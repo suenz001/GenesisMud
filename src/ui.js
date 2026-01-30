@@ -18,14 +18,32 @@ const elRoomName = document.getElementById('current-room-name');
 const miniMapBox = document.getElementById('mini-map-box');
 
 export const UI = {
-    print: (text, type = 'normal') => {
+    // 輸出訊息 (支援純文字與 HTML)
+    // isHtml: 如果為 true，則使用 innerHTML
+    print: (content, type = 'normal', isHtml = false) => {
         const div = document.createElement('div');
-        div.textContent = text;
+        
+        if (isHtml) {
+            div.innerHTML = content;
+        } else {
+            div.textContent = content;
+        }
+
         if (type === 'system') div.classList.add('msg-system');
         if (type === 'error') div.classList.add('msg-error');
         if (type === 'chat') div.classList.add('msg-chat');
+        
         output.appendChild(div);
         output.scrollTop = output.scrollHeight;
+    },
+
+    // --- 新增：產生可點擊指令的 HTML 輔助函式 ---
+    // text: 顯示的文字 (如 "[吃]")
+    // cmd: 實際執行的指令 (如 "eat rice")
+    // styleClass: 額外的 CSS 類別
+    makeCmd: (text, cmd, styleClass = 'cmd-link') => {
+        // 我們將指令存在 data-cmd 屬性中
+        return `<span class="${styleClass}" data-cmd="${cmd}">${text}</span>`;
     },
 
     updateHUD: (playerData) => {
@@ -135,14 +153,12 @@ export const UI = {
     },
 
     onInput: (callback) => {
-        // --- 修改核心：保留上次輸入指令 ---
         const sendHandler = () => {
             const val = input.value.trim();
             if (val) {
                 UI.print(`> ${val}`);
                 callback(val);
-                // 修改這裡：不要清空，改為全選
-                input.select(); 
+                input.select();
             }
         };
 
@@ -157,15 +173,26 @@ export const UI = {
                 if (cmd) {
                     UI.print(`> ${cmd}`);
                     callback(cmd);
-                    // 點擊按鈕時，也可以把指令填入框框並選取，方便接著按 Enter
                     input.value = cmd;
                     input.select();
                 }
             });
         });
-    },
 
-    onAuthAction: (callbacks) => {
+        // --- 新增：事件委派 (Event Delegation) 處理動態生成的按鈕 ---
+        output.addEventListener('click', (e) => {
+            // 檢查點擊的元素是否有 data-cmd 屬性
+            if (e.target && e.target.dataset.cmd) {
+                const cmd = e.target.dataset.cmd;
+                UI.print(`> ${cmd}`); // 模擬輸入
+                callback(cmd);        // 執行指令
+                input.value = cmd;    // 填入輸入框方便重複執行
+                input.select();
+            }
+        });
+    }
+    // ... 其他函式 ...
+    ,onAuthAction: (callbacks) => {
         btnLogin.addEventListener('click', () => { callbacks.onLogin(emailInput.value, pwdInput.value); });
         btnRegister.addEventListener('click', () => { callbacks.onRegister(emailInput.value, pwdInput.value); });
         btnGuest.addEventListener('click', () => { callbacks.onGuest(); });

@@ -317,3 +317,44 @@ body {
 .msg-system { color: #ffff00; }
 .msg-error { color: #ff5555; }
 .msg-chat { color: #00ffff; }
+
+/* --- 互動文字連結樣式 --- */
+.cmd-link {
+    color: #00ff00; /* 亮綠色 */
+    text-decoration: underline;
+    cursor: pointer;
+    margin: 0 2px;
+}
+.cmd-link:hover {
+    color: #fff;
+    background-color: #333;
+    text-decoration: none;
+}
+
+/* 動作按鈕 (例如 [吃], [買]) */
+.cmd-btn {
+    display: inline-block;
+    background: #333;
+    color: #eee;
+    border: 1px solid #555;
+    padding: 0 4px;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 3px;
+    margin-left: 5px;
+}
+.cmd-btn:hover {
+    border-color: #33ff33;
+    color: #fff;
+    background: #444;
+}
+
+/* 購買按鈕專用色 */
+.cmd-btn-buy {
+    border-color: #ff9800;
+    color: #ff9800;
+}
+.cmd-btn-buy:hover {
+    background: #ff9800;
+    color: #000;
+}

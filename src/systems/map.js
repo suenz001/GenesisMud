@@ -1,9 +1,9 @@
-// src/systems/map.js
+// src/systems/map.js (請完全覆蓋)
 import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { WorldMap } from "../data/world.js";
 import { UI } from "../ui.js";
 import { db } from "../firebase.js";
-import { NPCDB } from "../data/npcs.js"; // 新增：引入 NPC 資料庫
+import { NPCDB } from "../data/npcs.js";
 
 const DIR_OFFSET = {
     'north': { x: 0, y: 1, z: 0 },
@@ -56,31 +56,48 @@ export const MapSystem = {
         UI.print(`【${room.title}】`, "system");
         UI.print(room.description);
 
-        // --- 新增：顯示房間內的人物 (NPC 與 玩家) ---
-        let chars = [];
+        // --- 顯示房間內人物 (互動版) ---
+        let npcHtml = "";
         
-        // 1. 顯示 NPC
+        // 1. NPC
         if (room.npcs && room.npcs.length > 0) {
             room.npcs.forEach(npcId => {
                 const npc = NPCDB[npcId];
-                // 格式：店小二(waiter)
-                if (npc) chars.push(`${npc.name}(${npc.id})`);
-                else chars.push(npcId);
+                if (npc) {
+                    // 顯示：店小二(waiter) [看] [商品]
+                    let links = `${npc.name}(${npc.id})`;
+                    links += UI.makeCmd("[看]", `look ${npc.id}`, "cmd-btn");
+                    
+                    // 如果 NPC 有商店，顯示 [商品] 鈕
+                    if (npc.shop) {
+                        links += UI.makeCmd("[商品]", `list ${npc.id}`, "cmd-btn");
+                    }
+                    
+                    npcHtml += `<span>${links}</span>、`;
+                }
             });
         }
+        // 2. 玩家 (暫時只有自己)
+        npcHtml += `[ 玩家 ] : ${playerData.name}`;
 
-        // 2. 顯示玩家自己 (未來多人連線時，這裡要改成顯示其他玩家)
-        // 格式：[ 玩家 ] : 某某某
-        chars.push(`[ 玩家 ] : ${playerData.name}`);
+        // 注意：這裡使用 isHtml = true
+        UI.print(`這裡明顯的人物有：${npcHtml}`, "chat", true);
 
-        if (chars.length > 0) {
-            UI.print(`這裡明顯的人物有：${chars.join(", ")}`, "chat");
-        }
-        // ------------------------------------------
-
+        // --- 顯示出口 (互動版) ---
         const validExits = MapSystem.getAvailableExits(playerData.location);
-        const exitList = Object.keys(validExits).join(", ");
-        UI.print(`明顯的出口：${exitList || "無"}`, "chat");
+        const exitKeys = Object.keys(validExits);
+        
+        if (exitKeys.length === 0) {
+            UI.print(`明顯的出口：無`, "chat");
+        } else {
+            // 將每個出口變成按鈕
+            const exitLinks = exitKeys.map(dir => {
+                // 顯示為：north [north]
+                return UI.makeCmd(dir, dir, "cmd-link");
+            }).join(", ");
+            
+            UI.print(`明顯的出口：${exitLinks}`, "chat", true);
+        }
     },
 
     move: async (playerData, direction, userId) => {
@@ -122,9 +139,7 @@ export const MapSystem = {
                 "attributes.food": attr.food,
                 "attributes.water": attr.water
             });
-        } catch (e) {
-            console.error(e);
-        }
+        } catch (e) { console.error(e); }
     },
 
     teleport: async (playerData, targetRoomId, userId) => {
