@@ -3,6 +3,7 @@ import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/fireba
 import { WorldMap } from "../data/world.js";
 import { UI } from "../ui.js";
 import { db } from "../firebase.js";
+import { NPCDB } from "../data/npcs.js"; // 新增：引入 NPC 資料庫
 
 const DIR_OFFSET = {
     'north': { x: 0, y: 1, z: 0 },
@@ -49,10 +50,34 @@ export const MapSystem = {
             UI.print("你陷入虛空...", "error");
             return;
         }
+
         UI.updateLocationInfo(room.title);
         UI.updateHUD(playerData);
         UI.print(`【${room.title}】`, "system");
         UI.print(room.description);
+
+        // --- 新增：顯示房間內的人物 (NPC 與 玩家) ---
+        let chars = [];
+        
+        // 1. 顯示 NPC
+        if (room.npcs && room.npcs.length > 0) {
+            room.npcs.forEach(npcId => {
+                const npc = NPCDB[npcId];
+                // 格式：店小二(waiter)
+                if (npc) chars.push(`${npc.name}(${npc.id})`);
+                else chars.push(npcId);
+            });
+        }
+
+        // 2. 顯示玩家自己 (未來多人連線時，這裡要改成顯示其他玩家)
+        // 格式：[ 玩家 ] : 某某某
+        chars.push(`[ 玩家 ] : ${playerData.name}`);
+
+        if (chars.length > 0) {
+            UI.print(`這裡明顯的人物有：${chars.join(", ")}`, "chat");
+        }
+        // ------------------------------------------
+
         const validExits = MapSystem.getAvailableExits(playerData.location);
         const exitList = Object.keys(validExits).join(", ");
         UI.print(`明顯的出口：${exitList || "無"}`, "chat");
@@ -60,7 +85,6 @@ export const MapSystem = {
 
     move: async (playerData, direction, userId) => {
         if (!playerData) return;
-
         const validExits = MapSystem.getAvailableExits(playerData.location);
 
         if (!validExits[direction]) {
@@ -73,18 +97,15 @@ export const MapSystem = {
             return;
         }
 
-        // --- 新增：生存狀態檢查 ---
         const attr = playerData.attributes;
         if (attr.food <= 0 || attr.water <= 0) {
             UI.print("你餓得頭昏眼花，一步也走不動了...", "error");
-            return; // 阻止移動
+            return;
         }
 
-        // 扣除食物與飲水
-        attr.food = Math.max(0, attr.food - 1); // 每次移動扣 1
+        attr.food = Math.max(0, attr.food - 1);
         attr.water = Math.max(0, attr.water - 1);
         
-        // 飢餓提示
         if (attr.food < 10) UI.print("你的肚子咕嚕咕嚕叫了起來。", "system");
         if (attr.water < 10) UI.print("你口乾舌燥，急需喝水。", "system");
 
@@ -98,7 +119,7 @@ export const MapSystem = {
             const playerRef = doc(db, "players", userId);
             await updateDoc(playerRef, { 
                 location: nextRoomId,
-                "attributes.food": attr.food,   // 更新資料庫
+                "attributes.food": attr.food,
                 "attributes.water": attr.water
             });
         } catch (e) {

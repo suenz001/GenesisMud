@@ -5,7 +5,7 @@ import { db, auth } from "../firebase.js";
 import { UI } from "../ui.js";
 import { MapSystem } from "./map.js";
 import { ItemDB } from "../data/items.js"; 
-import { NPCDB } from "../data/npcs.js"; // 新增：引入 NPC 資料庫
+import { NPCDB } from "../data/npcs.js"; 
 
 const dirMapping = {
     'n': 'north', 's': 'south', 'e': 'east', 'w': 'west',
@@ -54,11 +54,9 @@ function findNPCInRoom(roomId, npcNameOrId) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
 
-    // 1. 先用 ID 找
     if (room.npcs.includes(npcNameOrId)) {
         return NPCDB[npcNameOrId];
     }
-    // 2. 用名稱找 (例如輸入 "店小二")
     for (const npcId of room.npcs) {
         const npc = NPCDB[npcId];
         if (npc && npc.name === npcNameOrId) {
@@ -83,13 +81,11 @@ const commandRegistry = {
         }
     },
     
-    // --- 新增：查看商品 (list) ---
+    // --- 修改：查看商品 (list) - 增加英文顯示 ---
     'list': {
         description: '查看NPC販賣的商品',
         execute: (playerData, args) => {
             const room = MapSystem.getRoom(playerData.location);
-            
-            // 如果沒有指定 NPC，就找房間裡第一個有賣東西的 NPC
             let targetNPC = null;
             if (args.length > 0) {
                 targetNPC = findNPCInRoom(playerData.location, args[0]);
@@ -105,16 +101,20 @@ const commandRegistry = {
             }
 
             if (!targetNPC.shop) {
-                UI.print(`${targetNPC.name} 身上沒帶什麼東西賣。`, "chat");
+                UI.print(`${targetNPC.name}(${targetNPC.id}) 身上沒帶什麼東西賣。`, "chat");
                 return;
             }
 
-            let msg = `\n【 ${targetNPC.name} 的商品列表 】\n`;
+            let msg = `\n【 ${targetNPC.name}(${targetNPC.id}) 的商品列表 】\n`;
             msg += `--------------------------------------------------\n`;
             for (const [itemId, price] of Object.entries(targetNPC.shop)) {
                 const itemInfo = ItemDB[itemId];
                 const itemName = itemInfo ? itemInfo.name : itemId;
-                msg += ` ${itemName.padEnd(10, '　')} ： 每單位 ${price} 兩\n`;
+                
+                // 格式：白米飯(rice) ...... 10兩
+                const displayStr = `${itemName}(${itemId})`;
+                // 使用 padEnd 讓排版整齊一點 (全形字算2格比較複雜，這裡簡單用空格補齊)
+                msg += ` ${displayStr.padEnd(20, ' ')} ： 每單位 ${price} 兩\n`;
             }
             msg += `--------------------------------------------------\n`;
             msg += `(指令範例：buy rice 1 from waiter)\n`;
@@ -122,53 +122,40 @@ const commandRegistry = {
         }
     },
 
-    // --- 新增：購買 (buy) ---
     'buy': {
         description: '向NPC購買物品',
         execute: async (playerData, args, userId) => {
-            // 語法解析：buy <item> <amount> from <npc>
-            // args 範例: ['rice', '3', 'from', 'waiter']
-            
-            if (args.length < 3) { // 至少要有 buy item from npc (數量預設1)
-                 // 簡易處理：如果只有 buy rice，假設是跟第一個 NPC 買 1 個
-                 if (args.length === 1) {
-                     args.push("1"); // amount
-                 }
+            if (args.length < 1) { // 至少要有 buy item
+                 // 如果只有 buy，沒給參數，提示錯誤
+                 UI.print("你想買什麼？(範例: buy rice)", "error");
+                 return;
             }
-
+            // 處理預設值：buy rice -> amount=1, npc=自動抓
             let itemName = args[0];
-            let amount = parseInt(args[1]);
+            let amount = 1;
             let npcName = null;
 
-            // 檢查有沒有 'from'
+            // 簡單的參數解析邏輯
+            if (args.length >= 2 && !isNaN(args[1])) {
+                amount = parseInt(args[1]);
+            }
+            
             const fromIndex = args.indexOf('from');
             if (fromIndex !== -1 && fromIndex + 1 < args.length) {
                 npcName = args[fromIndex + 1];
-                // 如果 amount 沒填 (例如 buy rice from waiter)，修正 amount
-                if (isNaN(amount)) amount = 1;
             } else {
-                // 如果沒有 from，嘗試找房間第一個 NPC
                 const room = MapSystem.getRoom(playerData.location);
                 if (room.npcs && room.npcs.length > 0) {
                     npcName = room.npcs[0];
                 }
-                if (isNaN(amount)) amount = 1;
             }
 
-            if (amount <= 0) {
-                UI.print("你要買空氣嗎？", "error");
-                return;
-            }
+            if (amount <= 0) { UI.print("你要買空氣嗎？", "error"); return; }
 
-            // 1. 確認 NPC 存在
             const npc = findNPCInRoom(playerData.location, npcName);
-            if (!npc) {
-                UI.print("這裡沒有這個人。", "error");
-                return;
-            }
+            if (!npc) { UI.print("這裡沒有這個人。", "error"); return; }
 
-            // 2. 確認 NPC 有賣這個東西
-            // 允許輸入 ID (rice) 或 名稱 (白米飯)
+            // 允許輸入 ID 或 名稱
             let targetItemId = null;
             let price = 0;
 
@@ -176,7 +163,6 @@ const commandRegistry = {
                 targetItemId = itemName;
                 price = npc.shop[itemName];
             } else {
-                // 用名稱反查 ID
                 for (const [sid, p] of Object.entries(npc.shop)) {
                     if (ItemDB[sid] && ItemDB[sid].name === itemName) {
                         targetItemId = sid;
@@ -187,22 +173,18 @@ const commandRegistry = {
             }
 
             if (!targetItemId) {
-                UI.print(`${npc.name} 搖搖頭說：「客官，小店沒賣這個。」`, "chat");
+                UI.print(`${npc.name}(${npc.id}) 搖搖頭說：「客官，小店沒賣這個。」`, "chat");
                 return;
             }
 
-            // 3. 計算總價與檢查金錢
             const totalPrice = price * amount;
             if ((playerData.money || 0) < totalPrice) {
                 UI.print("你的錢不夠。(需要 " + totalPrice + " 兩)", "error");
                 return;
             }
 
-            // 4. 交易執行
-            // 扣錢
             playerData.money -= totalPrice;
             
-            // 加物品
             if (!playerData.inventory) playerData.inventory = [];
             const existingItem = playerData.inventory.find(i => i.id === targetItemId);
             const itemInfo = ItemDB[targetItemId];
@@ -217,9 +199,8 @@ const commandRegistry = {
                 });
             }
 
-            UI.print(`你從 ${npc.name} 那裡買下了 ${amount} 份${itemInfo.name}，花費了 ${totalPrice} 兩。`, "system");
+            UI.print(`你從 ${npc.name}(${npc.id}) 那裡買下了 ${amount} 份${itemInfo.name}(${targetItemId})，花費了 ${totalPrice} 兩。`, "system");
 
-            // 更新資料庫
             try {
                 const playerRef = doc(db, "players", userId);
                 await updateDoc(playerRef, {
@@ -233,25 +214,21 @@ const commandRegistry = {
         }
     },
 
-    // --- 修改：觀察 (Look) - 增加顯示 NPC ---
     'look': {
         description: '觀察四周 (簡寫: l)',
         execute: (playerData, args) => {
-            // 如果有參數 (look item / look npc)
             if (args && args.length > 0) {
                 const target = args[0];
-                // 先找 NPC
                 const npc = findNPCInRoom(playerData.location, target);
                 if (npc) {
-                    UI.print(`【${npc.name}】`, "system");
+                    UI.print(`【${npc.name}(${npc.id})】`, "system");
                     UI.print(npc.description);
                     return;
                 }
-                // 再找物品 (原本的邏輯)
                 const invItem = playerData.inventory.find(i => i.id === target || i.name === target);
                 if (invItem) {
                     const itemData = ItemDB[invItem.id];
-                    UI.print(`【${itemData.name}】`, "system");
+                    UI.print(`【${itemData.name}(${invItem.id})】`, "system");
                     UI.print(itemData.desc);
                     return;
                 }
@@ -259,21 +236,14 @@ const commandRegistry = {
                 return;
             }
             
-            // 原本的看地圖邏輯
+            // 呼叫 MapSystem.look，它現在會負責顯示房間內的 NPC
             MapSystem.look(playerData);
-            
-            // 額外顯示房間裡的 NPC
-            const room = MapSystem.getRoom(playerData.location);
-            if (room.npcs && room.npcs.length > 0) {
-                let npcMsg = "這裡還有：";
-                const names = room.npcs.map(nid => NPCDB[nid] ? NPCDB[nid].name : nid);
-                UI.print(npcMsg + names.join("、"), "chat"); // 顯示青色文字
-            }
         }
     },
     'l': { description: 'look 簡寫', execute: (p, a) => commandRegistry['look'].execute(p, a) },
 
-    // ... (保留其他所有原有指令 eat, drink, score, save 等，不用變動) ...
+    // ... (其他指令 eat, drink, drop, say, emote, score, skills, inventory, suicide, save, recall 保持不變) ...
+    // 為節省篇幅，請保留您原本檔案中的這些指令，不要刪除
     'eat': {
         description: '吃食物',
         execute: async (playerData, args, userId) => {
@@ -375,7 +345,7 @@ const commandRegistry = {
             let msg = `\n【 ${playerData.name} 的背包 】\n--------------------------------------------------\n`;
             msg += ` 身上的錢：${money} 兩白銀\n--------------------------------------------------\n`;
             if (items.length === 0) { msg += ` 目前身上空空如也。\n`; } 
-            else { items.forEach(item => { msg += ` ${item.name} (${item.id}) x${item.count}\n`; }); }
+            else { items.forEach(item => { msg += ` ${item.name}(${item.id}) x${item.count}\n`; }); }
             msg += `--------------------------------------------------\n`;
             UI.print(msg, 'chat');
         }
