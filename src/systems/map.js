@@ -4,65 +4,111 @@ import { WorldMap } from "../data/world.js";
 import { UI } from "../ui.js";
 import { db } from "../firebase.js";
 
+// 方向偏移量定義
+const offsets = {
+    'north':     { x: 0, y: 1, z: 0 },
+    'south':     { x: 0, y: -1, z: 0 },
+    'east':      { x: 1, y: 0, z: 0 },
+    'west':      { x: -1, y: 0, z: 0 },
+    'northeast': { x: 1, y: 1, z: 0 },
+    'northwest': { x: -1, y: 1, z: 0 },
+    'southeast': { x: 1, y: -1, z: 0 },
+    'southwest': { x: -1, y: -1, z: 0 },
+    'up':        { x: 0, y: 0, z: 1 },
+    'down':      { x: 0, y: 0, z -1: -1 } // 注意：z軸處理
+};
+
+// 簡寫對應 (讓系統內部統一用全名)
+const shortDirMap = {
+    'n': 'north', 's': 'south', 'e': 'east', 'w': 'west',
+    'ne': 'northeast', 'nw': 'northwest', 'se': 'southeast', 'sw': 'southwest',
+    'u': 'up', 'd': 'down'
+};
+
 export const MapSystem = {
-    // 取得當前房間物件
     getRoom: (roomId) => {
         return WorldMap[roomId];
     },
 
-    // 執行「看」(Look)
-    // 這是最核心的函式，移動後、登入後都會呼叫
+    // --- 新增：動態計算所有出口 ---
+    getAvailableExits: (room) => {
+        const exits = { ...room.exits }; // 先複製原本手動設定的 (例如 "out", "enter")
+
+        // 遍歷所有方向，檢查座標上是否有房間
+        for (const [dir, offset] of Object.entries(offsets)) {
+            const targetX = room.x + offset.x;
+            const targetY = room.y + offset.y;
+            const targetZ = room.z + offset.z;
+
+            // 搜尋地圖 (資料量大時建議改用 Map<"x,y,z", roomId> 優化，目前遍歷即可)
+            for (const [targetId, targetRoom] of Object.entries(WorldMap)) {
+                if (targetRoom.x === targetX && 
+                    targetRoom.y === targetY && 
+                    targetRoom.z === targetZ) {
+                    
+                    // 找到相鄰房間！自動加入出口
+                    exits[dir] = targetId;
+                    break;
+                }
+            }
+        }
+        return exits;
+    },
+
     look: (playerData) => {
         if (!playerData || !playerData.location) return;
         
         const roomId = playerData.location;
         const room = WorldMap[roomId];
 
-        // 錯誤處理：如果玩家卡在不存在的房間
         if (!room) {
             UI.print("你陷入了虛空之中... (錯誤：找不到地圖 " + roomId + ")", "error");
             return;
         }
 
-        // 1. 更新介面顯示 (地點名稱)
+        // 使用動態計算的出口
+        const dynamicExits = MapSystem.getAvailableExits(room);
+
         UI.updateLocationInfo(room.title);
-        
-        // 2. 更新 HUD (血條 + 小地圖)
-        // 注意：UI.updateHUD 會自己去讀取 WorldMap 來畫 5x5 地圖，所以這裡不用傳出口
         UI.updateHUD(playerData); 
 
-        // 3. 輸出文字描述到對話框
         UI.print(`【${room.title}】`, "system");
         UI.print(room.description);
         
-        // 4. 列出文字版出口 (輔助用)
-        const exits = Object.keys(room.exits).join(", ");
-        UI.print(`明顯的出口：${exits || "無"}`, "chat");
+        // 顯示出口
+        const exitList = Object.keys(dynamicExits).map(dir => {
+            // 顯示中文方向會更親切
+            return dir; 
+        }).join(", ");
+        
+        UI.print(`明顯的出口：${exitList || "無"}`, "chat");
     },
 
-    // 執行「移動」(Move)
     move: async (playerData, direction, userId) => {
         if (!playerData) return;
 
+        // 處理縮寫 (n -> north)
+        const fullDir = shortDirMap[direction] || direction;
+
         const currentRoomId = playerData.location;
         const room = WorldMap[currentRoomId];
+        
+        // 取得動態出口列表
+        const dynamicExits = MapSystem.getAvailableExits(room);
 
-        // 檢查該方向是否有出口
-        if (!room || !room.exits[direction]) {
+        // 檢查方向
+        if (!room || !dynamicExits[fullDir]) {
             UI.print("那個方向沒有路。", "error");
             return;
         }
 
-        const nextRoomId = room.exits[direction];
+        const nextRoomId = dynamicExits[fullDir];
         
-        // --- 本地端立即更新 (讓玩家感覺無延遲) ---
+        // 更新與存檔
         playerData.location = nextRoomId;
-        UI.print(`你往 ${direction} 走去...`);
-        
-        // 移動後立刻看四周
+        UI.print(`你往 ${fullDir} 走去...`);
         MapSystem.look(playerData); 
 
-        // --- 背景非同步存檔 ---
         try {
             const playerRef = doc(db, "players", userId);
             await updateDoc(playerRef, {
@@ -74,7 +120,6 @@ export const MapSystem = {
         }
     },
 
-    // 執行「傳送」(Teleport) - 用於 Recall
     teleport: async (playerData, targetRoomId, userId) => {
         if (!WorldMap[targetRoomId]) {
             UI.print("傳送失敗：目標地點不存在。", "error");

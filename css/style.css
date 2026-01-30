@@ -1,4 +1,6 @@
 /* css/style.css */
+
+/* --- 全域設定 --- */
 body {
     background-color: #000;
     color: #c0c0c0; /* 經典淺灰字 */
@@ -9,12 +11,13 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    overflow: hidden; /* 防止整個頁面捲動 */
+    overflow: hidden;
 }
 
+/* --- 遊戲主框架 --- */
 #game-wrapper {
     width: 100%;
-    max-width: 1100px; /* 加寬版面 */
+    max-width: 1100px;
     height: 95vh;
     display: flex;
     flex-direction: column;
@@ -34,14 +37,13 @@ body {
     flex-shrink: 0;
 }
 
-/* --- 核心佈局：左右兩欄 --- */
 #game-body {
     display: flex;
     flex-grow: 1;
     overflow: hidden;
 }
 
-/* 左側：文字區 (65%) */
+/* --- 左側：文字輸出區 (65%) --- */
 #main-display {
     flex: 6.5; 
     display: flex;
@@ -52,12 +54,17 @@ body {
 #output {
     flex-grow: 1;
     padding: 15px;
-    overflow-y: auto; /* 文字區自己捲動 */
+    overflow-y: auto;
     white-space: pre-wrap;
     line-height: 1.6;
     font-size: 15px;
     background: #000;
 }
+
+/* 卷軸美化 (Chrome/Safari) */
+#output::-webkit-scrollbar { width: 8px; }
+#output::-webkit-scrollbar-track { background: #111; }
+#output::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
 
 #input-area {
     display: flex;
@@ -67,7 +74,7 @@ body {
     flex-shrink: 0;
 }
 
-/* 右側：側邊欄 (35%) */
+/* --- 右側：側邊欄 (35%) --- */
 #sidebar {
     flex: 3.5;
     background: #1a1a1a;
@@ -75,10 +82,10 @@ body {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
-/* 面板通用樣式 */
+/* 面板共用樣式 */
 .panel-box {
     border: 1px solid #444;
     background: #222;
@@ -95,9 +102,17 @@ body {
     text-align: center;
 }
 
-/* --- 5x5 地圖樣式 --- */
+/* --- 小地圖 (5x5 網格) --- */
+#current-room-name {
+    text-align: center;
+    font-size: 18px;
+    color: #fff;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
 #mini-map-box {
-    height: 220px; /* 足夠的高度 */
+    height: 220px;
     background: #0d0d0d;
     border: 1px solid #555;
     display: flex;
@@ -109,8 +124,8 @@ body {
 
 .range-map-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr); /* 5列 */
-    grid-template-rows: repeat(5, 1fr);    /* 5行 */
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, 1fr);
     gap: 4px;
     width: 100%;
     height: 100%;
@@ -127,17 +142,15 @@ body {
     border: 1px solid #222;
 }
 
-/* 當格子有房間時 */
 .map-cell-range.room-exists {
     border: 1px solid #666;
     background-color: #333;
-    color: #fff; /* 亮字 */
+    color: #fff;
     font-weight: bold;
     box-shadow: 0 0 2px rgba(255, 255, 255, 0.1);
     cursor: default;
 }
 
-/* 當前玩家位置 */
 .map-cell-range.current-pos {
     border: 1px solid #33ff33;
     background-color: rgba(51, 255, 51, 0.3);
@@ -146,71 +159,89 @@ body {
     font-size: 10px;
 }
 
-/* 空地 */
 .map-cell-range.empty {
     border: none;
     background: transparent;
 }
 
-/* 狀態條 (血條) 樣式 */
+/* --- 狀態條 (6條屬性) --- */
+#panel-status {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.status-group {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px;
+    border-radius: 4px;
+}
+
 .status-row {
     display: flex;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 2px;
     font-size: 13px;
 }
 
+.status-row.sub-stat .label {
+    font-size: 12px;
+    color: #888;
+}
+
 .status-row .label {
-    width: 25px; /* 中文字寬度 */
-    color: #aaa;
+    width: 35px;
+    color: #ccc;
     font-weight: bold;
+    text-align: right;
+    padding-right: 6px;
 }
 
 .bar-container {
     flex-grow: 1;
-    height: 18px;
+    height: 14px;
     background: #333;
     position: relative;
     border: 1px solid #555;
-    border-radius: 3px;
+    border-radius: 2px;
     overflow: hidden;
 }
 
 .bar-fill {
     height: 100%;
-    width: 100%; /* JS 控制 */
+    width: 100%;
     transition: width 0.3s ease;
 }
 
-.bar-fill.hp { background: #d32f2f; } /* 紅 */
-.bar-fill.mp { background: #1976d2; } /* 藍 */
-.bar-fill.sp { background: #fbc02d; } /* 黃 */
+/* 屬性顏色定義 */
+.bar-fill.hp { background: #d32f2f; }
+.bar-fill.mp { background: #1976d2; }
+.bar-fill.sp { background: #fbc02d; }
+.bar-fill.force { background: #ff9800; }
+.bar-fill.mana { background: #9c27b0; }
+.bar-fill.spiritual { background: #00bcd4; }
 
 .bar-text {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
+    top: 0; left: 0; width: 100%;
     text-align: center;
-    line-height: 18px;
+    line-height: 14px;
     color: #fff;
     text-shadow: 1px 1px 1px #000;
-    font-size: 11px;
+    font-size: 10px;
 }
 
-#current-room-name {
-    text-align: center;
-    font-size: 18px;
-    color: #fff;
-    font-weight: bold;
-    margin-bottom: 5px;
-}
-
-/* 方向鍵盤 */
+/* --- 按鈕與輸入框 --- */
 .d-pad {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 4px;
+}
+
+.action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
 }
 
 .btn-move, .btn-action {
@@ -221,6 +252,7 @@ body {
     cursor: pointer;
     font-size: 13px;
     border-radius: 3px;
+    transition: background 0.2s;
 }
 
 .btn-move:hover, .btn-action:hover {
@@ -229,13 +261,11 @@ body {
     color: #fff;
 }
 
-.action-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 5px;
+.btn-move:disabled, .btn-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
-/* 輸入框與登入相關 */
 #cmd-input {
     flex-grow: 1;
     background: #000;
@@ -255,6 +285,7 @@ body {
     cursor: pointer;
 }
 
+/* --- 登入面板 --- */
 #login-panel {
     position: absolute;
     top: 50%;
@@ -279,6 +310,7 @@ body {
     width: 200px;
 }
 
+/* 文字顏色 */
 .msg-system { color: #ffff00; }
 .msg-error { color: #ff5555; }
 .msg-chat { color: #00ffff; }

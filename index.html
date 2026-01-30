@@ -8,10 +8,9 @@
 </head>
 <body>
     <div id="game-wrapper">
-        <div id="header">【創世江湖行】GenesisMud - Ver 0.1.0 (GUI版)</div>
+        <div id="header">【創世江湖行】GenesisMud - Ver 0.2.0 (狀態升級)</div>
         
         <div id="game-body">
-            
             <div id="main-display">
                 <div id="output"></div>
                 <div id="input-area">
@@ -23,41 +22,64 @@
             <div id="sidebar">
                 
                 <div class="panel-box" id="panel-map">
-                    <div class="panel-title">所在位置</div>
                     <div id="current-room-name">-- 未知 --</div>
-                    <div id="mini-map-box">地圖區域 (開發中)</div>
+                    <div id="mini-map-box">地圖區域</div>
                 </div>
 
                 <div class="panel-box" id="panel-status">
-                    <div class="panel-title">人物狀態</div>
-                    
-                    <div class="status-row">
-                        <span class="label">精 (HP)</span>
-                        <div class="bar-container">
-                            <div id="bar-hp" class="bar-fill hp" style="width: 100%;"></div>
-                            <span id="text-hp" class="bar-text">100/100</span>
+                    <div class="status-group">
+                        <div class="status-row">
+                            <span class="label">精</span>
+                            <div class="bar-container">
+                                <div id="bar-hp" class="bar-fill hp" style="width: 100%;"></div>
+                                <span id="text-hp" class="bar-text">100/100</span>
+                            </div>
+                        </div>
+                        <div class="status-row sub-stat">
+                            <span class="label">靈力</span>
+                            <div class="bar-container">
+                                <div id="bar-spiritual" class="bar-fill spiritual" style="width: 0%;"></div>
+                                <span id="text-spiritual" class="bar-text">0/0</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="status-row">
-                        <span class="label">氣 (MP)</span>
-                        <div class="bar-container">
-                            <div id="bar-mp" class="bar-fill mp" style="width: 100%;"></div>
-                            <span id="text-mp" class="bar-text">100/100</span>
+                    <div class="status-group">
+                        <div class="status-row">
+                            <span class="label">氣</span>
+                            <div class="bar-container">
+                                <div id="bar-mp" class="bar-fill mp" style="width: 100%;"></div>
+                                <span id="text-mp" class="bar-text">100/100</span>
+                            </div>
+                        </div>
+                        <div class="status-row sub-stat">
+                            <span class="label">內力</span>
+                            <div class="bar-container">
+                                <div id="bar-force" class="bar-fill force" style="width: 0%;"></div>
+                                <span id="text-force" class="bar-text">0/0</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="status-row">
-                        <span class="label">神 (SP)</span>
-                        <div class="bar-container">
-                            <div id="bar-sp" class="bar-fill sp" style="width: 100%;"></div>
-                            <span id="text-sp" class="bar-text">100/100</span>
+                    <div class="status-group">
+                        <div class="status-row">
+                            <span class="label">神</span>
+                            <div class="bar-container">
+                                <div id="bar-sp" class="bar-fill sp" style="width: 100%;"></div>
+                                <span id="text-sp" class="bar-text">100/100</span>
+                            </div>
+                        </div>
+                        <div class="status-row sub-stat">
+                            <span class="label">法力</span>
+                            <div class="bar-container">
+                                <div id="bar-mana" class="bar-fill mana" style="width: 0%;"></div>
+                                <span id="text-mana" class="bar-text">0/0</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="panel-box" id="panel-move">
-                    <div class="panel-title">移動</div>
                     <div class="d-pad">
                         <button class="btn-move" data-dir="nw">↖</button>
                         <button class="btn-move" data-dir="n">北</button>
@@ -72,23 +94,21 @@
                         <button class="btn-move" data-dir="se">↘</button>
                     </div>
                     <div style="margin-top: 5px; text-align: center;">
-                        <button class="btn-move" data-dir="up">往上</button>
-                        <button class="btn-move" data-dir="out">外出</button>
-                        <button class="btn-move" data-dir="enter">進入</button>
-                        <button class="btn-move" data-dir="down">往下</button>
+                        <button class="btn-move" data-dir="up">上</button>
+                        <button class="btn-move" data-dir="out">外</button>
+                        <button class="btn-move" data-dir="enter">內</button>
+                        <button class="btn-move" data-dir="down">下</button>
                     </div>
                 </div>
 
                 <div class="panel-box">
-                    <div class="panel-title">指令</div>
                     <div class="action-grid">
                         <button class="btn-action" data-cmd="status">狀態</button>
                         <button class="btn-action" data-cmd="recall">回城</button>
-                        <button class="btn-action" data-cmd="help">幫助</button>
-                        <button class="btn-action" data-cmd="inventory" disabled>背包</button>
+                        <button class="btn-action" data-cmd="save">存檔</button>
+                        <button class="btn-action" data-cmd="help">說明</button>
                     </div>
                 </div>
-
             </div>
         </div>
 

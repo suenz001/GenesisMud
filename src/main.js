@@ -63,10 +63,6 @@ UI.onInput((cmd) => {
     }
     CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
     if (localPlayerData) {
-        // 更新時傳入目前的房間出口，以便重繪地圖
-        // 為了取得出口，我們可以用 location 反查 MapSystem (但這裡沒有 import MapSystem)
-        // 簡單解法：CommandSystem 執行完後，map.js 會呼叫 MapSystem.look -> UI.updateHUD，所以這裡其實不用傳 exits
-        // 但為了保險，我們只在這裡觸發 HUD 的數值更新
         UI.updateHUD(localPlayerData); 
     }
 });
@@ -93,13 +89,24 @@ async function checkAndCreatePlayerData(user, displayName) {
         } else {
             UI.print("檢測到新面孔，正在為您重塑肉身...", "system");
             
+            // 定義初始資料
             const initialData = {
                 name: displayName,
                 email: user.email || "anonymous",
                 location: "inn_start",
-                savePoint: "inn_start", // <--- 新增：預設存檔點
+                savePoint: "inn_start",
                 attributes: {
-                    hp: 100, mp: 100, sp: 100, spiritual: 0, 
+                    // --- 基礎三寶 ---
+                    hp: 100, maxHp: 100, // 精
+                    mp: 100, maxMp: 100, // 氣
+                    sp: 100, maxSp: 100, // 神
+
+                    // --- 進階修為 (初始值較低，需要修練) ---
+                    spiritual: 10, maxSpiritual: 10, // 靈力 (對應精)
+                    force: 10,     maxForce: 10,     // 內力 (對應氣)
+                    mana: 10,      maxMana: 10,      // 法力 (對應神)
+
+                    // --- 天賦屬性 ---
                     str: 20, con: 20, dex: 20, int: 20, kar: 20, per: 20
                 },
                 sect: "none",

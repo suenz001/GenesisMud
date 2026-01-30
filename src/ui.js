@@ -1,5 +1,5 @@
-// src/ui.js - 請完全覆蓋
-import { WorldMap } from "./data/world.js"; // <--- 這裡需要直接引用 WorldMap 來查座標
+// src/ui.js
+import { WorldMap } from "./data/world.js";
 
 const output = document.getElementById('output');
 const input = document.getElementById('cmd-input');
@@ -13,7 +13,7 @@ const btnLogin = document.getElementById('btn-login');
 const btnRegister = document.getElementById('btn-register');
 const btnGuest = document.getElementById('btn-guest');
 
-// HUD 元素
+// HUD 元素 - 基礎
 const elRoomName = document.getElementById('current-room-name');
 const miniMapBox = document.getElementById('mini-map-box');
 
@@ -24,10 +24,13 @@ const textMp = document.getElementById('text-mp');
 const barSp = document.getElementById('bar-sp');
 const textSp = document.getElementById('text-sp');
 
-// 改回中文標籤
-document.querySelector('#panel-status .status-row:nth-child(2) .label').textContent = "精";
-document.querySelector('#panel-status .status-row:nth-child(3) .label').textContent = "氣";
-document.querySelector('#panel-status .status-row:nth-child(4) .label').textContent = "神";
+// HUD 元素 - 進階 (新增)
+const barForce = document.getElementById('bar-force');
+const textForce = document.getElementById('text-force');
+const barMana = document.getElementById('bar-mana');
+const textMana = document.getElementById('text-mana');
+const barSpiritual = document.getElementById('bar-spiritual');
+const textSpiritual = document.getElementById('text-spiritual');
 
 export const UI = {
     print: (text, type = 'normal') => {
@@ -43,83 +46,69 @@ export const UI = {
     updateHUD: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
-        const max = 100; 
+        
+        // 輔助函式：計算百分比並更新 DOM
+        const updateBar = (barEl, textEl, current, max) => {
+            // 避免 max 為 0 或 undefined 的情況
+            const safeMax = max || 1; 
+            const safeCurrent = current || 0;
+            const percent = Math.max(0, Math.min(100, (safeCurrent / safeMax) * 100));
+            barEl.style.width = `${percent}%`;
+            textEl.textContent = `${safeCurrent}/${safeMax}`;
+        };
 
-        // 1. 精 (HP)
-        const hpPercent = Math.max(0, Math.min(100, (attr.hp / max) * 100));
-        barHp.style.width = `${hpPercent}%`;
-        textHp.textContent = `${attr.hp}/${max}`;
+        // 1. 基礎屬性 (如果沒有 max 欄位，暫時用 100 當預設)
+        updateBar(barHp, textHp, attr.hp, attr.maxHp || 100);
+        updateBar(barMp, textMp, attr.mp, attr.maxMp || 100);
+        updateBar(barSp, textSp, attr.sp, attr.maxSp || 100);
 
-        // 2. 氣 (MP)
-        const mpPercent = Math.max(0, Math.min(100, (attr.mp / max) * 100));
-        barMp.style.width = `${mpPercent}%`;
-        textMp.textContent = `${attr.mp}/${max}`;
+        // 2. 進階屬性
+        updateBar(barSpiritual, textSpiritual, attr.spiritual, attr.maxSpiritual || 10);
+        updateBar(barForce, textForce, attr.force, attr.maxForce || 10);
+        updateBar(barMana, textMana, attr.mana, attr.maxMana || 10);
 
-        // 3. 神 (SP)
-        const spPercent = Math.max(0, Math.min(100, (attr.sp / max) * 100));
-        barSp.style.width = `${spPercent}%`;
-        textSp.textContent = `${attr.sp}/${max}`;
-
-        // 4. 繪製 5x5 範圍地圖
-        // 為了取得座標，我們需要從 WorldMap 裡查當前玩家所在的房間
+        // 3. 繪製地圖
         const currentRoom = WorldMap[playerData.location];
         if (currentRoom) {
             UI.drawRangeMap(currentRoom.x, currentRoom.y, currentRoom.z, playerData.location);
         }
     },
 
-    // --- 新增：繪製範圍地圖 (Range Map) ---
+    // ... (drawRangeMap, updateLocationInfo, enableGameInput, showLoginPanel, showLoginError 等保持不變) ...
+    // 請保留原本的 drawRangeMap 邏輯
     drawRangeMap: (px, py, pz, currentId) => {
         miniMapBox.innerHTML = ''; 
-        
         const grid = document.createElement('div');
-        grid.className = 'range-map-grid'; // 使用新的 class
-
-        // 定義視野半徑 (半徑2 = 5x5)
+        grid.className = 'range-map-grid';
         const radius = 2; 
 
-        // 掃描 Y 軸 (從北到南：py + radius -> py - radius)
         for (let y = py + radius; y >= py - radius; y--) {
-            // 掃描 X 軸 (從西到東：px - radius -> px + radius)
             for (let x = px - radius; x <= px + radius; x++) {
-                
                 const div = document.createElement('div');
                 div.className = 'map-cell-range';
-
-                // 搜尋這個座標有沒有房間 (且高度 z 相同)
-                // 這裡簡單用遍歷搜尋，資料量大時可優化為 Map lookup
-                let roomKey = null;
                 let roomData = null;
 
                 for (const [key, val] of Object.entries(WorldMap)) {
-                    // 必須 x, y, z 都吻合
                     if (val.x === x && val.y === y && val.z === pz) {
-                        roomKey = key;
                         roomData = val;
                         break;
                     }
                 }
 
                 if (x === px && y === py) {
-                    // 玩家中心點
                     div.classList.add('current-pos');
-                    div.textContent = "我"; // 縮小的標記
+                    div.textContent = "我";
                 } else if (roomData) {
-                    // 這裡有房間
                     div.classList.add('room-exists');
-                    // 取地圖名稱的第一個字當縮寫 (例如 "悅來客棧" -> "悅")
                     div.textContent = roomData.title.substring(0, 1);
-                    div.title = roomData.title; // 滑鼠移上去顯示全名
+                    div.title = roomData.title;
                 } else {
-                    // 空地
                     div.classList.add('empty');
                 }
-
                 grid.appendChild(div);
             }
         }
         
-        // 顯示樓層提示
         const zInfo = document.createElement('div');
         zInfo.style.position = 'absolute';
         zInfo.style.bottom = '2px';
@@ -128,10 +117,9 @@ export const UI = {
         zInfo.style.color = '#555';
         zInfo.textContent = `層級: ${pz}`;
         miniMapBox.appendChild(zInfo);
-
         miniMapBox.appendChild(grid);
     },
-
+    
     updateLocationInfo: (roomTitle) => {
         elRoomName.textContent = roomTitle;
     },
