@@ -5,34 +5,29 @@ export const WorldMap = {
         title: "悅來客棧",
         description: "這是一間名震江湖的老字號客棧。牆上掛著『賓至如歸』的牌匾。角落裡幾個乞丐正在竊竊私語。\n【這裡可以休息，輸入 save 儲存進度】",
         allowSave: true,
-        x: 0, y: 0, z: 0,
-        // 我們不需要手動寫 south: "yangzhou_square"，系統會自動算！
-        // 但我們保留 out，讓習慣打 out 的玩家也能出去
-        exits: { 
-            "out": "yangzhou_square" 
-        }
+        x: 0, y: 0, z: 0
+        // 移除 exits: { out: ... }，現在全靠座標自動連線
     },
 
     "yangzhou_square": {
         title: "揚州廣場",
         description: "這裡是揚州城的中心廣場，人聲鼎沸，車水馬龍。正中央有一座巨大的石碑，上面刻著當今武林高手的排名。",
-        x: 0, y: -1, z: 0, // 在客棧南邊 (y-1)
-        exits: {
-            "enter": "inn_start" // 特殊入口指令
-        }
-        // 注意：這裡不用寫 north, south, east, west，只要座標對，路就通！
+        x: 0, y: -1, z: 0 
+        // 移除 enter
     },
 
     // === 東邊街道系統 ===
     "street_e1": {
         title: "長安東街",
         description: "客棧東邊的街道，往來行人絡繹不絕。",
-        x: 1, y: 0, z: 0 // 客棧 (0,0) 的東邊 (x+1)
+        x: 1, y: 0, z: 0 
     },
     "market_sq": {
         title: "熱鬧市集",
-        description: "這裡是城裡最熱鬧的市集，叫賣聲此起彼落。",
-        x: 2, y: 0, z: 0
+        description: "這裡是城裡最熱鬧的市集，叫賣聲此起彼落。北邊是一面高聳的防火牆，阻擋了去路。",
+        x: 2, y: 0, z: 0,
+        // 【新增牆壁】阻擋往北 (神鋒武器鋪)
+        walls: ["north"]
     },
     "bank": {
         title: "宏源錢莊",
@@ -40,18 +35,18 @@ export const WorldMap = {
         x: 3, y: 0, z: 0
     },
 
-    // === 東北邊街道 (示範牆壁阻擋) ===
+    // === 東北邊街道 ===
     "street_ne1": {
         title: "青龍街",
         description: "街道兩旁種滿了柳樹，環境較為清幽。",
-        x: 1, y: 1, z: 0,
-        // 假設這條街北邊在施工，雖然 (1,2) 可能有地圖，但我們擋住
-        walls: ["north"] 
+        x: 1, y: 1, z: 0
     },
     "weapon_shop": {
         title: "神鋒武器鋪",
-        description: "還沒進門就聽到叮叮噹噹的打鐵聲，牆上掛滿了刀槍劍戟。",
-        x: 2, y: 1, z: 0
+        description: "還沒進門就聽到叮叮噹噹的打鐵聲，牆上掛滿了刀槍劍戟。南邊是一面高牆。",
+        x: 2, y: 1, z: 0,
+        // 【新增牆壁】阻擋往南 (回到市集)
+        walls: ["south"]
     },
 
     // === 西邊與南邊 ===
@@ -66,22 +61,16 @@ export const WorldMap = {
         x: -1, y: -1, z: 0
     },
     
-    // === 茅山 (高度變化 Z軸) ===
+    // === 茅山 ===
     "maoshan_foot": {
         title: "茅山腳下",
         description: "茅山腳下，霧氣瀰漫。",
-        x: -2, y: -1, z: 0,
-        // 上山通常是特殊路徑，我們可以用座標堆疊，或者手動指定 exits
-        exits: {
-            "up": "maoshan_gate" // 這裡我們手動保留 up，因為座標 z+1 自動判斷也可以
-        }
+        x: -2, y: -1, z: 0
     },
     "maoshan_gate": {
         title: "茅山派山門",
         description: "茅山派的大門。\n【此處可 save】",
         allowSave: true,
-        x: -2, y: -1, z: 1, // 座標與山腳一樣，但高度 Z=1
-        // 因為在正上方，系統會自動判定 'down' 通往 maoshan_foot
-        // 所以這裡甚至不用寫 exits: { down: ... }
+        x: -2, y: -1, z: 1
     }
 };

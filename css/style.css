@@ -1,7 +1,7 @@
 /* css/style.css */
 body {
     background-color: #000;
-    color: #c0c0c0;
+    color: #c0c0c0; /* 經典淺灰字 */
     font-family: 'Courier New', Courier, monospace, "微軟正黑體";
     margin: 0;
     padding: 0;
@@ -9,12 +9,12 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    overflow: hidden;
+    overflow: hidden; /* 防止整個頁面捲動 */
 }
 
 #game-wrapper {
     width: 100%;
-    max-width: 1100px;
+    max-width: 1100px; /* 加寬版面 */
     height: 95vh;
     display: flex;
     flex-direction: column;
@@ -34,16 +34,16 @@ body {
     flex-shrink: 0;
 }
 
-/* --- 核心佈局 --- */
+/* --- 核心佈局：左右兩欄 --- */
 #game-body {
     display: flex;
     flex-grow: 1;
     overflow: hidden;
 }
 
-/* 左側：文字區 */
+/* 左側：文字區 (65%) */
 #main-display {
-    flex: 6.5;
+    flex: 6.5; 
     display: flex;
     flex-direction: column;
     border-right: 1px solid #444;
@@ -52,7 +52,7 @@ body {
 #output {
     flex-grow: 1;
     padding: 15px;
-    overflow-y: auto;
+    overflow-y: auto; /* 文字區自己捲動 */
     white-space: pre-wrap;
     line-height: 1.6;
     font-size: 15px;
@@ -67,7 +67,7 @@ body {
     flex-shrink: 0;
 }
 
-/* 右側：側邊欄 */
+/* 右側：側邊欄 (35%) */
 #sidebar {
     flex: 3.5;
     background: #1a1a1a;
@@ -78,6 +78,7 @@ body {
     gap: 12px;
 }
 
+/* 面板通用樣式 */
 .panel-box {
     border: 1px solid #444;
     background: #222;
@@ -96,7 +97,7 @@ body {
 
 /* --- 5x5 地圖樣式 --- */
 #mini-map-box {
-    height: 220px;
+    height: 220px; /* 足夠的高度 */
     background: #0d0d0d;
     border: 1px solid #555;
     display: flex;
@@ -108,8 +109,8 @@ body {
 
 .range-map-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    grid-template-rows: repeat(5, 1fr);
+    grid-template-columns: repeat(5, 1fr); /* 5列 */
+    grid-template-rows: repeat(5, 1fr);    /* 5行 */
     gap: 4px;
     width: 100%;
     height: 100%;
@@ -124,17 +125,20 @@ body {
     color: #666;
     background: #111;
     border: 1px solid #222;
+    box-sizing: border-box; /* 確保紅線邊框不會撐破格子 */
 }
 
+/* 當格子有房間時 */
 .map-cell-range.room-exists {
     border: 1px solid #666;
     background-color: #333;
-    color: #fff;
+    color: #fff; /* 亮字 */
     font-weight: bold;
     box-shadow: 0 0 2px rgba(255, 255, 255, 0.1);
     cursor: default;
 }
 
+/* 當前玩家位置 */
 .map-cell-range.current-pos {
     border: 1px solid #33ff33;
     background-color: rgba(51, 255, 51, 0.3);
@@ -143,10 +147,17 @@ body {
     font-size: 10px;
 }
 
+/* 空地 */
 .map-cell-range.empty {
     border: none;
     background: transparent;
 }
+
+/* --- 牆壁紅線阻擋 (重要！) --- */
+.wall-north { border-top: 2px solid #ff3333 !important; }
+.wall-south { border-bottom: 2px solid #ff3333 !important; }
+.wall-east  { border-right: 2px solid #ff3333 !important; }
+.wall-west  { border-left: 2px solid #ff3333 !important; }
 
 /* --- 狀態條 (6條版) --- */
 #panel-status {
@@ -168,11 +179,17 @@ body {
     font-size: 13px;
 }
 
-.status-row.sub-stat { margin-bottom: 0; }
-.status-row.sub-stat .label { font-size: 12px; color: #888; }
+.status-row.sub-stat {
+    margin-bottom: 0;
+}
+
+.status-row.sub-stat .label {
+    font-size: 12px;
+    color: #888;
+}
 
 .status-row .label {
-    width: 35px;
+    width: 35px; /* 標籤寬度 */
     color: #ccc;
     font-weight: bold;
     text-align: right;
@@ -189,55 +206,112 @@ body {
     overflow: hidden;
 }
 
-.bar-fill { height: 100%; width: 100%; transition: width 0.3s ease; }
+.bar-fill {
+    height: 100%;
+    width: 100%; /* JS 控制 */
+    transition: width 0.3s ease;
+}
 
-/* 顏色定義 */
+/* 狀態條顏色定義 */
 .bar-fill.hp { background: #d32f2f; } /* 紅 (精) */
 .bar-fill.mp { background: #1976d2; } /* 藍 (氣) */
 .bar-fill.sp { background: #fbc02d; } /* 黃 (神) */
+
 .bar-fill.force { background: #ff9800; }     /* 橘 (內力) */
 .bar-fill.mana { background: #9c27b0; }      /* 紫 (法力) */
 .bar-fill.spiritual { background: #00bcd4; } /* 青 (靈力) */
 
 .bar-text {
-    position: absolute; top: 0; left: 0; width: 100%;
-    text-align: center; line-height: 14px;
-    color: #fff; text-shadow: 1px 1px 1px #000; font-size: 10px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    line-height: 14px;
+    color: #fff;
+    text-shadow: 1px 1px 1px #000;
+    font-size: 10px;
 }
 
 #current-room-name {
-    text-align: center; font-size: 18px; color: #fff; font-weight: bold; margin-bottom: 5px;
+    text-align: center;
+    font-size: 18px;
+    color: #fff;
+    font-weight: bold;
+    margin-bottom: 5px;
 }
 
 /* 方向鍵盤 */
-.d-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-.btn-move, .btn-action {
-    background: #333; color: #ddd; border: 1px solid #555;
-    padding: 10px 0; cursor: pointer; font-size: 13px; border-radius: 3px;
+.d-pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
 }
-.btn-move:hover, .btn-action:hover {
-    background: #555; border-color: #33ff33; color: #fff;
-}
-.action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 
-/* 輸入與登入 */
+.btn-move, .btn-action {
+    background: #333;
+    color: #ddd;
+    border: 1px solid #555;
+    padding: 10px 0;
+    cursor: pointer;
+    font-size: 13px;
+    border-radius: 3px;
+}
+
+.btn-move:hover, .btn-action:hover {
+    background: #555;
+    border-color: #33ff33;
+    color: #fff;
+}
+
+.action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+}
+
+/* 輸入框與登入相關 */
 #cmd-input {
-    flex-grow: 1; background: #000; border: 1px solid #555;
-    color: #fff; padding: 8px; font-size: 14px; font-family: inherit;
+    flex-grow: 1;
+    background: #000;
+    border: 1px solid #555;
+    color: #fff;
+    padding: 8px;
+    font-size: 14px;
+    font-family: inherit;
 }
+
 #send-btn, #btn-login, #btn-register, #btn-guest {
-    background: #333; color: #fff; border: 1px solid #555;
-    padding: 0 15px; margin-left: 5px; cursor: pointer;
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+    padding: 0 15px;
+    margin-left: 5px;
+    cursor: pointer;
 }
+
 #login-panel {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    background: #222; padding: 20px; border: 1px solid #33ff33;
-    text-align: center; display: none; z-index: 100;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #222;
+    padding: 20px;
+    border: 1px solid #33ff33;
+    text-align: center;
+    display: none; 
+    z-index: 100;
     box-shadow: 0 0 50px rgba(0,0,0,0.8);
 }
+
 #login-panel input {
-    display: block; margin: 10px auto; padding: 8px;
-    background: #000; color: #fff; border: 1px solid #555; width: 200px;
+    display: block;
+    margin: 10px auto;
+    padding: 8px;
+    background: #000;
+    color: #fff;
+    border: 1px solid #555;
+    width: 200px;
 }
 
 .msg-system { color: #ffff00; }
