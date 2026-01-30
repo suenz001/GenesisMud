@@ -7,16 +7,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// 引入自定義模組
 import { UI } from "./ui.js";
 import { CommandSystem } from "./systems/commands.js"; 
-import { auth, db } from "./firebase.js"; // <--- 新增：引入初始化好的 auth 和 db
-
-// --- 初始化 Firebase (這一段全部刪除，因為移到 firebase.js 了) ---
-// const app = initializeApp(firebaseConfig);
-// const analytics = getAnalytics(app);
-// const auth = getAuth(app);
-// const db = getFirestore(app);
+import { auth, db } from "./firebase.js";
 
 // --- 遊戲狀態 ---
 let currentUser = null;
@@ -25,7 +18,7 @@ let localPlayerData = null;
 // --- 系統啟動 ---
 UI.print("系統初始化中...", "system");
 
-// 1. 監聽登入狀態 (直接使用匯入的 auth)
+// 1. 監聽登入狀態
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
@@ -46,7 +39,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// 2. 綁定登入/註冊/匿名按鈕邏輯
+// 2. 綁定按鈕
 UI.onAuthAction({
     onLogin: (email, pwd) => {
         if(!email || !pwd) return UI.showLoginError("請輸入帳號密碼");
@@ -67,13 +60,19 @@ UI.onAuthAction({
     }
 });
 
-// 3. 處理遊戲指令
+// 3. 處理遊戲指令 (來自輸入框 或 按鈕點擊)
 UI.onInput((cmd) => {
     if (!currentUser) {
         UI.print("請先登入。", "error");
         return;
     }
+    // 執行指令
     CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
+    
+    // 指令執行完後，刷新一次介面狀態 (例如扣血、扣魔後需要更新介面)
+    if (localPlayerData) {
+        UI.updateHUD(localPlayerData);
+    }
 });
 
 // --- 輔助函式 ---
@@ -90,7 +89,6 @@ function getErrMsg(code) {
 }
 
 async function checkAndCreatePlayerData(user, displayName) {
-    // 這裡直接使用匯入的 db
     const playerRef = doc(db, "players", user.uid);
     try {
         const docSnap = await getDoc(playerRef);
@@ -106,16 +104,8 @@ async function checkAndCreatePlayerData(user, displayName) {
                 email: user.email || "anonymous",
                 location: "inn_start",
                 attributes: {
-                    hp: 100,      
-                    mp: 100,      
-                    sp: 100,      
-                    spiritual: 0, 
-                    str: 20,      
-                    con: 20,      
-                    dex: 20,      
-                    int: 20,      
-                    kar: 20,      
-                    per: 20       
+                    hp: 100, mp: 100, sp: 100, spiritual: 0, 
+                    str: 20, con: 20, dex: 20, int: 20, kar: 20, per: 20
                 },
                 sect: "none",
                 createdAt: new Date().toISOString()
@@ -123,9 +113,14 @@ async function checkAndCreatePlayerData(user, displayName) {
 
             await setDoc(playerRef, initialData);
             localPlayerData = initialData;
-            
             UI.print("角色建立完成！", "system");
         }
+        
+        // --- 新增：資料載入後，立刻刷新介面 ---
+        UI.updateHUD(localPlayerData);
+        // 自動執行一次 look，讓地點名稱顯示出來
+        CommandSystem.handle('look', localPlayerData, currentUser.uid);
+
     } catch (e) {
         UI.print("資料庫讀取失敗：" + e.message, "error");
     }

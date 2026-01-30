@@ -1,82 +1,66 @@
-// src/ui.js
-const output = document.getElementById('output');
-const input = document.getElementById('cmd-input');
-const sendBtn = document.getElementById('send-btn');
-const loginPanel = document.getElementById('login-panel');
-const loginMsg = document.getElementById('login-msg');
+// src/systems/map.js
+import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { WorldMap } from "../data/world.js";
+import { UI } from "../ui.js";
+import { db } from "../firebase.js";
 
-// 登入面板的輸入框與按鈕
-const emailInput = document.getElementById('email-input');
-const pwdInput = document.getElementById('pwd-input');
-const btnLogin = document.getElementById('btn-login');
-const btnRegister = document.getElementById('btn-register');
-const btnGuest = document.getElementById('btn-guest');
-
-export const UI = {
-    // 輸出訊息
-    print: (text, type = 'normal') => {
-        const div = document.createElement('div');
-        div.textContent = text;
-        if (type === 'system') div.classList.add('msg-system');
-        if (type === 'error') div.classList.add('msg-error');
-        if (type === 'chat') div.classList.add('msg-chat');
-        output.appendChild(div);
-        output.scrollTop = output.scrollHeight;
+export const MapSystem = {
+    // 取得當前房間資訊
+    getRoom: (roomId) => {
+        return WorldMap[roomId];
     },
 
-    // 控制遊戲輸入框
-    enableGameInput: (enabled) => {
-        input.disabled = !enabled;
-        sendBtn.disabled = !enabled;
-        if (enabled) {
-            input.placeholder = "請輸入指令...";
-            input.focus();
-        } else {
-            input.placeholder = "請先登入...";
+    // 執行看 (Look)
+    look: (playerData) => {
+        if (!playerData || !playerData.location) return;
+        
+        const roomId = playerData.location;
+        const room = WorldMap[roomId];
+
+        if (!room) {
+            UI.print("你陷入了虛空之中... (錯誤：找不到地圖 " + roomId + ")", "error");
+            return;
         }
+
+        // --- 新增：更新右側面板的地點名稱 ---
+        UI.updateLocationInfo(room.title); 
+
+        UI.print(`【${room.title}】`, "system");
+        UI.print(room.description);
+        
+        const exits = Object.keys(room.exits).join(", ");
+        UI.print(`明顯的出口：${exits || "無"}`, "chat");
     },
 
-    // 顯示/隱藏 登入面板
-    showLoginPanel: (show) => {
-        loginPanel.style.display = show ? 'block' : 'none';
-        if (show) {
-            emailInput.focus();
+    // 執行移動
+    move: async (playerData, direction, userId) => {
+        if (!playerData) return;
+
+        const currentRoomId = playerData.location;
+        const room = WorldMap[currentRoomId];
+
+        if (!room || !room.exits[direction]) {
+            UI.print("那個方向沒有路。", "error");
+            return;
         }
-    },
 
-    // 顯示登入錯誤訊息
-    showLoginError: (msg) => {
-        loginMsg.textContent = msg;
-    },
+        const nextRoomId = room.exits[direction];
+        
+        // 更新本地記憶體
+        playerData.location = nextRoomId;
+        
+        UI.print(`你往 ${direction} 走去...`);
+        MapSystem.look(playerData); // 這會觸發 UI.updateLocationInfo
 
-    // 綁定遊戲指令事件
-    onInput: (callback) => {
-        sendBtn.addEventListener('click', () => {
-            const val = input.value.trim();
-            if (val) {
-                UI.print(`> ${val}`);
-                callback(val);
-                input.value = '';
-            }
-        });
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendBtn.click();
-        });
-    },
-
-    // 綁定登入相關按鈕事件
-    onAuthAction: (callbacks) => {
-        // 登入
-        btnLogin.addEventListener('click', () => {
-            callbacks.onLogin(emailInput.value, pwdInput.value);
-        });
-        // 註冊
-        btnRegister.addEventListener('click', () => {
-            callbacks.onRegister(emailInput.value, pwdInput.value);
-        });
-        // 匿名
-        btnGuest.addEventListener('click', () => {
-            callbacks.onGuest();
-        });
+        // 更新資料庫
+        try {
+            const playerRef = doc(db, "players", userId);
+            await updateDoc(playerRef, {
+                location: nextRoomId
+            });
+        } catch (e) {
+            console.error("移動存檔失敗", e);
+            UI.print("系統警告：位置儲存失敗，請檢查網路。", "error");
+        }
     }
 };
