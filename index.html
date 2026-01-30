@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>創世江湖行 - GenesisMud</title>
+    <style>
+        /* MUD 風格樣式表 */
+        body {
+            background-color: #000;
+            color: #c0c0c0; /* 經典淺灰字 */
+            font-family: 'Courier New', Courier, monospace, "微軟正黑體";
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #game-wrapper {
+            width: 100%;
+            max-width: 900px;
+            height: 95vh;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #444;
+            background-color: #111;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+        }
+        #header {
+            padding: 10px;
+            background-color: #222;
+            border-bottom: 1px solid #444;
+            text-align: center;
+            color: #33ff33;
+            font-weight: bold;
+        }
+        #output {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            white-space: pre-wrap; /* 保留排版 */
+            line-height: 1.6;
+            font-size: 15px;
+        }
+        #input-area {
+            display: flex;
+            border-top: 1px solid #444;
+            padding: 10px;
+            background-color: #222;
+        }
+        #cmd-input {
+            flex-grow: 1;
+            background: #000;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 10px;
+            font-size: 16px;
+            font-family: inherit;
+        }
+        #cmd-input:focus {
+            outline: none;
+            border-color: #33ff33;
+        }
+        button {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 0 20px;
+            margin-left: 10px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        button:hover {
+            background: #444;
+            border-color: #888;
+        }
+        
+        /* 訊息顏色定義 */
+        .msg-system { color: #ffff00; } /* 黃色系統訊息 */
+        .msg-error { color: #ff5555; }  /* 紅色錯誤 */
+        .msg-chat { color: #00ffff; }   /* 青色對話 */
+        .msg-combat { color: #ffcc00; } /* 戰鬥訊息 */
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <div id="header">【創世江湖行】GenesisMud - Ver 0.0.1</div>
+        <div id="output"></div>
+        <div id="input-area">
+            <input type="text" id="cmd-input" placeholder="請輸入指令... (例如: look)" autocomplete="off">
+            <button id="send-btn">發送</button>
+        </div>
+    </div>
+
+    <script type="module">
+        // 使用 CDN 引入 Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
+
+        // 你的 Firebase 設定
+        const firebaseConfig = {
+            apiKey: "AIzaSyANyPbvSa_qXxfzirS8Q8Xp8MlogetLkTc",
+            authDomain: "genesismud-45614.firebaseapp.com",
+            projectId: "genesismud-45614",
+            storageBucket: "genesismud-45614.firebasestorage.app",
+            messagingSenderId: "42378693168",
+            appId: "1:42378693168:web:0bb8af796bd047d9a43bf5",
+            measurementId: "G-6PB3LBMH8T"
+        };
+
+        // 初始化 Firebase
+        let app, analytics;
+        try {
+            app = initializeApp(firebaseConfig);
+            analytics = getAnalytics(app);
+            logToScreen("連線成功！", "msg-system");
+            logToScreen("歡迎來到【創世江湖行】...", "msg-system");
+            logToScreen("你站在一片虛空之中，遠處似乎傳來了客棧的喧鬧聲...", "");
+        } catch (e) {
+            logToScreen("系統錯誤：Firebase 初始化失敗 - " + e.message, "msg-error");
+        }
+
+        // --- 遊戲基礎介面邏輯 ---
+
+        const output = document.getElementById('output');
+        const input = document.getElementById('cmd-input');
+        const btn = document.getElementById('send-btn');
+
+        // 顯示訊息到螢幕
+        function logToScreen(text, className = "") {
+            const div = document.createElement('div');
+            div.textContent = text;
+            if (className) div.classList.add(className);
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight; // 自動捲動到底部
+        }
+
+        // 處理玩家指令
+        function handleInput() {
+            const val = input.value.trim();
+            if (!val) return;
+            
+            // 顯示玩家輸入
+            logToScreen(`> ${val}`, ""); 
+            input.value = '';
+
+            // 簡單的本地指令測試
+            processCommand(val);
+        }
+
+        function processCommand(cmd) {
+            const lowerCmd = cmd.toLowerCase();
+            if (lowerCmd === 'look' || lowerCmd === 'l') {
+                logToScreen("【虛空】", "msg-system");
+                logToScreen("四周一片漆黑，唯有遠方有一絲光亮。這是一個新世界的起點。");
+                logToScreen("這裡明顯的出口是：out");
+            } else if (lowerCmd === 'help') {
+                logToScreen("可用指令：look (查看), help (幫助)");
+            } else {
+                logToScreen("什麼事也沒發生。", "msg-error");
+            }
+        }
+
+        // 綁定事件
+        btn.addEventListener('click', handleInput);
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleInput();
+        });
+
+        // 頁面載入後自動聚焦輸入框
+        input.focus();
+    </script>
+</body>
+</html>
