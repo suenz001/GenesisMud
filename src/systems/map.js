@@ -1,9 +1,10 @@
 // src/systems/map.js
-import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"; // 注意：這裡不用再 import getFirestore 了
 import { WorldMap } from "../data/world.js";
 import { UI } from "../ui.js";
+import { db } from "../firebase.js"; // <--- 改從這裡引入已經初始化好的 db
 
-const db = getFirestore();
+// const db = getFirestore(); <--- 刪掉這一行，因為我們已經 import db 了
 
 export const MapSystem = {
     // 取得當前房間資訊
@@ -55,7 +56,7 @@ export const MapSystem = {
 
         // 3. 背景更新資料庫 (Firestore)
         try {
-            const playerRef = doc(db, "players", userId);
+            const playerRef = doc(db, "players", userId); // 這裡使用的 db 就是從 firebase.js 匯入的
             await updateDoc(playerRef, {
                 location: nextRoomId
             });

@@ -1,34 +1,31 @@
 // src/main.js
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
 import { 
-    getAuth, 
     onAuthStateChanged, 
     signInWithEmailAndPassword, 
     createUserWithEmailAndPassword, 
     signInAnonymously 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // 引入自定義模組
-import { firebaseConfig } from "./config.js";
 import { UI } from "./ui.js";
-import { CommandSystem } from "./systems/commands.js"; // 新增：引入指令系統
+import { CommandSystem } from "./systems/commands.js"; 
+import { auth, db } from "./firebase.js"; // <--- 新增：引入初始化好的 auth 和 db
 
-// --- 初始化 Firebase ---
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// --- 初始化 Firebase (這一段全部刪除，因為移到 firebase.js 了) ---
+// const app = initializeApp(firebaseConfig);
+// const analytics = getAnalytics(app);
+// const auth = getAuth(app);
+// const db = getFirestore(app);
 
 // --- 遊戲狀態 ---
 let currentUser = null;
-let localPlayerData = null; // 新增：用來暫存玩家資料，讓指令系統可以隨時讀取
+let localPlayerData = null; 
 
 // --- 系統啟動 ---
 UI.print("系統初始化中...", "system");
 
-// 1. 監聽登入狀態
+// 1. 監聽登入狀態 (直接使用匯入的 auth)
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
@@ -38,12 +35,11 @@ onAuthStateChanged(auth, async (user) => {
         UI.showLoginPanel(false);
         UI.enableGameInput(true);
         
-        // 讀取或建立玩家資料
         await checkAndCreatePlayerData(user, displayName);
         
     } else {
         currentUser = null;
-        localPlayerData = null; // 登出時清空資料
+        localPlayerData = null;
         UI.print("請登入以開始遊戲。", "system");
         UI.showLoginPanel(true);
         UI.enableGameInput(false);
@@ -77,13 +73,11 @@ UI.onInput((cmd) => {
         UI.print("請先登入。", "error");
         return;
     }
-    // 多傳入 currentUser.uid 以便存檔使用
     CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
 });
 
 // --- 輔助函式 ---
 
-// 翻譯 Firebase 錯誤代碼
 function getErrMsg(code) {
     switch(code) {
         case 'auth/invalid-email': return "Email 格式錯誤";
@@ -95,44 +89,39 @@ function getErrMsg(code) {
     }
 }
 
-// 檢查並建立玩家資料
 async function checkAndCreatePlayerData(user, displayName) {
+    // 這裡直接使用匯入的 db
     const playerRef = doc(db, "players", user.uid);
     try {
         const docSnap = await getDoc(playerRef);
 
         if (docSnap.exists()) {
             UI.print("讀取檔案成功... 你的江湖與你同在。", "system");
-            // 將資料庫資料存入記憶體變數
             localPlayerData = docSnap.data();
         } else {
             UI.print("檢測到新面孔，正在為您重塑肉身...", "system");
             
-            // 定義初始資料
             const initialData = {
                 name: displayName,
                 email: user.email || "anonymous",
-                location: "inn_start", // 初始地點
+                location: "inn_start",
                 attributes: {
-                    hp: 100,      // 精
-                    mp: 100,      // 氣 (內力)
-                    sp: 100,      // 神
-                    spiritual: 0, // 靈力 (茅山專用)
-                    str: 20,      // 膂力
-                    con: 20,      // 根骨
-                    dex: 20,      // 身法
-                    int: 20,      // 悟性
-                    kar: 20,      // 福緣
-                    per: 20       // 定力
+                    hp: 100,      
+                    mp: 100,      
+                    sp: 100,      
+                    spiritual: 0, 
+                    str: 20,      
+                    con: 20,      
+                    dex: 20,      
+                    int: 20,      
+                    kar: 20,      
+                    per: 20       
                 },
-                sect: "none",     // 門派
+                sect: "none",
                 createdAt: new Date().toISOString()
             };
 
-            // 寫入資料庫
             await setDoc(playerRef, initialData);
-            
-            // 同時存入記憶體變數
             localPlayerData = initialData;
             
             UI.print("角色建立完成！", "system");
