@@ -1,6 +1,7 @@
 // src/systems/commands.js
-import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { db } from "../firebase.js";
+import { doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"; // 新增 deleteDoc
+import { signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; // 新增 signOut
+import { db, auth } from "../firebase.js"; // 引入 auth
 import { UI } from "../ui.js";
 import { MapSystem } from "./map.js"; 
 
@@ -10,7 +11,6 @@ const dirMapping = {
     'nw': 'northwest', 'ne': 'northeast', 'sw': 'southwest', 'se': 'southeast'
 };
 
-// 輔助：武學境界描述
 function getSkillLevelDesc(level) {
     if (level < 10) return "初學乍練";
     if (level < 30) return "略有小成";
@@ -28,7 +28,7 @@ const commandRegistry = {
         execute: () => {
             let msg = "【江湖指南】\n";
             msg += "基本指令：score (狀態), skills (技能), i (背包)\n";
-            msg += "特殊指令：save (存檔), recall (回城)\n";
+            msg += "特殊指令：save (存檔), recall (回城), suicide (刪除角色)\n";
             msg += "移動指令：n, s, e, w, u, d\n";
             UI.print(msg, 'system');
         }
@@ -42,19 +42,23 @@ const commandRegistry = {
         execute: (playerData) => MapSystem.look(playerData)
     },
     
-    // --- 新增：狀態指令 (score / sc / hp) ---
+    // --- 狀態指令 (新增性別顯示) ---
     'score': {
         description: '查看詳細屬性',
         execute: (playerData) => {
             if (!playerData) return;
             const attr = playerData.attributes;
-            const combat = playerData.combat || {}; // 防止舊帳號沒有 combat 欄位
+            const combat = playerData.combat || {};
 
-            // 計算動態數值 (簡單範例：攻擊力 = 膂力 * 10)
             const atk = combat.attack || (attr.str * 10);
             const def = combat.defense || (attr.con * 10);
 
+            // 顯示性別
+            const gender = playerData.gender || "未知";
+
             let msg = `\n【 ${playerData.name} 的狀態 】\n`;
+            msg += `--------------------------------------------------\n`;
+            msg += ` 性別：${gender}     門派：${playerData.sect}\n`;
             msg += `--------------------------------------------------\n`;
             msg += ` 精：${attr.hp}/${attr.maxHp}   靈力：${attr.spiritual}/${attr.maxSpiritual}\n`;
             msg += ` 氣：${attr.mp}/${attr.maxMp}   內力：${attr.force}/${attr.maxForce}\n`;
@@ -63,13 +67,11 @@ const commandRegistry = {
             msg += ` 食物：${attr.food}/${attr.maxFood}  飲水：${attr.water}/${attr.maxWater}\n`;
             msg += `--------------------------------------------------\n`;
             msg += ` 膂力：${attr.str}  膽識：${attr.cor || 20}\n`;
-            msg += ` 悟性：${attr.int}  靈性：${attr.int} (同悟性)\n`; // 靈性常與悟性掛勾
+            msg += ` 悟性：${attr.int}  靈性：${attr.int}\n`;
             msg += ` 根骨：${attr.con}  定力：${attr.per}\n`;
             msg += ` 身法：${attr.dex}  福緣：${attr.kar}\n`;
             msg += `--------------------------------------------------\n`;
             msg += ` 攻擊力：${atk}     防禦力：${def}\n`;
-            msg += ` 命中率：${combat.hitRate || 10}     閃避率：${combat.dodge || 10}\n`;
-            msg += ` 招架率：${combat.parry || 10}     殺氣：0\n`;
             msg += `--------------------------------------------------\n`;
             msg += ` 經驗值：${combat.xp || 0}      潛能：${combat.potential || 0}\n`;
             
@@ -79,7 +81,34 @@ const commandRegistry = {
     'sc': { description: 'score 簡寫', execute: (p) => commandRegistry['score'].execute(p) },
     'hp': { description: 'score 簡寫', execute: (p) => commandRegistry['score'].execute(p) },
 
-    // --- 新增：技能指令 (skills / sk) ---
+    // --- 新增：自殺指令 (suicide) ---
+    'suicide': {
+        description: '刪除角色 (慎用)',
+        execute: async (playerData, args, userId) => {
+            // 需要輸入 suicide confirm 才能執行
+            if (args[0] !== 'confirm') {
+                UI.print("【警告】這將永久刪除你的角色資料，無法復原！", "error");
+                UI.print("若確定要自殺，請輸入： suicide confirm", "system");
+                return;
+            }
+
+            try {
+                UI.print("你長嘆一聲，決定結束這段江湖路...", "system");
+                
+                // 1. 刪除資料庫文件
+                await deleteDoc(doc(db, "players", userId));
+                UI.print("資料已刪除。", "system");
+
+                // 2. 登出 (這會觸發 main.js 的 onAuthStateChanged，回到登入畫面)
+                await signOut(auth);
+
+            } catch (e) {
+                UI.print("自殺失敗(連死都不行?)：" + e.message, "error");
+            }
+        }
+    },
+
+    // --- 技能指令 ---
     'skills': {
         description: '查看已習得武學',
         execute: (playerData) => {
@@ -87,14 +116,13 @@ const commandRegistry = {
             const skillList = Object.entries(skills);
 
             if (skillList.length === 0) {
-                UI.print("你目前什麼都不會。(這就是傳說中的小白?)", "chat");
+                UI.print("你目前什麼都不會。", "chat");
                 return;
             }
 
             let msg = `\n【 ${playerData.name} 的武學 】\n`;
             msg += `--------------------------------------------------\n`;
             
-            // 技能名稱對照表 (之後可以移到外部 data)
             const skillNames = {
                 "unarmed": "基本拳腳",
                 "dodge": "基本輕功",
@@ -103,10 +131,9 @@ const commandRegistry = {
             };
 
             for (const [id, level] of skillList) {
-                const name = skillNames[id] || id; // 如果沒有中文名就顯示 id
+                const name = skillNames[id] || id; 
                 const desc = getSkillLevelDesc(level);
-                // 格式對齊
-                const nameStr = name.padEnd(10, '　'); // 使用全形空白填充對齊
+                const nameStr = name.padEnd(10, '　'); 
                 msg += ` ${nameStr} ${level.toString().padStart(3)}級 / ${desc}\n`;
             }
             msg += `--------------------------------------------------\n`;
@@ -115,7 +142,7 @@ const commandRegistry = {
     },
     'sk': { description: 'skills 簡寫', execute: (p) => commandRegistry['skills'].execute(p) },
 
-    // --- 新增：背包指令 (inventory / i) ---
+    // --- 背包指令 ---
     'inventory': {
         description: '查看背包與金錢',
         execute: (playerData) => {
