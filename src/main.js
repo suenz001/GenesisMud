@@ -178,8 +178,12 @@ async function createNewCharacter(user, data) {
             spiritual: 10, maxSpiritual: 10,
             force: 10,     maxForce: 10,
             mana: 10,      maxMana: 10,
+            
+            // 生存狀態
             food: 100, maxFood: 100,
             water: 100, maxWater: 100,
+            
+            // 天賦
             str: 20, con: 20, dex: 20, int: 20, per: 20, kar: 20, cor: 20
         },
 
@@ -197,13 +201,15 @@ async function createNewCharacter(user, data) {
             "parry": 10
         },
 
-        // 背包
+        // 背包與金錢 (這裡加入了測試用的食物與水)
         money: 1000,
         inventory: [
-            { id: "bread", name: "乾糧", count: 3 },
-            { id: "waterskin", name: "水袋", count: 1 }
+            { id: "rice", name: "白米飯", count: 2 },
+            { id: "dumpling", name: "肉包子", count: 3 },
+            { id: "waterskin", name: "牛皮水袋", count: 1 }
         ],
         equipment: { weapon: null, armor: null },
+        
         sect: "none",
         createdAt: new Date().toISOString()
     };
