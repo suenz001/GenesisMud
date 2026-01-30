@@ -10,8 +10,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+// 引入自定義模組
 import { firebaseConfig } from "./config.js";
 import { UI } from "./ui.js";
+import { CommandSystem } from "./systems/commands.js"; // 新增：引入指令系統
 
 // --- 初始化 Firebase ---
 const app = initializeApp(firebaseConfig);
@@ -21,6 +23,7 @@ const db = getFirestore(app);
 
 // --- 遊戲狀態 ---
 let currentUser = null;
+let localPlayerData = null; // 新增：用來暫存玩家資料，讓指令系統可以隨時讀取
 
 // --- 系統啟動 ---
 UI.print("系統初始化中...", "system");
@@ -40,6 +43,7 @@ onAuthStateChanged(auth, async (user) => {
         
     } else {
         currentUser = null;
+        localPlayerData = null; // 登出時清空資料
         UI.print("請登入以開始遊戲。", "system");
         UI.showLoginPanel(true);
         UI.enableGameInput(false);
@@ -67,16 +71,10 @@ UI.onAuthAction({
     }
 });
 
-// 3. 處理遊戲指令
+// 3. 處理遊戲指令 (已改用 CommandSystem)
 UI.onInput((cmd) => {
-    if (cmd === 'look') {
-        UI.print("你正在客棧的門口，這裡人來人往。");
-    } else if (cmd === 'status') {
-        // 之後我們會從資料庫讀取真實數值
-        UI.print("【狀態】精:100/100 氣:100/100"); 
-    } else {
-        UI.print("什麼事也沒發生。", "error");
-    }
+    // 將指令字串與目前的玩家資料傳給系統處理
+    CommandSystem.handle(cmd, localPlayerData);
 });
 
 // --- 輔助函式 ---
@@ -101,21 +99,38 @@ async function checkAndCreatePlayerData(user, displayName) {
 
         if (docSnap.exists()) {
             UI.print("讀取檔案成功... 你的江湖與你同在。", "system");
+            // 將資料庫資料存入記憶體變數
+            localPlayerData = docSnap.data();
         } else {
             UI.print("檢測到新面孔，正在為您重塑肉身...", "system");
+            
+            // 定義初始資料
             const initialData = {
                 name: displayName,
                 email: user.email || "anonymous",
-                location: "inn_start",
+                location: "inn_start", // 初始地點
                 attributes: {
-                    hp: 100, mp: 100, sp: 100,
-                    spiritual: 0, // 靈力 (茅山用)
-                    str: 20, con: 20, dex: 20, int: 20, kar: 20, per: 20
+                    hp: 100,      // 精
+                    mp: 100,      // 氣 (內力)
+                    sp: 100,      // 神
+                    spiritual: 0, // 靈力 (茅山專用)
+                    str: 20,      // 膂力
+                    con: 20,      // 根骨
+                    dex: 20,      // 身法
+                    int: 20,      // 悟性
+                    kar: 20,      // 福緣
+                    per: 20       // 定力
                 },
-                sect: "none",
+                sect: "none",     // 門派
                 createdAt: new Date().toISOString()
             };
+
+            // 寫入資料庫
             await setDoc(playerRef, initialData);
+            
+            // 同時存入記憶體變數
+            localPlayerData = initialData;
+            
             UI.print("角色建立完成！", "system");
         }
     } catch (e) {
