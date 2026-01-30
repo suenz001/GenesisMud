@@ -1,7 +1,7 @@
 /* css/style.css */
 body {
     background-color: #000;
-    color: #c0c0c0; /* 經典淺灰字 */
+    color: #c0c0c0;
     font-family: 'Courier New', Courier, monospace, "微軟正黑體";
     margin: 0;
     padding: 0;
@@ -9,11 +9,12 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    overflow: hidden;
 }
 
 #game-wrapper {
     width: 100%;
-    max-width: 900px;
+    max-width: 1000px; /* 加寬一點 */
     height: 95vh;
     display: flex;
     flex-direction: column;
@@ -30,18 +31,183 @@ body {
     text-align: center;
     color: #33ff33;
     font-weight: bold;
+    flex-shrink: 0;
+}
+
+/* --- 核心佈局：左右兩欄 --- */
+#game-body {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden; /* 內部捲動 */
+}
+
+/* 左側：文字區 */
+#main-display {
+    flex: 7; /* 佔 70% 寬度 */
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #444;
 }
 
 #output {
     flex-grow: 1;
     padding: 15px;
     overflow-y: auto;
-    white-space: pre-wrap; /* 保留排版 */
+    white-space: pre-wrap;
     line-height: 1.6;
     font-size: 15px;
+    background: #000;
 }
 
-/* 登入面板樣式 */
+#input-area {
+    display: flex;
+    border-top: 1px solid #444;
+    padding: 10px;
+    background-color: #222;
+    flex-shrink: 0;
+}
+
+/* 右側：側邊欄 (Sidebar) */
+#sidebar {
+    flex: 3; /* 佔 30% 寬度 */
+    background: #1a1a1a;
+    padding: 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* 面板通用樣式 */
+.panel-box {
+    border: 1px solid #444;
+    background: #222;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.panel-title {
+    color: #33ff33;
+    font-size: 14px;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+/* 狀態條樣式 */
+.status-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+    font-size: 12px;
+}
+
+.status-row .label {
+    width: 30px;
+    color: #aaa;
+}
+
+.bar-container {
+    flex-grow: 1;
+    height: 16px;
+    background: #333;
+    position: relative;
+    border: 1px solid #555;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    width: 100%; /* 之後用 JS 控制 */
+    transition: width 0.3s ease;
+}
+
+.bar-fill.hp { background: #d32f2f; } /* 紅色 */
+.bar-fill.mp { background: #1976d2; } /* 藍色 */
+.bar-fill.sp { background: #fbc02d; } /* 黃色 */
+
+.bar-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    line-height: 16px;
+    color: #fff;
+    text-shadow: 1px 1px 1px #000;
+    font-size: 11px;
+}
+
+/* 地圖資訊 */
+#current-room-name {
+    text-align: center;
+    font-size: 16px;
+    color: #fff;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+#mini-map-box {
+    height: 100px;
+    background: #000;
+    border: 1px dashed #555;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #666;
+    font-size: 12px;
+}
+
+/* 方向鍵盤 (Grid Layout) */
+.d-pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+}
+
+.btn-move, .btn-action {
+    background: #333;
+    color: #ddd;
+    border: 1px solid #555;
+    padding: 8px 0;
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 3px;
+}
+
+.btn-move:hover, .btn-action:hover {
+    background: #555;
+    border-color: #33ff33;
+    color: #fff;
+}
+
+.action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+}
+
+/* 輸入框與按鈕 */
+#cmd-input {
+    flex-grow: 1;
+    background: #000;
+    border: 1px solid #555;
+    color: #fff;
+    padding: 8px;
+    font-size: 14px;
+}
+
+#send-btn, #btn-login, #btn-register, #btn-guest {
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+    padding: 0 15px;
+    margin-left: 5px;
+    cursor: pointer;
+}
+
+/* 登入面板居中 */
 #login-panel {
     position: absolute;
     top: 50%;
@@ -51,7 +217,9 @@ body {
     padding: 20px;
     border: 1px solid #33ff33;
     text-align: center;
-    display: none; /* 預設隱藏，由 JS 控制 */
+    display: none; 
+    z-index: 100;
+    box-shadow: 0 0 50px rgba(0,0,0,0.8);
 }
 
 #login-panel input {
@@ -64,54 +232,7 @@ body {
     width: 200px;
 }
 
-#login-panel button {
-    margin: 5px;
-    background: #333;
-    color: #fff;
-    border: 1px solid #555;
-    padding: 5px 15px;
-    cursor: pointer;
-}
-
-#login-panel button:hover {
-    background: #555;
-    border-color: #33ff33;
-}
-
-/* 底部輸入區 */
-#input-area {
-    display: flex;
-    border-top: 1px solid #444;
-    padding: 10px;
-    background-color: #222;
-}
-
-#cmd-input {
-    flex-grow: 1;
-    background: #000;
-    border: 1px solid #555;
-    color: #fff;
-    padding: 10px;
-    font-size: 16px;
-    font-family: inherit;
-}
-
-#cmd-input:focus {
-    outline: none;
-    border-color: #33ff33;
-}
-
-#send-btn {
-    background: #333;
-    color: #fff;
-    border: 1px solid #555;
-    padding: 0 20px;
-    margin-left: 10px;
-    cursor: pointer;
-    font-family: inherit;
-}
-
-/* 訊息顏色定義 */
+/* 文字顏色 */
 .msg-system { color: #ffff00; }
 .msg-error { color: #ff5555; }
 .msg-chat { color: #00ffff; }

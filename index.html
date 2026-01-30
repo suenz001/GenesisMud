@@ -8,9 +8,89 @@
 </head>
 <body>
     <div id="game-wrapper">
-        <div id="header">【創世江湖行】GenesisMud - Ver 0.0.3</div>
+        <div id="header">【創世江湖行】GenesisMud - Ver 0.1.0 (GUI版)</div>
         
-        <div id="output"></div>
+        <div id="game-body">
+            
+            <div id="main-display">
+                <div id="output"></div>
+                <div id="input-area">
+                    <input type="text" id="cmd-input" placeholder="系統載入中..." disabled>
+                    <button id="send-btn" disabled>發送</button>
+                </div>
+            </div>
+
+            <div id="sidebar">
+                
+                <div class="panel-box" id="panel-map">
+                    <div class="panel-title">所在位置</div>
+                    <div id="current-room-name">-- 未知 --</div>
+                    <div id="mini-map-box">地圖區域 (開發中)</div>
+                </div>
+
+                <div class="panel-box" id="panel-status">
+                    <div class="panel-title">人物狀態</div>
+                    
+                    <div class="status-row">
+                        <span class="label">精 (HP)</span>
+                        <div class="bar-container">
+                            <div id="bar-hp" class="bar-fill hp" style="width: 100%;"></div>
+                            <span id="text-hp" class="bar-text">100/100</span>
+                        </div>
+                    </div>
+
+                    <div class="status-row">
+                        <span class="label">氣 (MP)</span>
+                        <div class="bar-container">
+                            <div id="bar-mp" class="bar-fill mp" style="width: 100%;"></div>
+                            <span id="text-mp" class="bar-text">100/100</span>
+                        </div>
+                    </div>
+
+                    <div class="status-row">
+                        <span class="label">神 (SP)</span>
+                        <div class="bar-container">
+                            <div id="bar-sp" class="bar-fill sp" style="width: 100%;"></div>
+                            <span id="text-sp" class="bar-text">100/100</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-box" id="panel-move">
+                    <div class="panel-title">移動</div>
+                    <div class="d-pad">
+                        <button class="btn-move" data-dir="nw">↖</button>
+                        <button class="btn-move" data-dir="n">北</button>
+                        <button class="btn-move" data-dir="ne">↗</button>
+                        
+                        <button class="btn-move" data-dir="w">西</button>
+                        <button class="btn-action" data-cmd="look">看</button>
+                        <button class="btn-move" data-dir="e">東</button>
+                        
+                        <button class="btn-move" data-dir="sw">↙</button>
+                        <button class="btn-move" data-dir="s">南</button>
+                        <button class="btn-move" data-dir="se">↘</button>
+                    </div>
+                    <div style="margin-top: 5px; text-align: center;">
+                        <button class="btn-move" data-dir="up">往上</button>
+                        <button class="btn-move" data-dir="out">外出</button>
+                        <button class="btn-move" data-dir="enter">進入</button>
+                        <button class="btn-move" data-dir="down">往下</button>
+                    </div>
+                </div>
+
+                <div class="panel-box">
+                    <div class="panel-title">指令</div>
+                    <div class="action-grid">
+                        <button class="btn-action" data-cmd="status">狀態</button>
+                        <button class="btn-action" data-cmd="recall">回城</button>
+                        <button class="btn-action" data-cmd="help">幫助</button>
+                        <button class="btn-action" data-cmd="inventory" disabled>背包</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
 
         <div id="login-panel">
             <div style="color: #33ff33; margin-bottom: 10px;">請先登入</div>
@@ -24,11 +104,6 @@
                 <button id="btn-guest">匿名試玩 (Guest)</button>
             </div>
             <div id="login-msg" style="color: red; margin-top: 5px; font-size: 12px;"></div>
-        </div>
-
-        <div id="input-area">
-            <input type="text" id="cmd-input" placeholder="系統載入中..." disabled>
-            <button id="send-btn" disabled>發送</button>
         </div>
     </div>
 
