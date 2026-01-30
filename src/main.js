@@ -71,10 +71,14 @@ UI.onAuthAction({
     }
 });
 
-// 3. 處理遊戲指令 (已改用 CommandSystem)
+// 3. 處理遊戲指令
 UI.onInput((cmd) => {
-    // 將指令字串與目前的玩家資料傳給系統處理
-    CommandSystem.handle(cmd, localPlayerData);
+    if (!currentUser) {
+        UI.print("請先登入。", "error");
+        return;
+    }
+    // 多傳入 currentUser.uid 以便存檔使用
+    CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
 });
 
 // --- 輔助函式 ---

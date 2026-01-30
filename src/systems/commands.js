@@ -1,78 +1,97 @@
+// src/systems/commands.js
 import { UI } from "../ui.js";
+import { MapSystem } from "./map.js"; // 引入地圖系統
 
-// 指令註冊表：定義所有指令的名稱、描述與執行邏輯
+// 輔助：方向縮寫對應
+const dirMapping = {
+    'n': 'north', 's': 'south', 'e': 'east', 'w': 'west',
+    'u': 'up', 'd': 'down', 'out': 'out', 'enter': 'enter',
+    'nw': 'northwest', 'ne': 'northeast', 'sw': 'southwest', 'se': 'southeast'
+};
+
 const commandRegistry = {
     'help': {
         description: '查看指令列表',
         execute: () => {
-            let msg = "【江湖指南】可用指令列表：\n";
-            msg += "--------------------------------\n";
-            
-            // 自動列出所有指令
-            for (const [key, cmd] of Object.entries(commandRegistry)) {
-                // padEnd 是為了排版對齊
-                msg += `${key.padEnd(10, ' ')} : ${cmd.description}\n`;
-            }
-            
-            msg += "--------------------------------\n";
+            let msg = "【江湖指南】\n";
+            msg += "基本指令：look, status, help\n";
+            msg += "移動指令：n, s, e, w, u, d, out, enter\n";
             UI.print(msg, 'system');
         }
     },
     'look': {
-        description: '觀察四周環境 (簡寫: l)',
-        execute: () => {
-            // 暫時寫死，之後會讀取地圖資料
-            UI.print("【客棧大廳】", "system");
-            UI.print("這裡是一間熱鬧的客棧，南來北往的俠客都在此歇腳。");
-            UI.print("店小二正在忙著招呼客人。");
-            UI.print("明顯的出口有：north (北), out (外)");
+        description: '觀察四周 (簡寫: l)',
+        execute: (playerData) => {
+            MapSystem.look(playerData);
         }
     },
-    'l': { // look 的別名
-        description: '觀察四周 (同 look)',
-        execute: () => commandRegistry['look'].execute()
+    'l': {
+        description: 'look 的簡寫',
+        execute: (playerData) => MapSystem.look(playerData)
     },
     'status': {
         description: '查看個人狀態 (簡寫: st)',
         execute: (playerData) => {
-            if (!playerData) {
-                UI.print("你還沒登入，沒有狀態可言。", "error");
-                return;
-            }
-            // 這裡顯示基本屬性
+            if (!playerData) return;
             const attr = playerData.attributes;
             let msg = `【${playerData.name} 的狀態】\n`;
-            msg += ` 精：${attr.hp}/100\n`;
-            msg += ` 氣：${attr.mp}/100\n`;
-            msg += ` 神：${attr.sp}/100\n`;
+            msg += ` 地點：${MapSystem.getRoom(playerData.location)?.title || '未知區域'}\n`;
+            msg += ` ------------------\n`;
+            msg += ` 精：${attr.hp}/100  氣：${attr.mp}/100\n`;
+            msg += ` 神：${attr.sp}/100  靈：${attr.spiritual}\n`;
             msg += ` 門派：${playerData.sect === 'none' ? '無門無派' : playerData.sect}`;
             UI.print(msg, 'chat');
         }
     },
     'st': { 
-        description: '查看狀態 (同 status)',
+        description: 'status 的簡寫',
         execute: (playerData) => commandRegistry['status'].execute(playerData)
     }
 };
 
-// 對外公開的管理器
-export const CommandSystem = {
-    // 處理輸入字串
-    handle: (inputStr, playerData) => {
-        if (!inputStr) return;
+// 動態註冊移動指令 (把 n, s, e, w... 全部加進去)
+Object.keys(dirMapping).forEach(shortDir => {
+    const fullDir = dirMapping[shortDir];
+    commandRegistry[shortDir] = {
+        description: `往 ${fullDir} 移動`,
+        execute: (playerData, args, userId) => {
+            MapSystem.move(playerData, fullDir, userId);
+        }
+    };
+});
 
-        // 將輸入切分為：指令 + 參數 (例如 "cast fireball" -> cmd="cast", args=["fireball"])
+// 為了讓全名也能用 (例如打 north)
+Object.values(dirMapping).forEach(fullDir => {
+    if (!commandRegistry[fullDir]) {
+        commandRegistry[fullDir] = {
+            description: `往 ${fullDir} 移動`,
+            execute: (playerData, args, userId) => {
+                MapSystem.move(playerData, fullDir, userId);
+            }
+        };
+    }
+});
+
+export const CommandSystem = {
+    // 注意：這裡多加了一個 userId 參數，因為移動需要存檔
+    handle: (inputStr, playerData, userId) => {
+        if (!inputStr) return;
+        
+        // 如果玩家資料還沒載入完
+        if (!playerData) {
+            UI.print("靈魂尚未歸位，請稍候...", "error");
+            return;
+        }
+
         const args = inputStr.trim().split(/\s+/);
-        const cmdName = args.shift().toLowerCase(); // 取出第一個字並轉小寫
+        const cmdName = args.shift().toLowerCase();
 
         const command = commandRegistry[cmdName];
 
         if (command) {
-            // 執行指令，並把剩下的參數和玩家資料傳進去
-            command.execute(playerData, args);
+            command.execute(playerData, args, userId);
         } else {
-            // 找不到指令時的武俠風提示
-            UI.print("你胡亂比劃了一通，但什麼也沒發生。(輸入 help 查看指令)", "error");
+            UI.print("你胡亂比劃了一通。(輸入 help 查看指令)", "error");
         }
     }
 };
