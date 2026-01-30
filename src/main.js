@@ -89,26 +89,66 @@ async function checkAndCreatePlayerData(user, displayName) {
         } else {
             UI.print("檢測到新面孔，正在為您重塑肉身...", "system");
             
-            // 定義初始資料
+            // --- 定義完整的初始資料結構 ---
             const initialData = {
                 name: displayName,
                 email: user.email || "anonymous",
                 location: "inn_start",
                 savePoint: "inn_start",
+                
+                // 1. 基礎與修為
                 attributes: {
-                    // --- 基礎三寶 ---
                     hp: 100, maxHp: 100, // 精
                     mp: 100, maxMp: 100, // 氣
                     sp: 100, maxSp: 100, // 神
 
-                    // --- 進階修為 (初始值較低，需要修練) ---
-                    spiritual: 10, maxSpiritual: 10, // 靈力 (對應精)
-                    force: 10,     maxForce: 10,     // 內力 (對應氣)
-                    mana: 10,      maxMana: 10,      // 法力 (對應神)
+                    spiritual: 10, maxSpiritual: 10, // 靈力
+                    force: 10,     maxForce: 10,     // 內力
+                    mana: 10,      maxMana: 10,      // 法力
+                    
+                    // 生存狀態 (會隨移動減少)
+                    food: 100, maxFood: 100,
+                    water: 100, maxWater: 100,
 
-                    // --- 天賦屬性 ---
-                    str: 20, con: 20, dex: 20, int: 20, kar: 20, per: 20
+                    // 天賦屬性 (10-30隨機，這裡先給固定值)
+                    str: 20, // 膂力 (影響攻擊、負重)
+                    con: 20, // 根骨 (影響血量、防禦)
+                    dex: 20, // 身法 (影響閃避、命中)
+                    int: 20, // 悟性 (影響學習速度)
+                    per: 20, // 定力 (影響法術抵抗、異常狀態)
+                    kar: 20, // 福緣 (運氣)
+                    cor: 20  // 膽識 (爆擊率?)
                 },
+
+                // 2. 戰鬥數值 (通常由屬性計算，這裡存基礎值)
+                combat: {
+                    xp: 0,          // 經驗值
+                    potential: 0,   // 潛能 (學習技能用)
+                    attack: 10,     // 攻擊力
+                    defense: 10,    // 防禦力
+                    hitRate: 10,    // 命中
+                    dodge: 10,      // 閃避
+                    parry: 10       // 招架
+                },
+
+                // 3. 技能列表 (格式: { skill_id: level })
+                skills: {
+                    "unarmed": 10, // 基本拳腳
+                    "dodge": 10,   // 基本輕功
+                    "parry": 10    // 基本招架
+                },
+
+                // 4. 背包與金錢
+                money: 1000, // 初始銀兩
+                inventory: [
+                    { id: "bread", name: "乾糧", count: 3 },
+                    { id: "waterskin", name: "水袋", count: 1 }
+                ],
+                equipment: {
+                    weapon: null,
+                    armor: null
+                },
+
                 sect: "none",
                 createdAt: new Date().toISOString()
             };
@@ -118,7 +158,6 @@ async function checkAndCreatePlayerData(user, displayName) {
             UI.print("角色建立完成！", "system");
         }
         
-        // 登入後立刻更新介面與觸發 Look
         CommandSystem.handle('look', localPlayerData, currentUser.uid);
 
     } catch (e) {

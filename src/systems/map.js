@@ -4,7 +4,6 @@ import { WorldMap } from "../data/world.js";
 import { UI } from "../ui.js";
 import { db } from "../firebase.js";
 
-// 方向對應的座標變化
 const DIR_OFFSET = {
     'north': { x: 0, y: 1, z: 0 },
     'south': { x: 0, y: -1, z: 0 },
@@ -21,40 +20,21 @@ const DIR_OFFSET = {
 export const MapSystem = {
     getRoom: (roomId) => WorldMap[roomId],
 
-    // --- 新核心：動態計算出口 ---
     getAvailableExits: (currentRoomId) => {
         const room = WorldMap[currentRoomId];
         if (!room) return {};
-
         const exits = {};
+        if (room.exits) Object.assign(exits, room.exits);
 
-        // 1. 先加入手動設定的特殊出口 (如 enter, out)
-        if (room.exits) {
-            Object.assign(exits, room.exits);
-        }
-
-        // 2. 自動偵測座標鄰居
         for (const [dir, offset] of Object.entries(DIR_OFFSET)) {
-            // 如果這個方向被牆擋住了，就跳過
             if (room.walls && room.walls.includes(dir)) continue;
-
-            // 計算目標座標
             const targetX = room.x + offset.x;
             const targetY = room.y + offset.y;
             const targetZ = room.z + offset.z;
 
-            // 搜尋地圖上符合該座標的房間
-            // (資料量大時建議建立座標索引 cache，目前遍歷即可)
             for (const [targetId, targetRoom] of Object.entries(WorldMap)) {
-                if (targetRoom.x === targetX && 
-                    targetRoom.y === targetY && 
-                    targetRoom.z === targetZ) {
-                    
-                    // 找到了鄰居！加入出口列表
-                    // 注意：如果手動 exits 已經定義了這個方向，以手動為準 (覆蓋)
-                    if (!exits[dir]) {
-                        exits[dir] = targetId;
-                    }
+                if (targetRoom.x === targetX && targetRoom.y === targetY && targetRoom.z === targetZ) {
+                    if (!exits[dir]) exits[dir] = targetId;
                     break;
                 }
             }
@@ -65,19 +45,14 @@ export const MapSystem = {
     look: (playerData) => {
         if (!playerData || !playerData.location) return;
         const room = WorldMap[playerData.location];
-
         if (!room) {
-            UI.print("你陷入虛空... (錯誤：找不到地圖 " + playerData.location + ")", "error");
+            UI.print("你陷入虛空...", "error");
             return;
         }
-
         UI.updateLocationInfo(room.title);
         UI.updateHUD(playerData);
-
         UI.print(`【${room.title}】`, "system");
         UI.print(room.description);
-        
-        // 使用動態計算的出口來顯示
         const validExits = MapSystem.getAvailableExits(playerData.location);
         const exitList = Object.keys(validExits).join(", ");
         UI.print(`明顯的出口：${exitList || "無"}`, "chat");
@@ -86,11 +61,9 @@ export const MapSystem = {
     move: async (playerData, direction, userId) => {
         if (!playerData) return;
 
-        // 使用動態計算的出口來判斷是否可移動
         const validExits = MapSystem.getAvailableExits(playerData.location);
 
         if (!validExits[direction]) {
-            // 增加一點沉浸感：如果是因為有牆壁
             const room = WorldMap[playerData.location];
             if (room.walls && room.walls.includes(direction)) {
                 UI.print("那邊是一面牆，過不去。", "error");
@@ -100,16 +73,34 @@ export const MapSystem = {
             return;
         }
 
-        const nextRoomId = validExits[direction];
+        // --- 新增：生存狀態檢查 ---
+        const attr = playerData.attributes;
+        if (attr.food <= 0 || attr.water <= 0) {
+            UI.print("你餓得頭昏眼花，一步也走不動了...", "error");
+            return; // 阻止移動
+        }
+
+        // 扣除食物與飲水
+        attr.food = Math.max(0, attr.food - 1); // 每次移動扣 1
+        attr.water = Math.max(0, attr.water - 1);
         
-        // 更新與存檔
+        // 飢餓提示
+        if (attr.food < 10) UI.print("你的肚子咕嚕咕嚕叫了起來。", "system");
+        if (attr.water < 10) UI.print("你口乾舌燥，急需喝水。", "system");
+
+        const nextRoomId = validExits[direction];
         playerData.location = nextRoomId;
+        
         UI.print(`你往 ${direction} 走去...`);
         MapSystem.look(playerData);
 
         try {
             const playerRef = doc(db, "players", userId);
-            await updateDoc(playerRef, { location: nextRoomId });
+            await updateDoc(playerRef, { 
+                location: nextRoomId,
+                "attributes.food": attr.food,   // 更新資料庫
+                "attributes.water": attr.water
+            });
         } catch (e) {
             console.error(e);
         }
