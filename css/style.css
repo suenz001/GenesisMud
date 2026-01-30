@@ -1,0 +1,117 @@
+/* css/style.css */
+body {
+    background-color: #000;
+    color: #c0c0c0; /* 經典淺灰字 */
+    font-family: 'Courier New', Courier, monospace, "微軟正黑體";
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#game-wrapper {
+    width: 100%;
+    max-width: 900px;
+    height: 95vh;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #444;
+    background-color: #111;
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+    position: relative;
+}
+
+#header {
+    padding: 10px;
+    background-color: #222;
+    border-bottom: 1px solid #444;
+    text-align: center;
+    color: #33ff33;
+    font-weight: bold;
+}
+
+#output {
+    flex-grow: 1;
+    padding: 15px;
+    overflow-y: auto;
+    white-space: pre-wrap; /* 保留排版 */
+    line-height: 1.6;
+    font-size: 15px;
+}
+
+/* 登入面板樣式 */
+#login-panel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #222;
+    padding: 20px;
+    border: 1px solid #33ff33;
+    text-align: center;
+    display: none; /* 預設隱藏，由 JS 控制 */
+}
+
+#login-panel input {
+    display: block;
+    margin: 10px auto;
+    padding: 8px;
+    background: #000;
+    color: #fff;
+    border: 1px solid #555;
+    width: 200px;
+}
+
+#login-panel button {
+    margin: 5px;
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+    padding: 5px 15px;
+    cursor: pointer;
+}
+
+#login-panel button:hover {
+    background: #555;
+    border-color: #33ff33;
+}
+
+/* 底部輸入區 */
+#input-area {
+    display: flex;
+    border-top: 1px solid #444;
+    padding: 10px;
+    background-color: #222;
+}
+
+#cmd-input {
+    flex-grow: 1;
+    background: #000;
+    border: 1px solid #555;
+    color: #fff;
+    padding: 10px;
+    font-size: 16px;
+    font-family: inherit;
+}
+
+#cmd-input:focus {
+    outline: none;
+    border-color: #33ff33;
+}
+
+#send-btn {
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+    padding: 0 20px;
+    margin-left: 10px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+/* 訊息顏色定義 */
+.msg-system { color: #ffff00; }
+.msg-error { color: #ff5555; }
+.msg-chat { color: #00ffff; }
