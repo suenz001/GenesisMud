@@ -1,4 +1,6 @@
-// src/ui.js
+// src/ui.js - 請完全覆蓋
+import { WorldMap } from "./data/world.js"; // <--- 這裡需要直接引用 WorldMap 來查座標
+
 const output = document.getElementById('output');
 const input = document.getElementById('cmd-input');
 const sendBtn = document.getElementById('send-btn');
@@ -13,7 +15,7 @@ const btnGuest = document.getElementById('btn-guest');
 
 // HUD 元素
 const elRoomName = document.getElementById('current-room-name');
-const miniMapBox = document.getElementById('mini-map-box'); // 小地圖容器
+const miniMapBox = document.getElementById('mini-map-box');
 
 const barHp = document.getElementById('bar-hp');
 const textHp = document.getElementById('text-hp');
@@ -22,11 +24,10 @@ const textMp = document.getElementById('text-mp');
 const barSp = document.getElementById('bar-sp');
 const textSp = document.getElementById('text-sp');
 
-// 修改 HTML 中的標籤文字 (在這裡用 JS 改，或者你可以直接去 HTML 改)
-// 為了方便，我們直接操作 DOM 改掉中文
-document.querySelector('#panel-status .status-row:nth-child(2) .label').textContent = "Essence"; // 精
-document.querySelector('#panel-status .status-row:nth-child(3) .label').textContent = "Breath";  // 氣
-document.querySelector('#panel-status .status-row:nth-child(4) .label').textContent = "Spirit";  // 神
+// 改回中文標籤
+document.querySelector('#panel-status .status-row:nth-child(2) .label').textContent = "精";
+document.querySelector('#panel-status .status-row:nth-child(3) .label').textContent = "氣";
+document.querySelector('#panel-status .status-row:nth-child(4) .label').textContent = "神";
 
 export const UI = {
     print: (text, type = 'normal') => {
@@ -39,80 +40,94 @@ export const UI = {
         output.scrollTop = output.scrollHeight;
     },
 
-    updateHUD: (playerData, currentRoomExits) => {
+    updateHUD: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
         const max = 100; 
 
-        // 1. Essence (HP)
+        // 1. 精 (HP)
         const hpPercent = Math.max(0, Math.min(100, (attr.hp / max) * 100));
         barHp.style.width = `${hpPercent}%`;
         textHp.textContent = `${attr.hp}/${max}`;
 
-        // 2. Breath (MP)
+        // 2. 氣 (MP)
         const mpPercent = Math.max(0, Math.min(100, (attr.mp / max) * 100));
         barMp.style.width = `${mpPercent}%`;
         textMp.textContent = `${attr.mp}/${max}`;
 
-        // 3. Spirit (SP)
+        // 3. 神 (SP)
         const spPercent = Math.max(0, Math.min(100, (attr.sp / max) * 100));
         barSp.style.width = `${spPercent}%`;
         textSp.textContent = `${attr.sp}/${max}`;
 
-        // 4. 繪製小地圖
-        UI.drawMiniMap(currentRoomExits);
+        // 4. 繪製 5x5 範圍地圖
+        // 為了取得座標，我們需要從 WorldMap 裡查當前玩家所在的房間
+        const currentRoom = WorldMap[playerData.location];
+        if (currentRoom) {
+            UI.drawRangeMap(currentRoom.x, currentRoom.y, currentRoom.z, playerData.location);
+        }
     },
 
-    // --- 新增：繪製九宮格地圖 ---
-    drawMiniMap: (exits) => {
-        if (!exits) exits = {};
-        miniMapBox.innerHTML = ''; // 清空
+    // --- 新增：繪製範圍地圖 (Range Map) ---
+    drawRangeMap: (px, py, pz, currentId) => {
+        miniMapBox.innerHTML = ''; 
         
         const grid = document.createElement('div');
-        grid.className = 'mini-map-grid';
+        grid.className = 'range-map-grid'; // 使用新的 class
 
-        // 定義九宮格順序：NW, N, NE, W, Center, E, SW, S, SE
-        const cells = [
-            { dir: 'northwest', label: '↖' }, { dir: 'north', label: 'N' }, { dir: 'northeast', label: '↗' },
-            { dir: 'west', label: 'W' },      { dir: 'center', label: '我' }, { dir: 'east', label: 'E' },
-            { dir: 'southwest', label: '↙' }, { dir: 'south', label: 'S' }, { dir: 'southeast', label: '↘' }
-        ];
+        // 定義視野半徑 (半徑2 = 5x5)
+        const radius = 2; 
 
-        cells.forEach(cell => {
-            const div = document.createElement('div');
-            div.className = 'map-cell';
+        // 掃描 Y 軸 (從北到南：py + radius -> py - radius)
+        for (let y = py + radius; y >= py - radius; y--) {
+            // 掃描 X 軸 (從西到東：px - radius -> px + radius)
+            for (let x = px - radius; x <= px + radius; x++) {
+                
+                const div = document.createElement('div');
+                div.className = 'map-cell-range';
 
-            if (cell.dir === 'center') {
-                div.classList.add('current');
-                div.textContent = 'YOU';
-            } else if (exits[cell.dir]) {
-                div.classList.add('exit');
-                div.textContent = cell.label;
-                div.title = `往 ${cell.dir} 移動`;
-                // 讓小地圖也能點擊移動
-                div.onclick = () => {
-                    // 模擬點擊按鈕
-                    const btn = document.querySelector(`.btn-move[data-dir="${cell.dir}"]`);
-                    if (btn) btn.click();
-                };
-            } else {
-                // 沒有路的地方留空或顯示牆壁
-                div.style.opacity = '0.1';
+                // 搜尋這個座標有沒有房間 (且高度 z 相同)
+                // 這裡簡單用遍歷搜尋，資料量大時可優化為 Map lookup
+                let roomKey = null;
+                let roomData = null;
+
+                for (const [key, val] of Object.entries(WorldMap)) {
+                    // 必須 x, y, z 都吻合
+                    if (val.x === x && val.y === y && val.z === pz) {
+                        roomKey = key;
+                        roomData = val;
+                        break;
+                    }
+                }
+
+                if (x === px && y === py) {
+                    // 玩家中心點
+                    div.classList.add('current-pos');
+                    div.textContent = "我"; // 縮小的標記
+                } else if (roomData) {
+                    // 這裡有房間
+                    div.classList.add('room-exists');
+                    // 取地圖名稱的第一個字當縮寫 (例如 "悅來客棧" -> "悅")
+                    div.textContent = roomData.title.substring(0, 1);
+                    div.title = roomData.title; // 滑鼠移上去顯示全名
+                } else {
+                    // 空地
+                    div.classList.add('empty');
+                }
+
+                grid.appendChild(div);
             }
-            grid.appendChild(div);
-        });
-
-        // 處理特殊出口 (Up/Down/Out/Enter) 顯示在下方文字
-        const specialExits = Object.keys(exits).filter(k => !['north','south','east','west','northwest','northeast','southwest','southeast'].includes(k));
-        if (specialExits.length > 0) {
-            const extra = document.createElement('div');
-            extra.style.position = 'absolute';
-            extra.style.bottom = '5px';
-            extra.style.color = '#ffff00';
-            extra.style.fontSize = '12px';
-            extra.textContent = '其他: ' + specialExits.join(', ');
-            miniMapBox.appendChild(extra);
         }
+        
+        // 顯示樓層提示
+        const zInfo = document.createElement('div');
+        zInfo.style.position = 'absolute';
+        zInfo.style.bottom = '2px';
+        zInfo.style.right = '5px';
+        zInfo.style.fontSize = '10px';
+        zInfo.style.color = '#555';
+        zInfo.textContent = `層級: ${pz}`;
+        miniMapBox.appendChild(zInfo);
 
         miniMapBox.appendChild(grid);
     },
@@ -124,9 +139,7 @@ export const UI = {
     enableGameInput: (enabled) => {
         input.disabled = !enabled;
         sendBtn.disabled = !enabled;
-        const allBtns = document.querySelectorAll('.btn-move, .btn-action');
-        allBtns.forEach(btn => btn.disabled = !enabled);
-
+        document.querySelectorAll('.btn-move, .btn-action').forEach(btn => btn.disabled = !enabled);
         if (enabled) {
             input.placeholder = "請輸入指令...";
             input.focus();
@@ -139,10 +152,7 @@ export const UI = {
         loginPanel.style.display = show ? 'block' : 'none';
         if (show) emailInput.focus();
     },
-
-    showLoginError: (msg) => {
-        loginMsg.textContent = msg;
-    },
+    showLoginError: (msg) => { loginMsg.textContent = msg; },
 
     onInput: (callback) => {
         sendBtn.addEventListener('click', () => {
@@ -156,7 +166,6 @@ export const UI = {
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendBtn.click();
         });
-
         document.querySelectorAll('.btn-move, .btn-action').forEach(btn => {
             btn.addEventListener('click', () => {
                 const cmd = btn.dataset.dir || btn.dataset.cmd;
@@ -167,16 +176,9 @@ export const UI = {
             });
         });
     },
-
     onAuthAction: (callbacks) => {
-        btnLogin.addEventListener('click', () => {
-            callbacks.onLogin(emailInput.value, pwdInput.value);
-        });
-        btnRegister.addEventListener('click', () => {
-            callbacks.onRegister(emailInput.value, pwdInput.value);
-        });
-        btnGuest.addEventListener('click', () => {
-            callbacks.onGuest();
-        });
+        btnLogin.addEventListener('click', () => { callbacks.onLogin(emailInput.value, pwdInput.value); });
+        btnRegister.addEventListener('click', () => { callbacks.onRegister(emailInput.value, pwdInput.value); });
+        btnGuest.addEventListener('click', () => { callbacks.onGuest(); });
     }
 };

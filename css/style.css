@@ -1,7 +1,7 @@
-/* css/style.css - 請完全覆蓋 */
+/* css/style.css */
 body {
     background-color: #000;
-    color: #c0c0c0;
+    color: #c0c0c0; /* 經典淺灰字 */
     font-family: 'Courier New', Courier, monospace, "微軟正黑體";
     margin: 0;
     padding: 0;
@@ -9,12 +9,12 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    overflow: hidden;
+    overflow: hidden; /* 防止整個頁面捲動 */
 }
 
 #game-wrapper {
     width: 100%;
-    max-width: 1100px; /* 加寬一點，讓介面更舒服 */
+    max-width: 1100px; /* 加寬版面 */
     height: 95vh;
     display: flex;
     flex-direction: column;
@@ -34,15 +34,16 @@ body {
     flex-shrink: 0;
 }
 
+/* --- 核心佈局：左右兩欄 --- */
 #game-body {
     display: flex;
     flex-grow: 1;
     overflow: hidden;
 }
 
-/* 左側：文字區 */
+/* 左側：文字區 (65%) */
 #main-display {
-    flex: 6.5; /* 稍微縮小左側比例 */
+    flex: 6.5; 
     display: flex;
     flex-direction: column;
     border-right: 1px solid #444;
@@ -51,7 +52,7 @@ body {
 #output {
     flex-grow: 1;
     padding: 15px;
-    overflow-y: auto;
+    overflow-y: auto; /* 文字區自己捲動 */
     white-space: pre-wrap;
     line-height: 1.6;
     font-size: 15px;
@@ -66,9 +67,9 @@ body {
     flex-shrink: 0;
 }
 
-/* 右側：側邊欄 (Sidebar) */
+/* 右側：側邊欄 (35%) */
 #sidebar {
-    flex: 3.5; /* 加大右側比例 */
+    flex: 3.5;
     background: #1a1a1a;
     padding: 10px;
     overflow-y: auto;
@@ -94,10 +95,10 @@ body {
     text-align: center;
 }
 
-/* --- 新增：九宮格小地圖樣式 --- */
+/* --- 5x5 地圖樣式 --- */
 #mini-map-box {
-    height: 200px; /* 加大高度 */
-    background: #000;
+    height: 220px; /* 足夠的高度 */
+    background: #0d0d0d;
     border: 1px solid #555;
     display: flex;
     justify-content: center;
@@ -106,56 +107,63 @@ body {
     padding: 5px;
 }
 
-.mini-map-grid {
+.range-map-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-    gap: 5px;
+    grid-template-columns: repeat(5, 1fr); /* 5列 */
+    grid-template-rows: repeat(5, 1fr);    /* 5行 */
+    gap: 4px;
     width: 100%;
     height: 100%;
 }
 
-.map-cell {
-    border: 1px dashed #333;
+.map-cell-range {
     display: flex;
     justify-content: center;
     align-items: center;
     font-size: 12px;
-    color: #555;
-    border-radius: 4px;
+    border-radius: 2px;
+    color: #666;
+    background: #111;
+    border: 1px solid #222;
 }
 
-/* 當前位置 */
-.map-cell.current {
-    border: 2px solid #33ff33;
-    background-color: rgba(51, 255, 51, 0.2);
-    color: #fff;
+/* 當格子有房間時 */
+.map-cell-range.room-exists {
+    border: 1px solid #666;
+    background-color: #333;
+    color: #fff; /* 亮字 */
     font-weight: bold;
+    box-shadow: 0 0 2px rgba(255, 255, 255, 0.1);
+    cursor: default;
 }
 
-/* 存在的出口 */
-.map-cell.exit {
-    border: 1px solid #888;
-    background-color: #222;
-    color: #ddd;
-    cursor: pointer; /* 讓地圖也可以點擊移動 */
-}
-.map-cell.exit:hover {
-    background-color: #444;
+/* 當前玩家位置 */
+.map-cell-range.current-pos {
+    border: 1px solid #33ff33;
+    background-color: rgba(51, 255, 51, 0.3);
+    color: #33ff33;
+    font-weight: bold;
+    font-size: 10px;
 }
 
-/* 狀態條樣式 */
+/* 空地 */
+.map-cell-range.empty {
+    border: none;
+    background: transparent;
+}
+
+/* 狀態條 (血條) 樣式 */
 .status-row {
     display: flex;
     align-items: center;
-    margin-bottom: 8px; /* 間距拉大 */
+    margin-bottom: 8px;
     font-size: 13px;
 }
 
 .status-row .label {
-    width: 60px; /* 拉寬以容納英文 */
+    width: 25px; /* 中文字寬度 */
     color: #aaa;
-    font-size: 12px;
+    font-weight: bold;
 }
 
 .bar-container {
@@ -168,56 +176,109 @@ body {
     overflow: hidden;
 }
 
-.bar-fill { height: 100%; width: 100%; transition: width 0.3s ease; }
-.bar-fill.hp { background: #d32f2f; }
-.bar-fill.mp { background: #1976d2; }
-.bar-fill.sp { background: #fbc02d; }
+.bar-fill {
+    height: 100%;
+    width: 100%; /* JS 控制 */
+    transition: width 0.3s ease;
+}
+
+.bar-fill.hp { background: #d32f2f; } /* 紅 */
+.bar-fill.mp { background: #1976d2; } /* 藍 */
+.bar-fill.sp { background: #fbc02d; } /* 黃 */
 
 .bar-text {
-    position: absolute; top: 0; left: 0; width: 100%;
-    text-align: center; line-height: 18px;
-    color: #fff; text-shadow: 1px 1px 1px #000; font-size: 11px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    line-height: 18px;
+    color: #fff;
+    text-shadow: 1px 1px 1px #000;
+    font-size: 11px;
 }
 
 #current-room-name {
-    text-align: center; font-size: 18px; /* 字體加大 */
-    color: #fff; font-weight: bold; margin-bottom: 5px;
+    text-align: center;
+    font-size: 18px;
+    color: #fff;
+    font-weight: bold;
+    margin-bottom: 5px;
 }
 
 /* 方向鍵盤 */
 .d-pad {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
-}
-.btn-move, .btn-action {
-    background: #333; color: #ddd; border: 1px solid #555;
-    padding: 10px 0; cursor: pointer; font-size: 13px; border-radius: 3px;
-}
-.btn-move:hover, .btn-action:hover {
-    background: #555; border-color: #33ff33; color: #fff;
-}
-.action-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
 }
 
-/* 登入與輸入框相關維持原樣，但因 body flex 設定可能會微調 */
+.btn-move, .btn-action {
+    background: #333;
+    color: #ddd;
+    border: 1px solid #555;
+    padding: 10px 0;
+    cursor: pointer;
+    font-size: 13px;
+    border-radius: 3px;
+}
+
+.btn-move:hover, .btn-action:hover {
+    background: #555;
+    border-color: #33ff33;
+    color: #fff;
+}
+
+.action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+}
+
+/* 輸入框與登入相關 */
 #cmd-input {
-    flex-grow: 1; background: #000; border: 1px solid #555;
-    color: #fff; padding: 8px; font-size: 14px;
+    flex-grow: 1;
+    background: #000;
+    border: 1px solid #555;
+    color: #fff;
+    padding: 8px;
+    font-size: 14px;
+    font-family: inherit;
 }
+
 #send-btn, #btn-login, #btn-register, #btn-guest {
-    background: #333; color: #fff; border: 1px solid #555;
-    padding: 0 15px; margin-left: 5px; cursor: pointer;
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+    padding: 0 15px;
+    margin-left: 5px;
+    cursor: pointer;
 }
+
 #login-panel {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    background: #222; padding: 20px; border: 1px solid #33ff33;
-    text-align: center; display: none; z-index: 100;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #222;
+    padding: 20px;
+    border: 1px solid #33ff33;
+    text-align: center;
+    display: none; 
+    z-index: 100;
     box-shadow: 0 0 50px rgba(0,0,0,0.8);
 }
+
 #login-panel input {
-    display: block; margin: 10px auto; padding: 8px;
-    background: #000; color: #fff; border: 1px solid #555; width: 200px;
+    display: block;
+    margin: 10px auto;
+    padding: 8px;
+    background: #000;
+    color: #fff;
+    border: 1px solid #555;
+    width: 200px;
 }
+
 .msg-system { color: #ffff00; }
 .msg-error { color: #ff5555; }
 .msg-chat { color: #00ffff; }

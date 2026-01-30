@@ -1,62 +1,82 @@
 // src/data/world.js
 export const WorldMap = {
-    // === 新手村區域 ===
+    // === 中心區域 ===
     "inn_start": {
         title: "悅來客棧",
         description: "這是一間名震江湖的老字號客棧。牆上掛著『賓至如歸』的牌匾。角落裡幾個乞丐正在竊竊私語。\n【這裡可以休息，輸入 save 儲存進度】",
-        allowSave: true, // <--- 新增這行：允許存檔
-        exits: { "out": "yangzhou_square" }
-    },
-    "yangzhou_square": {
-        title: "揚州廣場",
-        description: "這裡是揚州城的中心廣場，人聲鼎沸，車水馬龍。正中央有一座巨大的石碑，上面刻著當今武林高手的排名。",
-        exits: {
-            "enter": "inn_start",
-            "north": "road_north",
-            "south": "road_south",
-            "east": "road_east",
-            "west": "road_west"
-        }
+        allowSave: true,
+        x: 0, y: 0, z: 0, // <--- 座標 (0,0)
+        exits: { "east": "street_e1" }
     },
 
-    // === 通往各門派的道路 ===
-    "road_north": {
-        title: "青石大道",
-        description: "這是一條寬闊的青石大道，向北延伸。遠遠望去，似乎可以見到巍峨的高山。",
+    // === 東邊街道系統 ===
+    "street_e1": {
+        title: "長安東街",
+        description: "客棧東邊的街道，往來行人絡繹不絕。",
+        x: 1, y: 0, z: 0,
         exits: { 
-            "south": "yangzhou_square",
-            "north": "shaolin_gate" 
+            "west": "inn_start",
+            "east": "market_sq",
+            "north": "street_ne1" // 往北岔路
         }
     },
-    "road_south": {
-        title: "林間小徑",
-        description: "路徑漸漸變得幽靜，兩旁是茂密的竹林，空氣中帶著一絲濕潤。",
+    "market_sq": {
+        title: "熱鬧市集",
+        description: "這裡是城裡最熱鬧的市集，叫賣聲此起彼落。",
+        x: 2, y: 0, z: 0,
         exits: { 
-            "north": "yangzhou_square",
-            "south": "wudang_foot" 
+            "west": "street_e1",
+            "east": "bank"
         }
     },
-    "road_east": {
-        title: "東門官道",
-        description: "往東是一條筆直的官道，路上行人匆匆。",
+    "bank": {
+        title: "宏源錢莊",
+        description: "這是一間金字招牌的錢莊，門口站著兩個彪形大漢。",
+        x: 3, y: 0, z: 0,
+        exits: { "west": "market_sq" }
+    },
+
+    // === 東北邊街道 ===
+    "street_ne1": {
+        title: "青龍街",
+        description: "街道兩旁種滿了柳樹，環境較為清幽。",
+        x: 1, y: 1, z: 0,
         exits: { 
-            "west": "yangzhou_square",
-            "east": "huashan_path" 
+            "south": "street_e1",
+            "east": "weapon_shop"
+        }
+    },
+    "weapon_shop": {
+        title: "神鋒武器鋪",
+        description: "還沒進門就聽到叮叮噹噹的打鐵聲，牆上掛滿了刀槍劍戟。",
+        x: 2, y: 1, z: 0,
+        exits: { "west": "street_ne1" }
+    },
+
+    // === 其他區域 (揚州廣場移到南邊) ===
+    "yangzhou_square": {
+        title: "揚州廣場",
+        description: "城市的中心廣場，連接著四面八方。",
+        x: 0, y: -1, z: 0, // 客棧南邊
+        exits: {
+            "north": "inn_start", // 這裡假設客棧在廣場北邊
+            "south": "road_south",
+            "west": "road_west"
         }
     },
     "road_west": {
         title: "西郊荒野",
-        description: "出了西門，景色變得荒涼起來。遠處有一座陰氣森森的山頭，那裡似乎就是傳說中的茅山。",
+        description: "景色荒涼，遠處有一座陰森的山頭。",
+        x: -1, y: -1, z: 0,
         exits: { 
             "east": "yangzhou_square",
-            "northwest": "maoshan_foot" 
+            "northwest": "maoshan_foot"
         }
     },
-
-    // === 茅山派入口 ===
     "maoshan_foot": {
         title: "茅山腳下",
-        description: "你來到了茅山腳下，四周瀰漫著淡淡的霧氣。山道旁立著一塊石碑，上書『凡人止步』。",
+        description: "茅山腳下，霧氣瀰漫。",
+        x: -2, y: 0, z: 0, // 稍微調整座標以配合地圖顯示
         exits: {
             "southeast": "road_west",
             "up": "maoshan_gate"
@@ -64,10 +84,15 @@ export const WorldMap = {
     },
     "maoshan_gate": {
         title: "茅山派山門",
-        description: "一座古樸陰森的道觀矗立在眼前。門口掛著兩盞幽綠的燈籠。\n【此處乃修道之地，可以 save 儲存進度】",
-        allowSave: true, // <--- 新增這行：門派大廳通常也可以存檔
-        exits: {
-            "down": "maoshan_foot"
-        }
+        description: "茅山派的大門。\n【此處可 save】",
+        allowSave: true,
+        x: -2, y: 0, z: 1, // 高度 Z=1
+        exits: { "down": "maoshan_foot" }
+    },
+    "road_south": {
+        title: "林間小徑",
+        description: "通往武當山的小路。",
+        x: 0, y: -2, z: 0,
+        exits: { "north": "yangzhou_square" }
     }
 };
