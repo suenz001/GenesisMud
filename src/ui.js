@@ -5,15 +5,16 @@ const sendBtn = document.getElementById('send-btn');
 const loginPanel = document.getElementById('login-panel');
 const loginMsg = document.getElementById('login-msg');
 
-// 登入面板輸入框
 const emailInput = document.getElementById('email-input');
 const pwdInput = document.getElementById('pwd-input');
 const btnLogin = document.getElementById('btn-login');
 const btnRegister = document.getElementById('btn-register');
 const btnGuest = document.getElementById('btn-guest');
 
-// --- 新增：HUD 元素 ---
+// HUD 元素
 const elRoomName = document.getElementById('current-room-name');
+const miniMapBox = document.getElementById('mini-map-box'); // 小地圖容器
+
 const barHp = document.getElementById('bar-hp');
 const textHp = document.getElementById('text-hp');
 const barMp = document.getElementById('bar-mp');
@@ -21,8 +22,13 @@ const textMp = document.getElementById('text-mp');
 const barSp = document.getElementById('bar-sp');
 const textSp = document.getElementById('text-sp');
 
+// 修改 HTML 中的標籤文字 (在這裡用 JS 改，或者你可以直接去 HTML 改)
+// 為了方便，我們直接操作 DOM 改掉中文
+document.querySelector('#panel-status .status-row:nth-child(2) .label').textContent = "Essence"; // 精
+document.querySelector('#panel-status .status-row:nth-child(3) .label').textContent = "Breath";  // 氣
+document.querySelector('#panel-status .status-row:nth-child(4) .label').textContent = "Spirit";  // 神
+
 export const UI = {
-    // 輸出訊息 (保持原樣)
     print: (text, type = 'normal') => {
         const div = document.createElement('div');
         div.textContent = text;
@@ -33,44 +39,91 @@ export const UI = {
         output.scrollTop = output.scrollHeight;
     },
 
-    // --- 新增：更新側邊欄狀態 (HUD) ---
-    updateHUD: (playerData) => {
+    updateHUD: (playerData, currentRoomExits) => {
         if (!playerData) return;
         const attr = playerData.attributes;
+        const max = 100; 
 
-        // 更新房間名稱 (如果有的話)
-        // 這裡我們暫時只更新屬性，地圖名稱由 MapSystem 呼叫 updateLocation 處理
-        
-        // 1. 更新精 (HP)
-        // 假設最大值暫時都是 100，之後可從屬性計算
-        const maxHp = 100; 
-        const hpPercent = Math.max(0, Math.min(100, (attr.hp / maxHp) * 100));
+        // 1. Essence (HP)
+        const hpPercent = Math.max(0, Math.min(100, (attr.hp / max) * 100));
         barHp.style.width = `${hpPercent}%`;
-        textHp.textContent = `${attr.hp}/${maxHp}`;
+        textHp.textContent = `${attr.hp}/${max}`;
 
-        // 2. 更新氣 (MP)
-        const maxMp = 100;
-        const mpPercent = Math.max(0, Math.min(100, (attr.mp / maxMp) * 100));
+        // 2. Breath (MP)
+        const mpPercent = Math.max(0, Math.min(100, (attr.mp / max) * 100));
         barMp.style.width = `${mpPercent}%`;
-        textMp.textContent = `${attr.mp}/${maxMp}`;
+        textMp.textContent = `${attr.mp}/${max}`;
 
-        // 3. 更新神 (SP)
-        const maxSp = 100;
-        const spPercent = Math.max(0, Math.min(100, (attr.sp / maxSp) * 100));
+        // 3. Spirit (SP)
+        const spPercent = Math.max(0, Math.min(100, (attr.sp / max) * 100));
         barSp.style.width = `${spPercent}%`;
-        textSp.textContent = `${attr.sp}/${maxSp}`;
+        textSp.textContent = `${attr.sp}/${max}`;
+
+        // 4. 繪製小地圖
+        UI.drawMiniMap(currentRoomExits);
     },
 
-    // --- 新增：更新地點名稱顯示 ---
+    // --- 新增：繪製九宮格地圖 ---
+    drawMiniMap: (exits) => {
+        if (!exits) exits = {};
+        miniMapBox.innerHTML = ''; // 清空
+        
+        const grid = document.createElement('div');
+        grid.className = 'mini-map-grid';
+
+        // 定義九宮格順序：NW, N, NE, W, Center, E, SW, S, SE
+        const cells = [
+            { dir: 'northwest', label: '↖' }, { dir: 'north', label: 'N' }, { dir: 'northeast', label: '↗' },
+            { dir: 'west', label: 'W' },      { dir: 'center', label: '我' }, { dir: 'east', label: 'E' },
+            { dir: 'southwest', label: '↙' }, { dir: 'south', label: 'S' }, { dir: 'southeast', label: '↘' }
+        ];
+
+        cells.forEach(cell => {
+            const div = document.createElement('div');
+            div.className = 'map-cell';
+
+            if (cell.dir === 'center') {
+                div.classList.add('current');
+                div.textContent = 'YOU';
+            } else if (exits[cell.dir]) {
+                div.classList.add('exit');
+                div.textContent = cell.label;
+                div.title = `往 ${cell.dir} 移動`;
+                // 讓小地圖也能點擊移動
+                div.onclick = () => {
+                    // 模擬點擊按鈕
+                    const btn = document.querySelector(`.btn-move[data-dir="${cell.dir}"]`);
+                    if (btn) btn.click();
+                };
+            } else {
+                // 沒有路的地方留空或顯示牆壁
+                div.style.opacity = '0.1';
+            }
+            grid.appendChild(div);
+        });
+
+        // 處理特殊出口 (Up/Down/Out/Enter) 顯示在下方文字
+        const specialExits = Object.keys(exits).filter(k => !['north','south','east','west','northwest','northeast','southwest','southeast'].includes(k));
+        if (specialExits.length > 0) {
+            const extra = document.createElement('div');
+            extra.style.position = 'absolute';
+            extra.style.bottom = '5px';
+            extra.style.color = '#ffff00';
+            extra.style.fontSize = '12px';
+            extra.textContent = '其他: ' + specialExits.join(', ');
+            miniMapBox.appendChild(extra);
+        }
+
+        miniMapBox.appendChild(grid);
+    },
+
     updateLocationInfo: (roomTitle) => {
         elRoomName.textContent = roomTitle;
     },
 
-    // 控制遊戲輸入框
     enableGameInput: (enabled) => {
         input.disabled = !enabled;
         sendBtn.disabled = !enabled;
-        // 同時啟用/禁用按鈕
         const allBtns = document.querySelectorAll('.btn-move, .btn-action');
         allBtns.forEach(btn => btn.disabled = !enabled);
 
@@ -91,9 +144,7 @@ export const UI = {
         loginMsg.textContent = msg;
     },
 
-    // 綁定輸入與按鈕事件 (合併處理)
     onInput: (callback) => {
-        // 1. 文字輸入框
         sendBtn.addEventListener('click', () => {
             const val = input.value.trim();
             if (val) {
@@ -106,21 +157,17 @@ export const UI = {
             if (e.key === 'Enter') sendBtn.click();
         });
 
-        // 2. --- 新增：畫面上的按鈕點擊事件 ---
-        // 選取所有移動按鈕和動作按鈕
         document.querySelectorAll('.btn-move, .btn-action').forEach(btn => {
             btn.addEventListener('click', () => {
-                // 從 data-dir 或 data-cmd 屬性取得指令
                 const cmd = btn.dataset.dir || btn.dataset.cmd;
                 if (cmd) {
-                    UI.print(`> ${cmd}`); // 模擬玩家輸入
-                    callback(cmd); // 直接呼叫指令處理
+                    UI.print(`> ${cmd}`);
+                    callback(cmd);
                 }
             });
         });
     },
 
-    // 綁定登入相關按鈕事件
     onAuthAction: (callbacks) => {
         btnLogin.addEventListener('click', () => {
             callbacks.onLogin(emailInput.value, pwdInput.value);

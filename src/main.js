@@ -11,14 +11,11 @@ import { UI } from "./ui.js";
 import { CommandSystem } from "./systems/commands.js"; 
 import { auth, db } from "./firebase.js";
 
-// --- 遊戲狀態 ---
 let currentUser = null;
 let localPlayerData = null; 
 
-// --- 系統啟動 ---
 UI.print("系統初始化中...", "system");
 
-// 1. 監聽登入狀態
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
@@ -39,7 +36,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// 2. 綁定按鈕
 UI.onAuthAction({
     onLogin: (email, pwd) => {
         if(!email || !pwd) return UI.showLoginError("請輸入帳號密碼");
@@ -60,22 +56,20 @@ UI.onAuthAction({
     }
 });
 
-// 3. 處理遊戲指令 (來自輸入框 或 按鈕點擊)
 UI.onInput((cmd) => {
     if (!currentUser) {
         UI.print("請先登入。", "error");
         return;
     }
-    // 執行指令
     CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
-    
-    // 指令執行完後，刷新一次介面狀態 (例如扣血、扣魔後需要更新介面)
     if (localPlayerData) {
-        UI.updateHUD(localPlayerData);
+        // 更新時傳入目前的房間出口，以便重繪地圖
+        // 為了取得出口，我們可以用 location 反查 MapSystem (但這裡沒有 import MapSystem)
+        // 簡單解法：CommandSystem 執行完後，map.js 會呼叫 MapSystem.look -> UI.updateHUD，所以這裡其實不用傳 exits
+        // 但為了保險，我們只在這裡觸發 HUD 的數值更新
+        UI.updateHUD(localPlayerData); 
     }
 });
-
-// --- 輔助函式 ---
 
 function getErrMsg(code) {
     switch(code) {
@@ -103,6 +97,7 @@ async function checkAndCreatePlayerData(user, displayName) {
                 name: displayName,
                 email: user.email || "anonymous",
                 location: "inn_start",
+                savePoint: "inn_start", // <--- 新增：預設存檔點
                 attributes: {
                     hp: 100, mp: 100, sp: 100, spiritual: 0, 
                     str: 20, con: 20, dex: 20, int: 20, kar: 20, per: 20
@@ -116,9 +111,7 @@ async function checkAndCreatePlayerData(user, displayName) {
             UI.print("角色建立完成！", "system");
         }
         
-        // --- 新增：資料載入後，立刻刷新介面 ---
-        UI.updateHUD(localPlayerData);
-        // 自動執行一次 look，讓地點名稱顯示出來
+        // 登入後立刻更新介面與觸發 Look
         CommandSystem.handle('look', localPlayerData, currentUser.uid);
 
     } catch (e) {

@@ -1,4 +1,4 @@
-/* css/style.css */
+/* css/style.css - 請完全覆蓋 */
 body {
     background-color: #000;
     color: #c0c0c0;
@@ -14,7 +14,7 @@ body {
 
 #game-wrapper {
     width: 100%;
-    max-width: 1000px; /* 加寬一點 */
+    max-width: 1100px; /* 加寬一點，讓介面更舒服 */
     height: 95vh;
     display: flex;
     flex-direction: column;
@@ -34,16 +34,15 @@ body {
     flex-shrink: 0;
 }
 
-/* --- 核心佈局：左右兩欄 --- */
 #game-body {
     display: flex;
     flex-grow: 1;
-    overflow: hidden; /* 內部捲動 */
+    overflow: hidden;
 }
 
 /* 左側：文字區 */
 #main-display {
-    flex: 7; /* 佔 70% 寬度 */
+    flex: 6.5; /* 稍微縮小左側比例 */
     display: flex;
     flex-direction: column;
     border-right: 1px solid #444;
@@ -69,13 +68,13 @@ body {
 
 /* 右側：側邊欄 (Sidebar) */
 #sidebar {
-    flex: 3; /* 佔 30% 寬度 */
+    flex: 3.5; /* 加大右側比例 */
     background: #1a1a1a;
     padding: 10px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 /* 面板通用樣式 */
@@ -95,22 +94,73 @@ body {
     text-align: center;
 }
 
+/* --- 新增：九宮格小地圖樣式 --- */
+#mini-map-box {
+    height: 200px; /* 加大高度 */
+    background: #000;
+    border: 1px solid #555;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    padding: 5px;
+}
+
+.mini-map-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 5px;
+    width: 100%;
+    height: 100%;
+}
+
+.map-cell {
+    border: 1px dashed #333;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    color: #555;
+    border-radius: 4px;
+}
+
+/* 當前位置 */
+.map-cell.current {
+    border: 2px solid #33ff33;
+    background-color: rgba(51, 255, 51, 0.2);
+    color: #fff;
+    font-weight: bold;
+}
+
+/* 存在的出口 */
+.map-cell.exit {
+    border: 1px solid #888;
+    background-color: #222;
+    color: #ddd;
+    cursor: pointer; /* 讓地圖也可以點擊移動 */
+}
+.map-cell.exit:hover {
+    background-color: #444;
+}
+
 /* 狀態條樣式 */
 .status-row {
     display: flex;
     align-items: center;
-    margin-bottom: 5px;
-    font-size: 12px;
+    margin-bottom: 8px; /* 間距拉大 */
+    font-size: 13px;
 }
 
 .status-row .label {
-    width: 30px;
+    width: 60px; /* 拉寬以容納英文 */
     color: #aaa;
+    font-size: 12px;
 }
 
 .bar-container {
     flex-grow: 1;
-    height: 16px;
+    height: 18px;
     background: #333;
     position: relative;
     border: 1px solid #555;
@@ -118,121 +168,56 @@ body {
     overflow: hidden;
 }
 
-.bar-fill {
-    height: 100%;
-    width: 100%; /* 之後用 JS 控制 */
-    transition: width 0.3s ease;
-}
-
-.bar-fill.hp { background: #d32f2f; } /* 紅色 */
-.bar-fill.mp { background: #1976d2; } /* 藍色 */
-.bar-fill.sp { background: #fbc02d; } /* 黃色 */
+.bar-fill { height: 100%; width: 100%; transition: width 0.3s ease; }
+.bar-fill.hp { background: #d32f2f; }
+.bar-fill.mp { background: #1976d2; }
+.bar-fill.sp { background: #fbc02d; }
 
 .bar-text {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    text-align: center;
-    line-height: 16px;
-    color: #fff;
-    text-shadow: 1px 1px 1px #000;
-    font-size: 11px;
+    position: absolute; top: 0; left: 0; width: 100%;
+    text-align: center; line-height: 18px;
+    color: #fff; text-shadow: 1px 1px 1px #000; font-size: 11px;
 }
 
-/* 地圖資訊 */
 #current-room-name {
-    text-align: center;
-    font-size: 16px;
-    color: #fff;
-    font-weight: bold;
-    margin-bottom: 5px;
-}
-#mini-map-box {
-    height: 100px;
-    background: #000;
-    border: 1px dashed #555;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: #666;
-    font-size: 12px;
+    text-align: center; font-size: 18px; /* 字體加大 */
+    color: #fff; font-weight: bold; margin-bottom: 5px;
 }
 
-/* 方向鍵盤 (Grid Layout) */
+/* 方向鍵盤 */
 .d-pad {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
 }
-
 .btn-move, .btn-action {
-    background: #333;
-    color: #ddd;
-    border: 1px solid #555;
-    padding: 8px 0;
-    cursor: pointer;
-    font-size: 12px;
-    border-radius: 3px;
+    background: #333; color: #ddd; border: 1px solid #555;
+    padding: 10px 0; cursor: pointer; font-size: 13px; border-radius: 3px;
 }
-
 .btn-move:hover, .btn-action:hover {
-    background: #555;
-    border-color: #33ff33;
-    color: #fff;
+    background: #555; border-color: #33ff33; color: #fff;
 }
-
 .action-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 5px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
 }
 
-/* 輸入框與按鈕 */
+/* 登入與輸入框相關維持原樣，但因 body flex 設定可能會微調 */
 #cmd-input {
-    flex-grow: 1;
-    background: #000;
-    border: 1px solid #555;
-    color: #fff;
-    padding: 8px;
-    font-size: 14px;
+    flex-grow: 1; background: #000; border: 1px solid #555;
+    color: #fff; padding: 8px; font-size: 14px;
 }
-
 #send-btn, #btn-login, #btn-register, #btn-guest {
-    background: #333;
-    color: #fff;
-    border: 1px solid #555;
-    padding: 0 15px;
-    margin-left: 5px;
-    cursor: pointer;
+    background: #333; color: #fff; border: 1px solid #555;
+    padding: 0 15px; margin-left: 5px; cursor: pointer;
 }
-
-/* 登入面板居中 */
 #login-panel {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #222;
-    padding: 20px;
-    border: 1px solid #33ff33;
-    text-align: center;
-    display: none; 
-    z-index: 100;
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: #222; padding: 20px; border: 1px solid #33ff33;
+    text-align: center; display: none; z-index: 100;
     box-shadow: 0 0 50px rgba(0,0,0,0.8);
 }
-
 #login-panel input {
-    display: block;
-    margin: 10px auto;
-    padding: 8px;
-    background: #000;
-    color: #fff;
-    border: 1px solid #555;
-    width: 200px;
+    display: block; margin: 10px auto; padding: 8px;
+    background: #000; color: #fff; border: 1px solid #555; width: 200px;
 }
-
-/* 文字顏色 */
 .msg-system { color: #ffff00; }
 .msg-error { color: #ff5555; }
 .msg-chat { color: #00ffff; }

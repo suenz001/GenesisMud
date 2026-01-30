@@ -5,12 +5,10 @@ import { UI } from "../ui.js";
 import { db } from "../firebase.js";
 
 export const MapSystem = {
-    // 取得當前房間資訊
     getRoom: (roomId) => {
         return WorldMap[roomId];
     },
 
-    // 執行看 (Look)
     look: (playerData) => {
         if (!playerData || !playerData.location) return;
         
@@ -22,8 +20,9 @@ export const MapSystem = {
             return;
         }
 
-        // --- 新增：更新右側面板的地點名稱 ---
         UI.updateLocationInfo(room.title); 
+        // 傳入出口資訊給 UI 畫小地圖
+        UI.updateHUD(playerData, room.exits); 
 
         UI.print(`【${room.title}】`, "system");
         UI.print(room.description);
@@ -32,7 +31,6 @@ export const MapSystem = {
         UI.print(`明顯的出口：${exits || "無"}`, "chat");
     },
 
-    // 執行移動
     move: async (playerData, direction, userId) => {
         if (!playerData) return;
 
@@ -46,13 +44,10 @@ export const MapSystem = {
 
         const nextRoomId = room.exits[direction];
         
-        // 更新本地記憶體
         playerData.location = nextRoomId;
-        
         UI.print(`你往 ${direction} 走去...`);
-        MapSystem.look(playerData); // 這會觸發 UI.updateLocationInfo
+        MapSystem.look(playerData); 
 
-        // 更新資料庫
         try {
             const playerRef = doc(db, "players", userId);
             await updateDoc(playerRef, {
@@ -61,6 +56,28 @@ export const MapSystem = {
         } catch (e) {
             console.error("移動存檔失敗", e);
             UI.print("系統警告：位置儲存失敗，請檢查網路。", "error");
+        }
+    },
+
+    // --- 新增：瞬間傳送 (用於 Recall) ---
+    teleport: async (playerData, targetRoomId, userId) => {
+        if (!WorldMap[targetRoomId]) {
+            UI.print("傳送失敗：目標地點不存在。", "error");
+            return;
+        }
+
+        playerData.location = targetRoomId;
+        UI.print("你唸動咒語，腳下升起一道白光...", "system");
+        
+        MapSystem.look(playerData);
+
+        try {
+            const playerRef = doc(db, "players", userId);
+            await updateDoc(playerRef, {
+                location: targetRoomId
+            });
+        } catch (e) {
+            console.error("傳送存檔失敗", e);
         }
     }
 };
