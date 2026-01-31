@@ -77,13 +77,17 @@ export const UI = {
             textEl.textContent = `${safeCurrent}/${safeMax}`;
         };
 
-        // --- 修正數值對應 (交換精與神) ---
-        updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp); // 氣 (HP)
+        // --- 修正對應 (交換精與氣) ---
+        // bar-hp (HTML中顯示為"精"的條) -> 顯示 SP
+        updateBar('bar-hp', 'text-hp', attr.sp, attr.maxSp); 
         
-        // 根據您的回報：bar-sp 顯示的是神的位置，bar-mp 顯示的是精的位置
-        updateBar('bar-sp', 'text-sp', attr.mp, attr.maxMp); // 將神(MP) 傳給 bar-sp
-        updateBar('bar-mp', 'text-mp', attr.sp, attr.maxSp); // 將精(SP) 傳給 bar-mp
+        // bar-sp (HTML中顯示為"氣"的條) -> 顯示 HP
+        updateBar('bar-sp', 'text-sp', attr.hp, attr.maxHp);
         
+        // bar-mp (HTML中顯示為"神"的條) -> 顯示 MP
+        updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp);
+        
+        // 進階屬性
         updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual);
         updateBar('bar-force', 'text-force', attr.force, attr.maxForce);
         updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana);
@@ -160,6 +164,7 @@ export const UI = {
         if (show) emailInput.focus();
     },
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
+    
     onInput: (callback) => {
         const sendHandler = () => {
             const val = input.value.trim();
