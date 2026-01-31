@@ -2,7 +2,7 @@
 import { 
     getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, limit, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { db } from "../firebase.js";
+import { db, auth } from "../firebase.js";
 import { UI } from "../ui.js";
 
 let unsubscribe = null; // 用來儲存取消監聽的函式
@@ -11,10 +11,15 @@ export const MessageSystem = {
     // 發送廣播訊息到指定房間
     broadcast: async (roomId, text, type = 'system') => {
         try {
+            // 獲取當前發送者的 ID
+            const user = auth.currentUser;
+            const senderId = user ? user.uid : "SYSTEM";
+
             await addDoc(collection(db, "world_logs"), {
                 roomId: roomId,
                 text: text,
                 type: type,
+                senderId: senderId, // 記錄是誰發送的
                 timestamp: serverTimestamp()
             });
         } catch (e) {
@@ -30,12 +35,15 @@ export const MessageSystem = {
             unsubscribe = null;
         }
 
-        // 監聽 world_logs 集合，條件：roomId 相符，按時間排序，只抓最新的
+        // 記錄開始監聽的時間點 (防止顯示歷史訊息)
+        const enterTime = Date.now();
+
+        // 監聽 world_logs 集合
         const q = query(
             collection(db, "world_logs"),
             where("roomId", "==", roomId),
             orderBy("timestamp", "desc"),
-            limit(5) 
+            limit(20) 
         );
 
         // 開啟即時監聽
@@ -44,16 +52,28 @@ export const MessageSystem = {
                 // 我們只關心新增的訊息 (added)
                 if (change.type === "added") {
                     const data = change.doc.data();
+                    const user = auth.currentUser;
                     
-                    // 過濾掉太舊的訊息 (避免一進房間就顯示歷史訊息)
-                    // 這裡簡單判斷：如果訊息產生時間跟現在差不到 2 秒才顯示 (或是頁面剛載入時的初始載入)
-                    // 為了簡化，我們直接顯示，但實務上通常會過濾 local write
-                    
-                    // 只有當這條訊息不是「本地端剛剛產生」的時候才顯示
-                    // (但為了讓玩家確認自己有送出，通常全部顯示也無妨，這裡我們加上一個簡單的判斷機制)
-                    if (!snapshot.metadata.hasPendingWrites) {
-                        UI.print(data.text, data.type || 'system');
+                    // --- 過濾機制 1：過濾掉歷史訊息 ---
+                    // 如果訊息有時間戳記 (Server端已寫入)，且時間早於我們進入房間的時間，則視為歷史訊息不顯示。
+                    // (減去 2000ms 是為了緩衝網路延遲或時鐘誤差，避免剛發生的訊息被誤刪)
+                    // 如果 data.timestamp 為 null (代表是本地端剛送出的暫存)，視為最新訊息，不攔截。
+                    if (data.timestamp) {
+                        const msgTime = data.timestamp.toDate().getTime();
+                        if (msgTime < enterTime - 2000) {
+                            return; 
+                        }
                     }
+
+                    // --- 過濾機制 2：過濾掉自己的廣播 ---
+                    // 因為本地端指令 (如 move, kill) 通常已經用 UI.print 顯示過 "你往北離開了"
+                    // 所以這裡要過濾掉廣播傳回來的 "某某某 往北離開了"，避免重複洗頻。
+                    if (user && data.senderId === user.uid) {
+                        return;
+                    }
+
+                    // 通過過濾，顯示訊息
+                    UI.print(data.text, data.type || 'system');
                 }
             });
         });
