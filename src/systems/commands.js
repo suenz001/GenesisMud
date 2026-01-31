@@ -128,7 +128,7 @@ const commandRegistry = {
             if (!playerData) return;
             const attr = playerData.attributes;
             const skills = playerData.skills || {};
-            const combat = playerData.combat || {}; // 雖然現在用動態計算，但保留讀取以防萬一
+            const combat = playerData.combat || {}; 
             
             // 動態計算戰鬥屬性
             const atk = (attr.str * 10) + (skills.unarmed || 0);
@@ -317,7 +317,7 @@ const commandRegistry = {
 
             const totalPrice = price * amount;
             if ((playerData.money || 0) < totalPrice) {
-                UI.print("你的錢不夠。(需要 " + UI.formatMoney(totalPrice) + ")", "error");
+                UI.print("你的錢不夠。(需要 " + UI.formatMoney(totalPrice) + ")", "error", true);
                 return;
             }
 
@@ -339,7 +339,8 @@ const commandRegistry = {
                 });
             }
 
-            UI.print(`你從 ${npc.name}(${npc.id}) 那裡買下了 ${amount} 份${itemInfo.name}(${targetItemId})，花費了 ${UI.formatMoney(totalPrice)}。`, "system");
+            // 修正點：加入 true 參數以正確解析 formatMoney 返回的 HTML
+            UI.print(`你從 ${npc.name}(${npc.id}) 那裡買下了 ${amount} 份${itemInfo.name}(${targetItemId})，花費了 ${UI.formatMoney(totalPrice)}。`, "system", true);
             
             // 廣播
             MessageSystem.broadcast(playerData.location, `${playerData.name} 向 ${npc.name} 買了一些 ${itemInfo.name}。`);
@@ -453,7 +454,7 @@ const commandRegistry = {
 
             } catch (e) {
                 console.error("Drop failed", e);
-                UI.print("丟棄失敗。", "error");
+                UI.print("丟棄失敗。(請確認 Firestore Rules)", "error");
             }
         }
     },
