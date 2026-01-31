@@ -1,4 +1,4 @@
-// src/ui.js (請保留原有的 import)
+// src/ui.js
 import { WorldMap } from "./data/world.js";
 
 const output = document.getElementById('output');
@@ -17,22 +17,46 @@ const elRoomName = document.getElementById('current-room-name');
 const miniMapBox = document.getElementById('mini-map-box');
 
 export const UI = {
-    // --- 新增：貨幣格式化 ---
-    // 1000文 = 1兩銀, 1000兩銀 = 1兩金
+    // --- 核心：顏色與格式化工具 ---
+    
+    // 產生帶顏色的 span
+    // color 可以是 hex (#ff0000) 或 css class
+    txt: (text, color = '#ccc', bold = false) => {
+        const style = `color:${color};${bold ? 'font-weight:bold;' : ''}`;
+        return `<span style="${style}">${text}</span>`;
+    },
+
+    // 產生標題分隔線
+    titleLine: (title) => {
+        return `<div style="color:#00ffff; border-bottom: 1px dashed #008888; margin: 5px 0; padding-bottom:2px;">≡ ${title} ≡</div>`;
+    },
+
+    // 產生屬性行 (標籤: 數值)
+    attrLine: (label, value, unit = '') => {
+        return `<span style="color:#88bbcc;">${label}：</span><span style="color:#fff; font-weight:bold;">${value}</span> <span style="color:#888;">${unit}</span>`;
+    },
+
+    // 貨幣格式化 (彩色版)
     formatMoney: (coins) => {
-        if (!coins) return "0 文銅錢";
+        if (!coins) return UI.txt("0", "#ccc") + UI.txt(" 文銅錢", "#888");
         const gold = Math.floor(coins / 1000000);
         const silver = Math.floor((coins % 1000000) / 1000);
         const copper = coins % 1000;
 
         let str = "";
-        if (gold > 0) str += `<span style="color:#ffd700">${gold}兩黃金</span> `;
-        if (silver > 0) str += `<span style="color:#c0c0c0">${silver}兩白銀</span> `;
-        if (copper > 0) str += `<span style="color:#cd7f32">${copper}文銅錢</span>`;
+        if (gold > 0) str += UI.txt(gold, "#ffd700", true) + UI.txt("兩黃金 ", "#aa8800");
+        if (silver > 0) str += UI.txt(silver, "#e0e0e0", true) + UI.txt("兩白銀 ", "#888");
+        if (copper > 0) str += UI.txt(copper, "#cd7f32", true) + UI.txt("文銅錢", "#885522");
         
-        return str.trim() || "0 文銅錢";
+        return str.trim() || UI.txt("0 文銅錢", "#888");
     },
 
+    // 產生可點擊的指令按鈕
+    makeCmd: (text, cmd, styleClass = 'cmd-link') => {
+        return `<span class="${styleClass}" data-cmd="${cmd}">${text}</span>`;
+    },
+
+    // 輸出訊息
     print: (content, type = 'normal', isHtml = false) => {
         const div = document.createElement('div');
         if (isHtml) div.innerHTML = content;
@@ -44,10 +68,6 @@ export const UI = {
         
         output.appendChild(div);
         output.scrollTop = output.scrollHeight;
-    },
-
-    makeCmd: (text, cmd, styleClass = 'cmd-link') => {
-        return `<span class="${styleClass}" data-cmd="${cmd}">${text}</span>`;
     },
 
     updateHUD: (playerData) => {

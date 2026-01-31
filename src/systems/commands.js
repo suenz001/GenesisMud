@@ -14,15 +14,21 @@ const dirMapping = {
     'nw': 'northwest', 'ne': 'northeast', 'sw': 'southwest', 'se': 'southeast'
 };
 
+// 技能等級顏色 (依照武俠小說境界)
 function getSkillLevelDesc(level) {
-    if (level < 10) return "初學乍練";
-    if (level < 30) return "略有小成";
-    if (level < 60) return "駕輕就熟";
-    if (level < 100) return "融會貫通";
-    if (level < 150) return "爐火純青";
-    if (level < 200) return "出類拔萃";
-    if (level < 300) return "登峰造極";
-    return "出神入化";
+    let desc = "";
+    let color = "#fff";
+    
+    if (level < 10) { desc = "初學乍練"; color = "#aaa"; }
+    else if (level < 30) { desc = "略有小成"; color = "#88ff88"; }
+    else if (level < 60) { desc = "駕輕就熟"; color = "#00ffff"; }
+    else if (level < 100) { desc = "融會貫通"; color = "#0088ff"; }
+    else if (level < 150) { desc = "爐火純青"; color = "#ffff00"; }
+    else if (level < 200) { desc = "出類拔萃"; color = "#ff8800"; }
+    else if (level < 300) { desc = "登峰造極"; color = "#ff0000"; }
+    else { desc = "出神入化"; color = "#ff00ff"; }
+
+    return UI.txt(desc, color);
 }
 
 // 輔助：更新背包到資料庫
@@ -52,7 +58,6 @@ async function consumeItem(playerData, userId, itemId, amount = 1) {
     } else {
         inventory.splice(itemIndex, 1);
     }
-    // 使用抽離出的 updateInventory 函式
     return await updateInventory(playerData, userId);
 }
 
@@ -77,14 +82,14 @@ const commandRegistry = {
     'help': {
         description: '查看指令列表',
         execute: () => {
-            let msg = "【江湖指南】\n";
-            msg += "基本指令：score, skills, inventory (i)\n";
-            msg += "生活指令：eat, drink, drop, get, look\n";
-            msg += "交易指令：list, buy\n";
-            msg += "社交指令：say, emote\n";
-            msg += "特殊指令：save, recall, suicide\n";
-            msg += "移動指令：n, s, e, w, u, d\n";
-            UI.print(msg, 'system');
+            let msg = UI.titleLine("江湖指南");
+            msg += UI.txt(" 基本指令：", "#00ffff") + "score, skills, inventory (i)\n";
+            msg += UI.txt(" 生活指令：", "#00ff00") + "eat, drink, drop, get, look\n";
+            msg += UI.txt(" 交易指令：", "#ffcc00") + "list, buy\n";
+            msg += UI.txt(" 社交指令：", "#ff88ff") + "say, emote\n";
+            msg += UI.txt(" 特殊指令：", "#ff0000") + "save, recall, suicide\n";
+            msg += UI.txt(" 移動指令：", "#aaa") + "n, s, e, w, u, d\n";
+            UI.print(msg, 'normal', true);
         }
     },
     
@@ -92,76 +97,104 @@ const commandRegistry = {
     'look': {
         description: '觀察四周 (簡寫: l)',
         execute: (playerData, args) => {
-            // 如果有參數 (look item / look npc)
             if (args && args.length > 0) {
                 const target = args[0];
-                // 1. 先找 NPC
                 const npc = findNPCInRoom(playerData.location, target);
                 if (npc) {
-                    UI.print(`【${npc.name}(${npc.id})】`, "system");
-                    UI.print(npc.description);
+                    let html = UI.titleLine(`${npc.name} (${npc.id})`);
+                    html += UI.txt(npc.description, "#ddd") + "<br>";
+                    UI.print(html, "system", true);
                     return;
                 }
-                // 2. 再找身上的物品
                 const invItem = playerData.inventory.find(i => i.id === target || i.name === target);
                 if (invItem) {
                     const itemData = ItemDB[invItem.id];
-                    UI.print(`【${itemData.name}(${invItem.id})】`, "system");
-                    UI.print(itemData.desc);
+                    let html = UI.titleLine(`${itemData.name} (${invItem.id})`);
+                    html += UI.txt(itemData.desc, "#ddd") + "<br>";
+                    UI.print(html, "system", true);
                     return;
                 }
-                // 3. (進階可選) 找地上的物品，這裡暫略，直接顯示找不到
                 UI.print("你看不到那個東西。", "error");
                 return;
             }
-            
-            // 呼叫 MapSystem.look 顯示房間資訊 (包含地上物品顯示邏輯)
             MapSystem.look(playerData);
         }
     },
     'l': { description: 'look 簡寫', execute: (p, a) => commandRegistry['look'].execute(p, a) },
 
-    // --- 狀態 (Score) ---
+    // --- 狀態 (Score) - 彩色版 ---
     'score': {
         description: '查看詳細屬性',
         execute: (playerData) => {
             if (!playerData) return;
             const attr = playerData.attributes;
             const skills = playerData.skills || {};
-            const combat = playerData.combat || {}; 
             
-            // 動態計算戰鬥屬性
             const atk = (attr.str * 10) + (skills.unarmed || 0);
             const def = (attr.con * 10) + (skills.parry || 0);
-            
-            const hitRate = (attr.dex * 10) + ((skills.unarmed || 0) * 2); // 命中
-            const dodge = (attr.dex * 10) + ((skills.dodge || 0) * 2);     // 閃避
-            const parry = (attr.str * 5) + (attr.con * 5) + ((skills.parry || 0) * 2); // 招架
+            const hitRate = (attr.dex * 10) + ((skills.unarmed || 0) * 2); 
+            const dodge = (attr.dex * 10) + ((skills.dodge || 0) * 2);     
+            const parry = (attr.str * 5) + (attr.con * 5) + ((skills.parry || 0) * 2); 
 
             const gender = playerData.gender || "未知";
             const moneyStr = UI.formatMoney(playerData.money || 0);
 
-            let msg = `\n【 ${playerData.name} 的狀態 】\n--------------------------------------------------\n`;
-            msg += ` 性別：${gender}     門派：${playerData.sect}\n`;
-            msg += ` 財產：${moneyStr}\n`;
-            msg += `--------------------------------------------------\n`;
-            msg += ` 精：${attr.hp}/${attr.maxHp}   靈力：${attr.spiritual}/${attr.maxSpiritual}\n`;
-            msg += ` 氣：${attr.mp}/${attr.maxMp}   內力：${attr.force}/${attr.maxForce}\n`;
-            msg += ` 神：${attr.sp}/${attr.maxSp}   法力：${attr.mana}/${attr.maxMana}\n`;
-            msg += `--------------------------------------------------\n`;
-            msg += ` 食物：${attr.food}/${attr.maxFood}  飲水：${attr.water}/${attr.maxWater}\n`;
-            msg += `--------------------------------------------------\n`;
-            msg += ` 攻擊力：${atk}     防禦力：${def}\n`;
-            msg += ` 命中率：${hitRate}     閃避率：${dodge}\n`;
-            msg += ` 招架率：${parry}     殺氣：0\n`;
-            msg += `--------------------------------------------------\n`;
-            UI.print(msg, 'chat', true);
+            // 使用 Grid 排版
+            let html = UI.titleLine(`${playerData.name} 的狀態`);
+            
+            // 基礎資訊
+            html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-bottom:5px;">`;
+            html += `<div>${UI.attrLine("性別", gender)}</div>`;
+            html += `<div>${UI.attrLine("門派", playerData.sect)}</div>`;
+            html += `</div>`;
+            html += `<div>${UI.attrLine("財產", moneyStr)}</div><br>`;
+
+            // 三寶 (精氣神)
+            html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
+            html += `<div>${UI.txt("【 精 與 靈 】", "#ff5555")}</div><div></div>`;
+            html += `<div>${UI.attrLine("精", attr.hp + "/" + attr.maxHp)}</div>`;
+            html += `<div>${UI.attrLine("靈力", attr.spiritual + "/" + attr.maxSpiritual)}</div>`;
+            
+            html += `<div>${UI.txt("【 氣 與 內 】", "#5555ff")}</div><div></div>`;
+            html += `<div>${UI.attrLine("氣", attr.mp + "/" + attr.maxMp)}</div>`;
+            html += `<div>${UI.attrLine("內力", attr.force + "/" + attr.maxForce)}</div>`;
+
+            html += `<div>${UI.txt("【 神 與 法 】", "#ffff55")}</div><div></div>`;
+            html += `<div>${UI.attrLine("神", attr.sp + "/" + attr.maxSp)}</div>`;
+            html += `<div>${UI.attrLine("法力", attr.mana + "/" + attr.maxMana)}</div>`;
+            html += `</div><br>`;
+
+            // 生存
+            html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
+            html += `<div>${UI.attrLine("食物", attr.food + "/" + attr.maxFood)}</div>`;
+            html += `<div>${UI.attrLine("飲水", attr.water + "/" + attr.maxWater)}</div>`;
+            html += `</div><br>`;
+
+            // 天賦屬性 (Cyan)
+            html += UI.txt("【 天賦屬性 】", "#00ffff") + "<br>";
+            html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
+            html += `<div>${UI.attrLine("膂力", attr.str)}</div><div>${UI.attrLine("膽識", attr.cor || 20)}</div>`;
+            html += `<div>${UI.attrLine("悟性", attr.int)}</div><div>${UI.attrLine("靈性", attr.int)}</div>`;
+            html += `<div>${UI.attrLine("根骨", attr.con)}</div><div>${UI.attrLine("定力", attr.per)}</div>`;
+            html += `<div>${UI.attrLine("身法", attr.dex)}</div><div>${UI.attrLine("福緣", attr.kar)}</div>`;
+            html += `</div><br>`;
+
+            // 戰鬥屬性 (Green)
+            html += UI.txt("【 戰鬥數值 】", "#00ff00") + "<br>";
+            html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
+            html += `<div>${UI.attrLine("攻擊力", atk)}</div><div>${UI.attrLine("防禦力", def)}</div>`;
+            html += `<div>${UI.attrLine("命中率", hitRate)}</div><div>${UI.attrLine("閃避率", dodge)}</div>`;
+            html += `<div>${UI.attrLine("招架率", parry)}</div><div>${UI.attrLine("殺氣", 0)}</div>`;
+            html += `</div>`;
+            
+            html += "<br>" + UI.titleLine("End of Status");
+            UI.print(html, 'chat', true);
         }
     },
     'sc': { description: 'score 簡寫', execute: (p) => commandRegistry['score'].execute(p) },
     'hp': { description: 'score 簡寫', execute: (p) => commandRegistry['score'].execute(p) },
 
-    // --- 技能 (Skills) ---
+    // --- 技能 (Skills) - 彩色版 ---
     'skills': {
         description: '查看已習得武學',
         execute: (playerData) => {
@@ -173,43 +206,43 @@ const commandRegistry = {
                 return;
             }
 
-            let msg = `\n【 ${playerData.name} 的武學 】\n`;
-            msg += `--------------------------------------------------\n`;
+            let html = UI.titleLine(`${playerData.name} 的武學`);
+            html += `<table style="width:100%; text-align:left;">`;
             
             const skillNames = {
-                "unarmed": "基本拳腳",
-                "dodge": "基本輕功",
-                "parry": "基本招架",
-                "force": "基本內功"
+                "unarmed": "基本拳腳", "dodge": "基本輕功",
+                "parry": "基本招架", "force": "基本內功"
             };
 
             for (const [id, level] of skillList) {
                 const name = skillNames[id] || id; 
                 const desc = getSkillLevelDesc(level);
-                // 簡單對齊
-                const nameStr = name.padEnd(10, '　'); 
-                msg += ` ${nameStr} ${level.toString().padStart(3)}級 / ${desc}\n`;
+                // 技能名稱用亮白，等級用 Cyan
+                html += `<tr>`;
+                html += `<td style="color:#fff; width:120px;">${name}</td>`;
+                html += `<td style="color:#00ffff; width:60px;">${level} 級</td>`;
+                html += `<td>${desc}</td>`;
+                html += `</tr>`;
             }
-            msg += `--------------------------------------------------\n`;
-            UI.print(msg, 'chat');
+            html += `</table>`;
+            html += UI.titleLine("End of Skills");
+            UI.print(html, 'chat', true);
         }
     },
     'sk': { description: 'skills 簡寫', execute: (p) => commandRegistry['skills'].execute(p) },
 
-    // --- 背包 (Inventory) ---
+    // --- 背包 (Inventory) - 彩色版 ---
     'inventory': {
         description: '查看背包與金錢',
         execute: (playerData) => {
             const items = playerData.inventory || [];
             const moneyStr = UI.formatMoney(playerData.money || 0);
 
-            let html = `<br><div style="color:#00ffff">【 ${playerData.name} 的背包 】</div>`;
-            html += `--------------------------------------------------<br>`;
-            html += ` 財產：${moneyStr}<br>`;
-            html += `--------------------------------------------------<br>`;
+            let html = UI.titleLine(`${playerData.name} 的背包`);
+            html += `<div>${UI.attrLine("財產", moneyStr)}</div><br>`;
             
             if (items.length === 0) {
-                html += ` 目前身上空空如也。<br>`;
+                html += UI.txt("目前身上空空如也。<br>", "#888");
             } else {
                 items.forEach(item => {
                     const itemData = ItemDB[item.id];
@@ -222,16 +255,18 @@ const commandRegistry = {
                     actions += UI.makeCmd("[丟]", `drop ${item.id}`, "cmd-btn");
                     actions += UI.makeCmd("[看]", `look ${item.id}`, "cmd-btn");
 
-                    html += ` ${item.name} (${item.id}) x${item.count} ${actions}<br>`;
+                    // 物品名稱亮白，ID 深灰
+                    const displayName = `${UI.txt(item.name, "#fff")} ${UI.txt("("+item.id+")", "#666")}`;
+                    html += `<div>${displayName} x${item.count} ${actions}</div>`;
                 });
             }
-            html += `--------------------------------------------------<br>`;
-            UI.print(html, '', true);
+            html += "<br>" + UI.titleLine("End of Inventory");
+            UI.print(html, 'chat', true);
         }
     },
     'i': { description: 'inventory 簡寫', execute: (p) => commandRegistry['inventory'].execute(p) },
 
-    // --- 商品列表 (List) ---
+    // --- 商品列表 (List) - 彩色版 ---
     'list': {
         description: '查看NPC販賣的商品',
         execute: (playerData, args) => {
@@ -245,29 +280,28 @@ const commandRegistry = {
                 }
             }
 
-            if (!targetNPC) {
-                UI.print("這裡沒有這個人，或者沒人在賣東西。", "error");
-                return;
-            }
+            if (!targetNPC) return UI.print("這裡沒人在賣東西。", "error");
+            if (!targetNPC.shop) return UI.print(`${targetNPC.name} 身上沒帶什麼東西賣。`, "chat");
 
-            if (!targetNPC.shop) {
-                UI.print(`${targetNPC.name} 身上沒帶什麼東西賣。`, "chat");
-                return;
-            }
-
-            let html = `<br><div style="color:#00ffff">【 ${targetNPC.name}(${targetNPC.id}) 的商品列表 】</div>`;
-            html += `--------------------------------------------------<br>`;
+            let html = UI.titleLine(`${targetNPC.name} 的商品列表`);
             
             for (const [itemId, price] of Object.entries(targetNPC.shop)) {
                 const itemInfo = ItemDB[itemId];
                 const itemName = itemInfo ? itemInfo.name : itemId;
                 const priceStr = UI.formatMoney(price);
+                
                 const buyCmd = `buy ${itemId} 1 from ${targetNPC.id}`;
                 const buyBtn = UI.makeCmd("[買1個]", buyCmd, "cmd-btn cmd-btn-buy");
 
-                html += `${itemName}(${itemId}) ... ${priceStr} ${buyBtn}<br>`;
+                // 排版：名稱 ... 價格 [按鈕]
+                const nameDisplay = `${UI.txt(itemName, "#fff")} ${UI.txt("("+itemId+")", "#666")}`;
+                
+                html += `<div style="display:flex; justify-content:space-between; margin-bottom:4px; border-bottom:1px dotted #333;">`;
+                html += `<span>${nameDisplay}</span>`;
+                html += `<span>${priceStr} ${buyBtn}</span>`;
+                html += `</div>`;
             }
-            html += `--------------------------------------------------<br>`;
+            html += UI.titleLine("End of List");
             UI.print(html, '', true);
         }
     },
@@ -321,10 +355,7 @@ const commandRegistry = {
                 return;
             }
 
-            // 扣錢
             playerData.money -= totalPrice;
-            
-            // 加物品
             if (!playerData.inventory) playerData.inventory = [];
             const existingItem = playerData.inventory.find(i => i.id === targetItemId);
             const itemInfo = ItemDB[targetItemId];
@@ -339,10 +370,8 @@ const commandRegistry = {
                 });
             }
 
-            // 修正點：加入 true 參數以正確解析 formatMoney 返回的 HTML
             UI.print(`你從 ${npc.name}(${npc.id}) 那裡買下了 ${amount} 份${itemInfo.name}(${targetItemId})，花費了 ${UI.formatMoney(totalPrice)}。`, "system", true);
             
-            // 廣播
             MessageSystem.broadcast(playerData.location, `${playerData.name} 向 ${npc.name} 買了一些 ${itemInfo.name}。`);
 
             try {
@@ -377,7 +406,6 @@ const commandRegistry = {
             if (success) {
                 attr.food = Math.min(attr.maxFood, attr.food + itemData.value);
                 UI.print(`你吃下了一份${invItem.name}，感覺體力恢復了。`, "system");
-                // 廣播
                 MessageSystem.broadcast(playerData.location, `${playerData.name} 拿出 ${invItem.name} 吃幾口。`);
                 
                 const playerRef = doc(db, "players", userId);
@@ -405,7 +433,6 @@ const commandRegistry = {
             if (success) {
                 attr.water = Math.min(attr.maxWater, attr.water + itemData.value);
                 UI.print(`你喝了一口${invItem.name}，感覺喉嚨滋潤多了。`, "system");
-                // 廣播
                 MessageSystem.broadcast(playerData.location, `${playerData.name} 拿起 ${invItem.name} 喝了幾口。`);
 
                 const playerRef = doc(db, "players", userId);
@@ -428,15 +455,12 @@ const commandRegistry = {
             
             const item = inventory[itemIndex];
             
-            // 從背包移除 1 個
             if (item.count > 1) item.count--;
             else inventory.splice(itemIndex, 1);
 
-            // 寫入背包更新
             const updateSuccess = await updateInventory(playerData, userId);
             if (!updateSuccess) return;
 
-            // 寫入掉落物到資料庫 (room_items)
             try {
                 await addDoc(collection(db, "room_items"), {
                     roomId: playerData.location,
@@ -449,12 +473,11 @@ const commandRegistry = {
                 UI.print(`你將 ${item.name} 丟棄在地上。`, "system");
                 MessageSystem.broadcast(playerData.location, `${playerData.name} 丟下了一份 ${item.name}。`);
                 
-                // 刷新畫面顯示掉落物
                 MapSystem.look(playerData);
 
             } catch (e) {
                 console.error("Drop failed", e);
-                UI.print("丟棄失敗。(請確認 Firestore Rules)", "error");
+                UI.print("丟棄失敗。", "error");
             }
         }
     },
@@ -478,14 +501,11 @@ const commandRegistry = {
                     return UI.print("地上沒有這個東西。", "error");
                 }
 
-                // 撿起第一個符合的
                 const docSnap = snapshot.docs[0];
                 const itemData = docSnap.data();
 
-                // 1. 從地上移除
                 await deleteDoc(doc(db, "room_items", docSnap.id));
 
-                // 2. 加入背包
                 if (!playerData.inventory) playerData.inventory = [];
                 const invItem = playerData.inventory.find(i => i.id === itemData.itemId);
                 
@@ -574,16 +594,11 @@ const commandRegistry = {
 
             try {
                 UI.print("你長嘆一聲，決定結束這段江湖路...", "system");
-                
-                // 1. 刪除資料庫文件
                 await deleteDoc(doc(db, "players", userId));
                 UI.print("資料已刪除。", "system");
-
-                // 2. 登出
                 await signOut(auth);
-
             } catch (e) {
-                UI.print("自殺失敗(連死都不行?)：" + e.message, "error");
+                UI.print("自殺失敗：" + e.message, "error");
             }
         }
     }
