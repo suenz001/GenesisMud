@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: commands.js
+fullContent:
 // src/systems/commands.js
 import { doc, updateDoc, deleteDoc, addDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -408,8 +412,11 @@ const commandRegistry = {
 
             const atk = (attr.str * 10) + activeAtkSkill;
             const def = (attr.con * 10);
-            const dodge = (attr.dex * 10) + effDodge;
-            const hitRate = (attr.dex * 10) + (activeAtkSkill * 2);
+            
+            // 修正：因為 dex (身法) 已被移除，改用 per (定力) 計算閃避與命中
+            // 如果您希望使用其他屬性(如 kar 福緣 或 int 悟性)，可在此修改
+            const dodge = (attr.per * 10) + effDodge; 
+            const hitRate = (attr.per * 10) + (activeAtkSkill * 2);
 
             const moneyStr = UI.formatMoney(playerData.money || 0);
             const potential = combat.potential || 0;
@@ -569,7 +576,7 @@ const commandRegistry = {
         } 
     },
 
-    // --- 其他指令 (保持不變) ---
+    // --- 其他指令 ---
     'sk': { description: 'sk', execute: (p)=>commandRegistry['skills'].execute(p) },
     'l': { description: 'look', execute: (p, a) => commandRegistry['look'].execute(p, a) },
     'inventory': { description: '背包', execute: (p) => { let h=UI.titleLine("背包")+`<div>${UI.attrLine("財產", UI.formatMoney(p.money))}</div><br>`; if(!p.inventory||p.inventory.length===0)h+=UI.txt("空空如也。<br>","#888"); else p.inventory.forEach(i=>{ const dat=ItemDB[i.id]; let act=""; if(dat){ if(dat.type==='food') act+=UI.makeCmd("[吃]",`eat ${i.id}`,"cmd-btn"); if(dat.type==='drink') act+=UI.makeCmd("[喝]",`drink ${i.id}`,"cmd-btn"); } act+=UI.makeCmd("[丟]",`drop ${i.id}`,"cmd-btn"); act+=UI.makeCmd("[看]",`look ${i.id}`,"cmd-btn"); h+=`<div>${UI.txt(i.name,"#fff")} (${i.id}) x${i.count} ${act}</div>`; }); UI.print(h+UI.titleLine("End"), "chat", true); } },
@@ -583,7 +590,24 @@ const commandRegistry = {
     'get': { description: '撿', execute: async (p,a,u) => { if(a.length===0)return UI.print("撿啥?","error"); const q=query(collection(db,"room_items"),where("roomId","==",p.location),where("itemId","==",a[0])); const snap=await getDocs(q); if(snap.empty)return UI.print("沒東西","error"); const d=snap.docs[0]; await deleteDoc(doc(db,"room_items",d.id)); const dat=d.data(); if(!p.inventory)p.inventory=[]; const ex=p.inventory.find(x=>x.id===dat.itemId); if(ex)ex.count++; else p.inventory.push({id:dat.itemId,name:dat.name,count:1}); await updatePlayer(u,{inventory:p.inventory}); UI.print("撿了 "+dat.name,"system"); MapSystem.look(p); } },
     'say': { description: '說', execute: (p,a)=>{const m=a.join(" ");UI.print(`你: ${m}`,"chat");MessageSystem.broadcast(p.location,`${p.name} 說: ${m}`);} },
     'emote': { description: '演', execute: (p,a)=>{const m=a.join(" ");UI.print(`${p.name} ${m}`,"system");MessageSystem.broadcast(p.location,`${p.name} ${m}`);} },
-    'save': { description: '存', execute: async(p,a,u)=>{await updatePlayer(u,{savePoint:p.location});UI.print("已存檔","system");} },
+    'save': { 
+        description: '存檔 (在客棧或門派大廳可設定重生點)', 
+        execute: async(p, a, u) => {
+            const room = MapSystem.getRoom(p.location);
+            let updateData = { lastSaved: new Date().toISOString() };
+            let msg = "遊戲進度已保存。";
+
+            if (room && room.allowSave) {
+                updateData.savePoint = p.location;
+                msg += " (重生點已更新至此處)";
+            } else {
+                msg += " (此處非安全區，重生點未變更)";
+            }
+
+            await updatePlayer(u, updateData);
+            UI.print(msg, "system");
+        } 
+    },
     'recall': { description: '回', execute: (p,a,u)=>MapSystem.teleport(p,p.savePoint||"inn_start",u) },
     'suicide': { description: '死', execute: async(p,a,u)=>{if(a[0]==='confirm'){await deleteDoc(doc(db,"players",u));await signOut(auth);}else UI.print("confirm?","error");} }
 };
@@ -609,3 +633,4 @@ export const CommandSystem = {
         else UI.print("你胡亂比劃了一通。(輸入 help 查看指令)", "error");
     }
 };
+}
