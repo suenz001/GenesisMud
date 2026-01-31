@@ -17,55 +17,43 @@ const elRoomName = document.getElementById('current-room-name');
 const miniMapBox = document.getElementById('mini-map-box');
 
 export const UI = {
-    // 顏色工具
     txt: (text, color = '#ccc', bold = false) => {
         const style = `color:${color};${bold ? 'font-weight:bold;' : ''}`;
         return `<span style="${style}">${text}</span>`;
     },
-
     titleLine: (title) => {
         return `<div style="color:#00ffff; border-bottom: 1px dashed #008888; margin: 5px 0; padding-bottom:2px;">≡ ${title} ≡</div>`;
     },
-
     attrLine: (label, value, unit = '') => {
         return `<span style="color:#88bbcc;">${label}：</span><span style="color:#fff; font-weight:bold;">${value}</span> <span style="color:#888;">${unit}</span>`;
     },
-
     formatMoney: (coins) => {
         if (!coins) return UI.txt("0", "#ccc") + UI.txt(" 文銅錢", "#888");
         const gold = Math.floor(coins / 1000000);
         const silver = Math.floor((coins % 1000000) / 1000);
         const copper = coins % 1000;
-
         let str = "";
         if (gold > 0) str += UI.txt(gold, "#ffd700", true) + UI.txt("兩黃金 ", "#aa8800");
         if (silver > 0) str += UI.txt(silver, "#e0e0e0", true) + UI.txt("兩白銀 ", "#888");
         if (copper > 0) str += UI.txt(copper, "#cd7f32", true) + UI.txt("文銅錢", "#885522");
-        
         return str.trim() || UI.txt("0 文銅錢", "#888");
     },
-
     makeCmd: (text, cmd, styleClass = 'cmd-link') => {
         return `<span class="${styleClass}" data-cmd="${cmd}">${text}</span>`;
     },
-
     print: (content, type = 'normal', isHtml = false) => {
         const div = document.createElement('div');
         if (isHtml) div.innerHTML = content;
         else div.textContent = content;
-
         if (type === 'system') div.classList.add('msg-system');
         if (type === 'error') div.classList.add('msg-error');
         if (type === 'chat') div.classList.add('msg-chat');
-        
         output.appendChild(div);
         output.scrollTop = output.scrollHeight;
     },
-
     updateHUD: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
-        
         const updateBar = (barId, textId, current, max) => {
             const barEl = document.getElementById(barId);
             const textEl = document.getElementById(textId);
@@ -77,27 +65,25 @@ export const UI = {
             textEl.textContent = `${safeCurrent}/${safeMax}`;
         };
 
-        // === 絕對修正：變數名稱嚴格對應 ID ===
+        // === 修正：完全依照直覺對應 ===
         // hp -> bar-hp (氣)
         updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp);
-        
-        // mp -> bar-mp (神)
-        updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp);
         
         // sp -> bar-sp (精)
         updateBar('bar-sp', 'text-sp', attr.sp, attr.maxSp);
         
-        // 進階屬性
-        updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual); // 靈力
-        updateBar('bar-force', 'text-force', attr.force, attr.maxForce); // 內力
-        updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana); // 法力
+        // mp -> bar-mp (神)
+        updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp);
+        
+        updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual);
+        updateBar('bar-force', 'text-force', attr.force, attr.maxForce);
+        updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana);
 
         const currentRoom = WorldMap[playerData.location];
         if (currentRoom) {
             UI.drawRangeMap(currentRoom.x, currentRoom.y, currentRoom.z, playerData.location);
         }
     },
-
     drawRangeMap: (px, py, pz, currentId) => {
         const miniMapBox = document.getElementById('mini-map-box');
         miniMapBox.innerHTML = ''; 
@@ -106,7 +92,6 @@ export const UI = {
         const radius = 2; 
         const currentRoomData = WorldMap[currentId];
         const currentRegions = currentRoomData ? (currentRoomData.region || ["world"]) : ["world"];
-
         for (let y = py + radius; y >= py - radius; y--) {
             for (let x = px - radius; x <= px + radius; x++) {
                 const div = document.createElement('div');
