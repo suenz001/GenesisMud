@@ -1,4 +1,3 @@
-
 // src/data/npcs.js
 
 export const NPCDB = {
