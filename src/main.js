@@ -69,42 +69,40 @@ UI.onInput((cmd) => {
 function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
     
+    // 每 30 秒執行
     regenInterval = setInterval(async () => {
         if (!localPlayerData || !user) return;
 
         const attr = localPlayerData.attributes;
-        let hpRecovered = false;
-        let spRecovered = false;
-        let mpRecovered = false;
+        let msg = [];
+        let changed = false;
 
         // 回復 HP (氣)
         if (attr.hp < attr.maxHp) {
             const recover = Math.floor(attr.maxHp * 0.1); 
             attr.hp = Math.min(attr.maxHp, attr.hp + recover);
-            hpRecovered = true;
+            msg.push("氣息順暢了許多");
+            changed = true;
         }
 
         // 回復 SP (精)
         if (attr.sp < attr.maxSp) {
             const recover = Math.floor(attr.maxSp * 0.1);
             attr.sp = Math.min(attr.maxSp, attr.sp + recover);
-            spRecovered = true;
+            msg.push("精神振作了些");
+            changed = true;
         }
 
         // 回復 MP (神)
         if (attr.mp < attr.maxMp) {
             const recover = Math.floor(attr.maxMp * 0.1);
             attr.mp = Math.min(attr.maxMp, attr.mp + recover);
-            mpRecovered = true;
+            msg.push("頭腦清醒了許多");
+            changed = true;
         }
 
-        if (hpRecovered || spRecovered || mpRecovered) {
-            let msg = "";
-            if (hpRecovered) msg += "你覺得氣息順暢了許多。";
-            if (spRecovered) msg += "你覺得精神振作了些。";
-            if (mpRecovered) msg += "你覺得頭腦清醒了許多。";
-            
-            UI.print(msg, "system");
+        if (changed) {
+            UI.print("你覺得" + msg.join("，") + "。", "system");
             UI.updateHUD(localPlayerData);
             try {
                 const playerRef = doc(db, "players", user.uid);
@@ -115,76 +113,9 @@ function startRegeneration(user) {
     }, 30000); 
 }
 
-async function handleCreationInput(input) {
-    const val = input.trim();
-    if (!val) return;
-
-    if (gameState === 'CREATION_ID') {
-        const idRegex = /^[a-zA-Z]{2,12}$/;
-        if (!idRegex.test(val)) { UI.print("ID 格式錯誤：限 2-12 個英文字母 (A-Z, a-z)。", "error"); return; }
-        const newId = val.toLowerCase();
-        UI.print(`正在檢查 ID [${newId}] 是否可用...`, "system");
-        try {
-            const playersRef = collection(db, "players");
-            const q = query(playersRef, where("id", "==", newId));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) { UI.print(`ID [${newId}] 已經被使用了。`, "error"); return; }
-            tempCreationData.id = newId; 
-            gameState = 'CREATION_NAME';
-            UI.print(`ID [${newId}] 可用！`, "system");
-            UI.print("請問大俠尊姓大名？(中文名稱)");
-        } catch (e) { console.error(e); UI.print("檢查 ID 失敗：" + e.message, "error"); }
-        return;
-    }
-
-    if (gameState === 'CREATION_NAME') {
-        if (val.length < 2) { UI.print("名字太短了。", "error"); return; }
-        tempCreationData.name = val;
-        gameState = 'CREATION_GENDER';
-        UI.print(`幸會，${val}。`, "system");
-        UI.print("請問大俠是【男】還是【女】？");
-        return;
-    }
-
-    if (gameState === 'CREATION_GENDER') {
-        let gender = "";
-        if (['男', 'm', 'male'].includes(val.toLowerCase())) gender = "男";
-        else if (['女', 'f', 'female'].includes(val.toLowerCase())) gender = "女";
-        if (!gender) { UI.print("請輸入 '男' 或 '女'。", "error"); return; }
-        tempCreationData.gender = gender;
-        await createNewCharacter(currentUser, tempCreationData);
-    }
-}
-
-function getErrMsg(code) {
-    switch(code) {
-        case 'auth/invalid-email': return "Email 格式錯誤";
-        case 'auth/user-not-found': return "找不到此帳號";
-        case 'auth/wrong-password': return "密碼錯誤";
-        case 'auth/email-already-in-use': return "此 Email 已被註冊";
-        case 'auth/weak-password': return "密碼太弱";
-        default: return "錯誤：" + code;
-    }
-}
-
-async function checkAndLoadPlayer(user) {
-    const playerRef = doc(db, "players", user.uid);
-    try {
-        const docSnap = await getDoc(playerRef);
-        if (docSnap.exists()) {
-            UI.print("讀取檔案成功... 你的江湖與你同在。", "system");
-            localPlayerData = docSnap.data();
-            gameState = 'PLAYING'; 
-            CommandSystem.handle('look', localPlayerData, user.uid);
-            startRegeneration(user);
-        } else {
-            UI.print("檢測到新面孔...", "system");
-            UI.print("請輸入您想使用的【英文 ID】(純英文字母)：");
-            gameState = 'CREATION_ID'; 
-        }
-    } catch (e) { UI.print("資料庫讀取失敗：" + e.message, "error"); }
-}
-
+// ... (handleCreationInput, getErrMsg, checkAndLoadPlayer, createNewCharacter 保持原樣，與上一版相同) ...
+// 為了節省空間，請確保您保留了 main.js 中剩餘的程式碼
+// 這裡僅列出 createNewCharacter 的潛能初始化部分供檢查
 async function createNewCharacter(user, data) {
     const playerRef = doc(db, "players", user.uid);
     UI.print("正在為您重塑肉身...", "system");
@@ -217,4 +148,100 @@ async function createNewCharacter(user, data) {
         CommandSystem.handle('look', localPlayerData, user.uid);
         startRegeneration(user);
     } catch (e) { UI.print("創建失敗：" + e.message, "error"); }
+}
+
+async function handleCreationInput(input) {
+    const val = input.trim();
+    if (!val) return;
+
+    if (gameState === 'CREATION_ID') {
+        const idRegex = /^[a-zA-Z]{2,12}$/;
+        if (!idRegex.test(val)) {
+            UI.print("ID 格式錯誤：限 2-12 個英文字母 (A-Z, a-z)。", "error");
+            return;
+        }
+        
+        const newId = val.toLowerCase();
+        UI.print(`正在檢查 ID [${newId}] 是否可用...`, "system");
+
+        try {
+            const playersRef = collection(db, "players");
+            const q = query(playersRef, where("id", "==", newId));
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+                UI.print(`ID [${newId}] 已經被使用了，請換一個。`, "error");
+                return;
+            }
+
+            tempCreationData.id = newId; 
+            gameState = 'CREATION_NAME';
+            UI.print(`ID [${newId}] 可用！`, "system");
+            UI.print("請問大俠尊姓大名？(中文名稱)");
+        } catch (e) {
+            console.error(e);
+            UI.print("檢查 ID 失敗：" + e.message, "error");
+        }
+        return;
+    }
+
+    if (gameState === 'CREATION_NAME') {
+        if (val.length < 2) {
+            UI.print("名字太短了，請重新輸入：", "error");
+            return;
+        }
+        tempCreationData.name = val;
+        gameState = 'CREATION_GENDER';
+        UI.print(`幸會，${val}。`, "system");
+        UI.print("請問大俠是【男】還是【女】？(請輸入 男 或 女)");
+        return;
+    }
+
+    if (gameState === 'CREATION_GENDER') {
+        let gender = "";
+        if (['男', 'm', 'male'].includes(val.toLowerCase())) gender = "男";
+        else if (['女', 'f', 'female'].includes(val.toLowerCase())) gender = "女";
+        
+        if (!gender) {
+            UI.print("請輸入 '男' 或 '女'。", "error");
+            return;
+        }
+
+        tempCreationData.gender = gender;
+        await createNewCharacter(currentUser, tempCreationData);
+    }
+}
+
+function getErrMsg(code) {
+    switch(code) {
+        case 'auth/invalid-email': return "Email 格式錯誤";
+        case 'auth/user-not-found': return "找不到此帳號";
+        case 'auth/wrong-password': return "密碼錯誤";
+        case 'auth/email-already-in-use': return "此 Email 已被註冊";
+        case 'auth/weak-password': return "密碼太弱 (需6位以上)";
+        default: return "錯誤：" + code;
+    }
+}
+
+async function checkAndLoadPlayer(user) {
+    const playerRef = doc(db, "players", user.uid);
+    try {
+        const docSnap = await getDoc(playerRef);
+
+        if (docSnap.exists()) {
+            UI.print("讀取檔案成功... 你的江湖與你同在。", "system");
+            localPlayerData = docSnap.data();
+            gameState = 'PLAYING'; 
+            CommandSystem.handle('look', localPlayerData, user.uid);
+            
+            // 讀取成功後啟動回復
+            startRegeneration(user);
+        } else {
+            UI.print("檢測到新面孔...", "system");
+            UI.print("請輸入您想使用的【英文 ID】(純英文字母，不可重複)：");
+            gameState = 'CREATION_ID'; 
+        }
+    } catch (e) {
+        UI.print("資料庫讀取失敗：" + e.message, "error");
+    }
 }
