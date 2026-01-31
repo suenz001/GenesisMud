@@ -6,7 +6,6 @@ import { db, auth } from "../firebase.js";
 import { NPCDB } from "../data/npcs.js";
 import { MessageSystem } from "./messages.js";
 import { ItemDB } from "../data/items.js";
-import { SkillDB } from "../data/skills.js"; // 記得引入 SkillDB
 
 const DIR_OFFSET = {
     'north': { x: 0, y: 1, z: 0 }, 'south': { x: 0, y: -1, z: 0 },
@@ -54,9 +53,7 @@ export const MapSystem = {
         if (room.safe) UI.print(UI.txt("【 安全區 】", "#00ff00"), "system", true);
         UI.print(room.description);
 
-        let chars = [];
-        
-        // --- NPC 顯示邏輯 (含師徒按鈕) ---
+        // --- NPC 顯示 (單行顯示) ---
         if (room.npcs && room.npcs.length > 0) {
             let deadNPCs = [];
             try {
@@ -71,64 +68,64 @@ export const MapSystem = {
                 });
             } catch (e) { console.error(e); }
 
+            // 這裡改用 div 堆疊，達到換行效果
+            let npcListHtml = "";
             room.npcs.forEach((npcId, index) => {
                 const isDead = deadNPCs.some(d => d.npcId === npcId && d.index === index);
                 if (!isDead) {
                     const npc = NPCDB[npcId];
                     if (npc) {
-                        let links = `${npc.name}(${npc.id})`;
+                        let links = `${UI.txt(npc.name, "#fff")} <span style="color:#aaa">(${npc.id})</span> `;
                         links += UI.makeCmd("[看]", `look ${npc.id}`, "cmd-btn");
                         
-                        // 師徒互動按鈕
                         const isMyMaster = (playerData.family && playerData.family.masterId === npc.id);
                         if (!isMyMaster && npc.family) {
                             links += UI.makeCmd("[拜師]", `apprentice ${npc.id}`, "cmd-btn");
                         }
-                        // 已拜師則在 look npc 時顯示學藝，這裡只顯示基本按鈕，避免畫面過亂
                         
                         if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id}`, "cmd-btn");
                         
-                        // 戰鬥按鈕
                         links += UI.makeCmd("[戰鬥]", `fight ${npc.id}`, "cmd-btn");
                         links += UI.makeCmd("[下殺手]", `kill ${npc.id}`, "cmd-btn cmd-btn-buy");
 
-                        chars.push(links);
+                        npcListHtml += `<div style="margin-top:4px;">${links}</div>`;
                     }
                 }
             });
+            if (npcListHtml) UI.print(npcListHtml, "chat", true);
         }
 
-        // 其他玩家
+        // --- 玩家顯示 (單行顯示) ---
         try {
             const playersRef = collection(db, "players");
             const q = query(playersRef, where("location", "==", playerData.location));
             const querySnapshot = await getDocs(q);
+            let playerHtml = "";
             querySnapshot.forEach((doc) => {
                 if (auth.currentUser && doc.id !== auth.currentUser.uid) {
                     const p = doc.data();
-                    chars.push(`[ 玩家 ] : ${p.name}(${p.id || 'unknown'})`);
+                    playerHtml += `<div style="margin-top:2px;">[ 玩家 ] ${p.name} <span style="color:#aaa">(${p.id || 'unknown'})</span></div>`;
                 }
             });
+            if (playerHtml) UI.print(playerHtml, "chat", true);
         } catch (e) { console.error(e); }
 
-        if (chars.length > 0) UI.print(`這裡明顯的人物有：${chars.join("、")}`, "chat", true);
-
-        // 掉落物
+        // --- 掉落物顯示 (單行顯示) ---
         try {
             const itemsRef = collection(db, "room_items");
             const qItems = query(itemsRef, where("roomId", "==", playerData.location));
             const itemSnapshot = await getDocs(qItems);
-            let droppedItems = [];
+            let itemHtml = "";
             itemSnapshot.forEach((doc) => {
                 const item = doc.data();
-                let link = `${item.name}(${item.itemId})`;
+                let link = `${UI.txt(item.name, "#ddd")} <span style="color:#666">(${item.itemId})</span> `;
                 link += UI.makeCmd("[撿取]", `get ${item.itemId}`, "cmd-btn");
-                droppedItems.push(link);
+                itemHtml += `<div style="margin-top:2px;">${link}</div>`;
             });
-            if (droppedItems.length > 0) UI.print(`地上的物品：${droppedItems.join("、")}`, "chat", true);
+            if (itemHtml) UI.print(itemHtml, "chat", true);
         } catch (e) { console.error(e); }
 
-        // 出口
+        // --- 出口顯示 ---
         const validExits = MapSystem.getAvailableExits(playerData.location);
         const exitKeys = Object.keys(validExits);
         

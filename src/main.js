@@ -20,7 +20,6 @@ let tempCreationData = {};
 
 UI.print("系統初始化中...", "system");
 
-// 1. 監聽登入狀態
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
@@ -42,7 +41,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// 2. 綁定按鈕
 UI.onAuthAction({
     onLogin: (email, pwd) => {
         if(!email || !pwd) return UI.showLoginError("請輸入帳號密碼");
@@ -60,7 +58,6 @@ UI.onAuthAction({
     }
 });
 
-// 3. 處理輸入
 UI.onInput((cmd) => {
     if (!currentUser) {
         UI.print("請先登入。", "error");
@@ -78,11 +75,9 @@ UI.onInput((cmd) => {
     }
 });
 
-// --- 自動回復系統 ---
 function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
     
-    // 每 30 秒執行一次
     regenInterval = setInterval(async () => {
         if (!localPlayerData || !user) return;
 
@@ -90,23 +85,18 @@ function startRegeneration(user) {
         let msg = [];
         let changed = false;
 
-        // 回復 HP (氣)
         if (attr.hp < attr.maxHp) {
             const recover = Math.floor(attr.maxHp * 0.1); 
             attr.hp = Math.min(attr.maxHp, attr.hp + recover);
             msg.push("氣息順暢了許多");
             changed = true;
         }
-
-        // 回復 SP (精)
         if (attr.sp < attr.maxSp) {
             const recover = Math.floor(attr.maxSp * 0.1);
             attr.sp = Math.min(attr.maxSp, attr.sp + recover);
             msg.push("精神振作了些");
             changed = true;
         }
-
-        // 回復 MP (神)
         if (attr.mp < attr.maxMp) {
             const recover = Math.floor(attr.maxMp * 0.1);
             attr.mp = Math.min(attr.maxMp, attr.mp + recover);
@@ -127,8 +117,6 @@ function startRegeneration(user) {
 
     }, 30000); 
 }
-
-// --- 輔助函式 ---
 
 async function handleCreationInput(input) {
     const val = input.trim();
@@ -213,8 +201,6 @@ async function checkAndLoadPlayer(user) {
             localPlayerData = docSnap.data();
             gameState = 'PLAYING'; 
             CommandSystem.handle('look', localPlayerData, user.uid);
-            
-            // 讀取成功後啟動回復
             startRegeneration(user);
         } else {
             UI.print("檢測到新面孔...", "system");
@@ -241,16 +227,15 @@ async function createNewCharacter(user, data) {
             hp: 100, maxHp: 100, mp: 100, maxMp: 100, sp: 100, maxSp: 100,
             spiritual: 10, maxSpiritual: 10, force: 10, maxForce: 10, mana: 10, maxMana: 10,
             food: 100, maxFood: 100, water: 100, maxWater: 100,
-            str: 20, con: 20, dex: 20, int: 20, per: 20, kar: 20, cor: 20
+            // 移除 dex (身法)
+            str: 20, con: 20, int: 20, per: 20, kar: 20, cor: 20
         },
-        // --- 初始化戰鬥屬性 (已移除 parry) ---
         combat: { 
             xp: 0, 
             potential: 100, 
             kills: 0, 
             attack: 10, defense: 10, hitRate: 10, dodge: 10 
         },
-        // --- 技能 (已移除 parry) ---
         skills: { "unarmed": 10, "dodge": 10 },
         money: 1000,
         inventory: [
