@@ -1,7 +1,4 @@
-{
-type: uploaded file
-fileName: map.js
-fullContent:
+
 // src/systems/map.js
 import { doc, updateDoc, collection, query, where, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { WorldMap } from "../data/world.js";
@@ -218,4 +215,3 @@ export const MapSystem = {
         await MessageSystem.broadcast(targetRoomId, `${playerData.name} 出現了。`);
     }
 };
-}
