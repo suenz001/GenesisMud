@@ -629,4 +629,3 @@ export const CommandSystem = {
         else UI.print("你胡亂比劃了一通。(輸入 help 查看指令)", "error");
     }
 };
-}
