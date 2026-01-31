@@ -77,26 +77,20 @@ export const UI = {
             textEl.textContent = `${safeCurrent}/${safeMax}`;
         };
 
-        // --- 修正：面板數值對應 ---
-        updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp); // 氣 (HP)
+        // --- 修正：數值對應 ---
+        // 氣 = HP
+        updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp);
         
-        // 修正：使用者回報 精(SP) 顯示在 神(MP) 的位置，所以這裡做交換調整
-        // 假設 HTML 中 bar-sp 是第二條，bar-mp 是第三條
-        // 我們將 attr.sp (精) 填入 bar-sp (如果面板標籤正確)
-        // 如果使用者說 "精對應到面板的神了"，代表 bar-sp 標籤是 "神"? 或者我傳錯了?
-        // 這裡依照標準：
-        // bar-hp -> HP (氣)
-        // bar-sp -> SP (精)
-        // bar-mp -> MP (神)
-        // 如果之前顯示錯亂，可能是 HTML ID 命名與變數不符。
-        // 這裡強制指定：
-        updateBar('bar-sp', 'text-sp', attr.sp, attr.maxSp); // 精
-        updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp); // 神
+        // 精 = SP (原本可能對應錯了，現在強制對應 bar-sp)
+        updateBar('bar-sp', 'text-sp', attr.sp, attr.maxSp);
+        
+        // 神 = MP (強制對應 bar-mp)
+        updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp);
         
         // 進階屬性
-        updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual); // 靈力
-        updateBar('bar-force', 'text-force', attr.force, attr.maxForce); // 內力
-        updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana); // 法力
+        updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual);
+        updateBar('bar-force', 'text-force', attr.force, attr.maxForce);
+        updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana);
 
         const currentRoom = WorldMap[playerData.location];
         if (currentRoom) {
@@ -104,8 +98,6 @@ export const UI = {
         }
     },
 
-    // ... (其餘函式保持不變，為節省篇幅省略 drawRangeMap, updateLocationInfo, onInput 等) ...
-    // 請務必保留 drawRangeMap 等原本內容
     drawRangeMap: (px, py, pz, currentId) => {
         const miniMapBox = document.getElementById('mini-map-box');
         miniMapBox.innerHTML = ''; 
@@ -172,6 +164,7 @@ export const UI = {
         if (show) emailInput.focus();
     },
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
+    
     onInput: (callback) => {
         const sendHandler = () => {
             const val = input.value.trim();
