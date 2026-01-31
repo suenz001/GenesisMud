@@ -1,3 +1,4 @@
+
 // src/data/items.js
 
 export const ItemDB = {
@@ -10,12 +11,20 @@ export const ItemDB = {
     "tea": { name: "烏龍茶", type: "drink", value: 30, desc: "一杯清茶。" },
     "wine": { name: "女兒紅", type: "drink", value: 20, desc: "一罈好酒。" },
 
-    // --- 新增：素材與戰利品 ---
+    // --- 素材與戰利品 ---
     "rabbit_meat": { name: "兔肉", type: "food", value: 30, desc: "一塊鮮紅的生兔肉，烤過應該不錯吃。" },
     "rabbit_skin": { name: "兔皮", type: "misc", value: 0, desc: "柔軟的兔毛皮，可以拿去賣錢。" },
     "boar_meat": { name: "野豬肉", type: "food", value: 50, desc: "一塊肥嫩的野豬肉。" },
     "boar_tooth": { name: "野豬獠牙", type: "misc", value: 0, desc: "尖銳的獠牙，是勇氣的象徵。" },
     "wolf_skin": { name: "狼皮", type: "misc", value: 0, desc: "一張完整的狼皮，價值不菲。" },
     "bear_paw": { name: "熊掌", type: "food", value: 100, desc: "極為珍貴的食材，大補！" },
-    "bear_skin": { name: "黑熊皮", type: "misc", value: 0, desc: "厚實的黑熊皮，做成大衣一定很保暖。" }
+    "bear_skin": { name: "黑熊皮", type: "misc", value: 0, desc: "厚實的黑熊皮，做成大衣一定很保暖。" },
+
+    // --- 新增：武器 ---
+    "iron_sword": { name: "鐵劍", type: "weapon", damage: 15, hit: 5, value: 500, desc: "一把普通的鐵劍，適合新手使用。" },
+    "steel_blade": { name: "鋼刀", type: "weapon", damage: 20, hit: 0, value: 1000, desc: "精鋼打造的鋼刀，鋒利無比。" },
+    
+    // --- 新增：防具 ---
+    "cloth_armor": { name: "布衣", type: "armor", defense: 5, value: 200, desc: "普通的粗布衣服，防禦力有限。" },
+    "leather_armor": { name: "皮甲", type: "armor", defense: 10, value: 500, desc: "用硬皮製成的盔甲，能提供不錯的防護。" }
 };

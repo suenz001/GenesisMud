@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: index.html
+fullContent:
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -8,7 +12,7 @@
 </head>
 <body>
     <div id="game-wrapper">
-        <div id="header">【創世江湖行】GenesisMud - Ver 0.3.0 (RPG系統版)</div>
+        <div id="header">【創世江湖行】GenesisMud - Ver 0.3.5 (裝備系統)</div>
         
         <div id="game-body">
             <div id="main-display">
@@ -105,6 +109,12 @@
                         <button class="btn-action" data-cmd="skills">技能</button>
                         <button class="btn-action" data-cmd="inventory">物品</button>
                         <button class="btn-action" data-cmd="save">存檔</button>
+                        
+                        <button class="btn-action" data-cmd="wield">裝備</button>
+                        <button class="btn-action" data-cmd="unwield">卸武</button>
+                        <button class="btn-action" data-cmd="wear">穿戴</button>
+                        <button class="btn-action" data-cmd="unwear">脫甲</button>
+
                         <button class="btn-action" data-cmd="recall">回城</button>
                         <button class="btn-action" data-cmd="help">說明</button>
                     </div>
@@ -130,3 +140,4 @@
     <script type="module" src="src/main.js"></script>
 </body>
 </html>
+}
