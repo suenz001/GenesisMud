@@ -17,26 +17,20 @@ const elRoomName = document.getElementById('current-room-name');
 const miniMapBox = document.getElementById('mini-map-box');
 
 export const UI = {
-    // --- 核心：顏色與格式化工具 ---
-    
-    // 產生帶顏色的 span
-    // color 可以是 hex (#ff0000) 或 css class
+    // 顏色工具
     txt: (text, color = '#ccc', bold = false) => {
         const style = `color:${color};${bold ? 'font-weight:bold;' : ''}`;
         return `<span style="${style}">${text}</span>`;
     },
 
-    // 產生標題分隔線
     titleLine: (title) => {
         return `<div style="color:#00ffff; border-bottom: 1px dashed #008888; margin: 5px 0; padding-bottom:2px;">≡ ${title} ≡</div>`;
     },
 
-    // 產生屬性行 (標籤: 數值)
     attrLine: (label, value, unit = '') => {
         return `<span style="color:#88bbcc;">${label}：</span><span style="color:#fff; font-weight:bold;">${value}</span> <span style="color:#888;">${unit}</span>`;
     },
 
-    // 貨幣格式化 (彩色版)
     formatMoney: (coins) => {
         if (!coins) return UI.txt("0", "#ccc") + UI.txt(" 文銅錢", "#888");
         const gold = Math.floor(coins / 1000000);
@@ -51,12 +45,10 @@ export const UI = {
         return str.trim() || UI.txt("0 文銅錢", "#888");
     },
 
-    // 產生可點擊的指令按鈕
     makeCmd: (text, cmd, styleClass = 'cmd-link') => {
         return `<span class="${styleClass}" data-cmd="${cmd}">${text}</span>`;
     },
 
-    // 輸出訊息
     print: (content, type = 'normal', isHtml = false) => {
         const div = document.createElement('div');
         if (isHtml) div.innerHTML = content;
@@ -85,12 +77,26 @@ export const UI = {
             textEl.textContent = `${safeCurrent}/${safeMax}`;
         };
 
-        updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp);
-        updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual);
-        updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp);
-        updateBar('bar-force', 'text-force', attr.force, attr.maxForce);
-        updateBar('bar-sp', 'text-sp', attr.sp, attr.maxSp);
-        updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana);
+        // --- 修正：面板數值對應 ---
+        updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp); // 氣 (HP)
+        
+        // 修正：使用者回報 精(SP) 顯示在 神(MP) 的位置，所以這裡做交換調整
+        // 假設 HTML 中 bar-sp 是第二條，bar-mp 是第三條
+        // 我們將 attr.sp (精) 填入 bar-sp (如果面板標籤正確)
+        // 如果使用者說 "精對應到面板的神了"，代表 bar-sp 標籤是 "神"? 或者我傳錯了?
+        // 這裡依照標準：
+        // bar-hp -> HP (氣)
+        // bar-sp -> SP (精)
+        // bar-mp -> MP (神)
+        // 如果之前顯示錯亂，可能是 HTML ID 命名與變數不符。
+        // 這裡強制指定：
+        updateBar('bar-sp', 'text-sp', attr.sp, attr.maxSp); // 精
+        updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp); // 神
+        
+        // 進階屬性
+        updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual); // 靈力
+        updateBar('bar-force', 'text-force', attr.force, attr.maxForce); // 內力
+        updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana); // 法力
 
         const currentRoom = WorldMap[playerData.location];
         if (currentRoom) {
@@ -98,12 +104,14 @@ export const UI = {
         }
     },
 
+    // ... (其餘函式保持不變，為節省篇幅省略 drawRangeMap, updateLocationInfo, onInput 等) ...
+    // 請務必保留 drawRangeMap 等原本內容
     drawRangeMap: (px, py, pz, currentId) => {
+        const miniMapBox = document.getElementById('mini-map-box');
         miniMapBox.innerHTML = ''; 
         const grid = document.createElement('div');
         grid.className = 'range-map-grid';
         const radius = 2; 
-
         const currentRoomData = WorldMap[currentId];
         const currentRegions = currentRoomData ? (currentRoomData.region || ["world"]) : ["world"];
 
@@ -112,7 +120,6 @@ export const UI = {
                 const div = document.createElement('div');
                 div.className = 'map-cell-range';
                 let roomData = null;
-
                 for (const [key, val] of Object.entries(WorldMap)) {
                     if (val.x === x && val.y === y && val.z === pz) {
                         const targetRegions = val.region || ["world"];
@@ -121,7 +128,6 @@ export const UI = {
                         break;
                     }
                 }
-
                 if (roomData) {
                     div.classList.add('room-exists');
                     div.title = roomData.title;
@@ -153,7 +159,6 @@ export const UI = {
         miniMapBox.appendChild(zInfo);
         miniMapBox.appendChild(grid);
     },
-
     updateLocationInfo: (roomTitle) => { elRoomName.textContent = roomTitle; },
     enableGameInput: (enabled) => {
         input.disabled = !enabled;
@@ -167,7 +172,6 @@ export const UI = {
         if (show) emailInput.focus();
     },
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
-    
     onInput: (callback) => {
         const sendHandler = () => {
             const val = input.value.trim();

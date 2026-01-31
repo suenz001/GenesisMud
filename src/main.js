@@ -13,7 +13,7 @@ import { auth, db } from "./firebase.js";
 
 let currentUser = null;
 let localPlayerData = null; 
-let regenInterval = null; // 用來儲存回復計時器
+let regenInterval = null; // 自動回復計時器
 
 // 遊戲狀態控制
 let gameState = 'INIT'; 
@@ -71,7 +71,7 @@ UI.onInput((cmd) => {
 
     if (gameState === 'PLAYING') {
         CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
-        // 每次指令後更新 HUD，確保數值同步
+        // 每次指令後更新 HUD
         if (localPlayerData) {
             UI.updateHUD(localPlayerData); 
         }
@@ -81,7 +81,7 @@ UI.onInput((cmd) => {
     }
 });
 
-// --- 自動回復系統 ---
+// --- 自動回復系統 (每30秒回復精氣神) ---
 function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
     
@@ -113,12 +113,12 @@ function startRegeneration(user) {
             changed = true;
         }
 
-        // 注意：靈力、內力、法力不自然回復，所以不處理
+        // 靈力、內力、法力不自然回復，需靠打坐/冥想
 
         if (changed) {
             UI.print("你覺得精神好多了。", "system");
             UI.updateHUD(localPlayerData);
-            // 同步回資料庫
+            // 同步回資料庫 (背景執行，不卡頓)
             try {
                 const playerRef = doc(db, "players", user.uid);
                 await updateDoc(playerRef, { attributes: attr });
@@ -216,7 +216,7 @@ async function checkAndLoadPlayer(user) {
             gameState = 'PLAYING'; 
             CommandSystem.handle('look', localPlayerData, user.uid);
             
-            // 啟動自動回復
+            // 讀取成功後啟動回復
             startRegeneration(user);
         } else {
             UI.print("檢測到新面孔...", "system");
@@ -239,14 +239,30 @@ async function createNewCharacter(user, data) {
         email: user.email || "anonymous",
         location: "inn_start",
         savePoint: "inn_start",
+        
+        // 基礎與修為
         attributes: {
             hp: 100, maxHp: 100, mp: 100, maxMp: 100, sp: 100, maxSp: 100,
             spiritual: 10, maxSpiritual: 10, force: 10, maxForce: 10, mana: 10, maxMana: 10,
             food: 100, maxFood: 100, water: 100, maxWater: 100,
             str: 20, con: 20, dex: 20, int: 20, per: 20, kar: 20, cor: 20
         },
-        combat: { xp: 0, potential: 0, attack: 10, defense: 10, hitRate: 10, dodge: 10, parry: 10 },
-        skills: { "unarmed": 10, "dodge": 10, "parry": 10 },
+
+        // 戰鬥數值 (初始化潛能為 100，方便新手起步)
+        combat: { 
+            xp: 0, 
+            potential: 100, 
+            attack: 10, defense: 10, hitRate: 10, dodge: 10, parry: 10 
+        },
+
+        // 技能
+        skills: { 
+            "unarmed": 10, 
+            "dodge": 10, 
+            "parry": 10 
+        },
+
+        // 背包
         money: 1000,
         inventory: [
             { id: "rice", name: "白米飯", count: 2 },
@@ -265,7 +281,7 @@ async function createNewCharacter(user, data) {
         UI.print(`角色【${data.name}(${data.id})】建立完成！`, "system");
         CommandSystem.handle('look', localPlayerData, user.uid);
         
-        // 啟動自動回復
+        // 創建成功後啟動回復
         startRegeneration(user);
     } catch (e) {
         UI.print("創建失敗：" + e.message, "error");
