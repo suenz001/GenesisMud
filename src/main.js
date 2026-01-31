@@ -15,11 +15,6 @@ let currentUser = null;
 let localPlayerData = null; 
 
 // 遊戲狀態控制
-// 'INIT': 初始化
-// 'CREATION_ID': 輸入英文ID (新增)
-// 'CREATION_NAME': 輸入中文名稱
-// 'CREATION_GENDER': 輸入性別
-// 'PLAYING': 正常遊戲
 let gameState = 'INIT'; 
 let tempCreationData = {}; 
 
@@ -43,6 +38,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+// 2. 綁定按鈕
 UI.onAuthAction({
     onLogin: (email, pwd) => {
         if(!email || !pwd) return UI.showLoginError("請輸入帳號密碼");
@@ -86,7 +82,6 @@ async function handleCreationInput(input) {
 
     // 步驟 1: 輸入英文 ID
     if (gameState === 'CREATION_ID') {
-        // 檢查格式：只能英文字母，2~12字元
         const idRegex = /^[a-zA-Z]{2,12}$/;
         if (!idRegex.test(val)) {
             UI.print("ID 格式錯誤：限 2-12 個英文字母 (A-Z, a-z)。", "error");
@@ -96,20 +91,25 @@ async function handleCreationInput(input) {
         const newId = val.toLowerCase();
         UI.print(`正在檢查 ID [${newId}] 是否可用...`, "system");
 
-        // 檢查唯一性 (查詢資料庫是否有相同 ID)
-        const playersRef = collection(db, "players");
-        const q = query(playersRef, where("id", "==", newId));
-        const querySnapshot = await getDocs(q);
+        try {
+            // 檢查唯一性
+            const playersRef = collection(db, "players");
+            const q = query(playersRef, where("id", "==", newId));
+            const querySnapshot = await getDocs(q);
 
-        if (!querySnapshot.empty) {
-            UI.print(`ID [${newId}] 已經被使用了，請換一個。`, "error");
-            return;
+            if (!querySnapshot.empty) {
+                UI.print(`ID [${newId}] 已經被使用了，請換一個。`, "error");
+                return;
+            }
+
+            tempCreationData.id = newId; 
+            gameState = 'CREATION_NAME';
+            UI.print(`ID [${newId}] 可用！`, "system");
+            UI.print("請問大俠尊姓大名？(中文名稱)");
+        } catch (e) {
+            console.error(e);
+            UI.print("檢查 ID 失敗 (請確認 Firestore 權限規則已更新)：" + e.message, "error");
         }
-
-        tempCreationData.id = newId; // 存入 ID
-        gameState = 'CREATION_NAME';
-        UI.print(`ID [${newId}] 可用！`, "system");
-        UI.print("請問大俠尊姓大名？(中文名稱)");
         return;
     }
 
@@ -166,7 +166,7 @@ async function checkAndLoadPlayer(user) {
         } else {
             UI.print("檢測到新面孔...", "system");
             UI.print("請輸入您想使用的【英文 ID】(純英文字母，不可重複)：");
-            gameState = 'CREATION_ID'; // 從 ID 開始
+            gameState = 'CREATION_ID'; 
         }
     } catch (e) {
         UI.print("資料庫讀取失敗：" + e.message, "error");
@@ -178,7 +178,7 @@ async function createNewCharacter(user, data) {
     UI.print("正在為您重塑肉身...", "system");
 
     const initialData = {
-        id: data.id,     // 新增 ID 欄位
+        id: data.id,     
         name: data.name,
         gender: data.gender,
         email: user.email || "anonymous",
