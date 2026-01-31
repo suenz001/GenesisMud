@@ -1,5 +1,3 @@
-{
-
 // src/systems/commands.js
 import { doc, updateDoc, deleteDoc, addDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -672,4 +670,3 @@ export const CommandSystem = {
         else UI.print("你胡亂比劃了一通。(輸入 help 查看指令)", "error");
     }
 };
-}
