@@ -1,4 +1,4 @@
-// src/ui.js
+// src/ui.js (請保留原有的 import)
 import { WorldMap } from "./data/world.js";
 
 const output = document.getElementById('output');
@@ -13,21 +13,30 @@ const btnLogin = document.getElementById('btn-login');
 const btnRegister = document.getElementById('btn-register');
 const btnGuest = document.getElementById('btn-guest');
 
-// HUD 元素
 const elRoomName = document.getElementById('current-room-name');
 const miniMapBox = document.getElementById('mini-map-box');
 
 export const UI = {
-    // 輸出訊息 (支援純文字與 HTML)
-    // isHtml: 如果為 true，則使用 innerHTML
+    // --- 新增：貨幣格式化 ---
+    // 1000文 = 1兩銀, 1000兩銀 = 1兩金
+    formatMoney: (coins) => {
+        if (!coins) return "0 文銅錢";
+        const gold = Math.floor(coins / 1000000);
+        const silver = Math.floor((coins % 1000000) / 1000);
+        const copper = coins % 1000;
+
+        let str = "";
+        if (gold > 0) str += `<span style="color:#ffd700">${gold}兩黃金</span> `;
+        if (silver > 0) str += `<span style="color:#c0c0c0">${silver}兩白銀</span> `;
+        if (copper > 0) str += `<span style="color:#cd7f32">${copper}文銅錢</span>`;
+        
+        return str.trim() || "0 文銅錢";
+    },
+
     print: (content, type = 'normal', isHtml = false) => {
         const div = document.createElement('div');
-        
-        if (isHtml) {
-            div.innerHTML = content;
-        } else {
-            div.textContent = content;
-        }
+        if (isHtml) div.innerHTML = content;
+        else div.textContent = content;
 
         if (type === 'system') div.classList.add('msg-system');
         if (type === 'error') div.classList.add('msg-error');
@@ -37,12 +46,10 @@ export const UI = {
         output.scrollTop = output.scrollHeight;
     },
 
-    // 產生可點擊指令的 HTML 輔助函式
     makeCmd: (text, cmd, styleClass = 'cmd-link') => {
         return `<span class="${styleClass}" data-cmd="${cmd}">${text}</span>`;
     },
 
-    // 更新 HUD (狀態條 + 小地圖)
     updateHUD: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
@@ -71,14 +78,12 @@ export const UI = {
         }
     },
 
-    // 繪製小地圖 (含區域檢查)
     drawRangeMap: (px, py, pz, currentId) => {
         miniMapBox.innerHTML = ''; 
         const grid = document.createElement('div');
         grid.className = 'range-map-grid';
         const radius = 2; 
 
-        // 取得當前房間的 regions (預設為 world)
         const currentRoomData = WorldMap[currentId];
         const currentRegions = currentRoomData ? (currentRoomData.region || ["world"]) : ["world"];
 
@@ -89,17 +94,10 @@ export const UI = {
                 let roomData = null;
 
                 for (const [key, val] of Object.entries(WorldMap)) {
-                    // 1. 座標必須吻合
                     if (val.x === x && val.y === y && val.z === pz) {
-                        
-                        // 2. 區域必須相容 (Region Check)
-                        // 如果目標房間的 region 與當前房間沒有交集，就不顯示
                         const targetRegions = val.region || ["world"];
                         const hasCommonRegion = currentRegions.some(r => targetRegions.includes(r));
-                        
-                        if (hasCommonRegion) {
-                            roomData = val;
-                        }
+                        if (hasCommonRegion) roomData = val;
                         break;
                     }
                 }
@@ -125,7 +123,6 @@ export const UI = {
                 grid.appendChild(div);
             }
         }
-        
         const zInfo = document.createElement('div');
         zInfo.style.position = 'absolute';
         zInfo.style.bottom = '2px';
@@ -137,49 +134,31 @@ export const UI = {
         miniMapBox.appendChild(grid);
     },
 
-    updateLocationInfo: (roomTitle) => {
-        elRoomName.textContent = roomTitle;
-    },
-
+    updateLocationInfo: (roomTitle) => { elRoomName.textContent = roomTitle; },
     enableGameInput: (enabled) => {
         input.disabled = !enabled;
         sendBtn.disabled = !enabled;
         document.querySelectorAll('.btn-move, .btn-action').forEach(btn => btn.disabled = !enabled);
-        
-        if (enabled) {
-            input.placeholder = "請輸入指令...";
-            input.focus();
-        } else {
-            input.placeholder = "請先登入...";
-        }
+        if (enabled) { input.placeholder = "請輸入指令..."; input.focus(); } 
+        else { input.placeholder = "請先登入..."; }
     },
-
     showLoginPanel: (show) => {
         loginPanel.style.display = show ? 'block' : 'none';
         if (show) emailInput.focus();
     },
-
-    showLoginError: (msg) => {
-        document.getElementById('login-msg').textContent = msg;
-    },
-
+    showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
+    
     onInput: (callback) => {
         const sendHandler = () => {
             const val = input.value.trim();
             if (val) {
                 UI.print(`> ${val}`);
                 callback(val);
-                // 關鍵：全選文字，方便重複輸入
                 input.select(); 
             }
         };
-
         sendBtn.addEventListener('click', sendHandler);
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendHandler();
-        });
-
-        // 固定按鈕點擊
+        input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendHandler(); });
         document.querySelectorAll('.btn-move, .btn-action').forEach(btn => {
             btn.addEventListener('click', () => {
                 const cmd = btn.dataset.dir || btn.dataset.cmd;
@@ -191,8 +170,6 @@ export const UI = {
                 }
             });
         });
-
-        // 動態 HTML 按鈕點擊 (Event Delegation)
         output.addEventListener('click', (e) => {
             if (e.target && e.target.dataset.cmd) {
                 const cmd = e.target.dataset.cmd;
@@ -203,7 +180,6 @@ export const UI = {
             }
         });
     },
-
     onAuthAction: (callbacks) => {
         btnLogin.addEventListener('click', () => { callbacks.onLogin(emailInput.value, pwdInput.value); });
         btnRegister.addEventListener('click', () => { callbacks.onRegister(emailInput.value, pwdInput.value); });

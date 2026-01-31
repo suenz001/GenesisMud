@@ -5,6 +5,7 @@ import { UI } from "../ui.js";
 import { db, auth } from "../firebase.js"; 
 import { NPCDB } from "../data/npcs.js";
 import { MessageSystem } from "./messages.js";
+import { ItemDB } from "../data/items.js"; // 新增引用 ItemDB
 
 const DIR_OFFSET = {
     'north': { x: 0, y: 1, z: 0 }, 'south': { x: 0, y: -1, z: 0 },
@@ -17,14 +18,11 @@ const DIR_OFFSET = {
 export const MapSystem = {
     getRoom: (roomId) => WorldMap[roomId],
 
-    // 取得有效出口 (含座標計算、牆壁檢查、區域檢查)
     getAvailableExits: (currentRoomId) => {
         const room = WorldMap[currentRoomId];
         if (!room) return {};
         const exits = {};
         if (room.exits) Object.assign(exits, room.exits);
-
-        // 取得當前房間區域
         const currentRegions = room.region || ["world"];
 
         for (const [dir, offset] of Object.entries(DIR_OFFSET)) {
@@ -32,17 +30,11 @@ export const MapSystem = {
             const targetX = room.x + offset.x;
             const targetY = room.y + offset.y;
             const targetZ = room.z + offset.z;
-
             for (const [targetId, targetRoom] of Object.entries(WorldMap)) {
                 if (targetRoom.x === targetX && targetRoom.y === targetY && targetRoom.z === targetZ) {
-                    
-                    // 檢查區域相容性
                     const targetRegions = targetRoom.region || ["world"];
                     const hasCommonRegion = currentRegions.some(r => targetRegions.includes(r));
-
-                    if (hasCommonRegion) {
-                        if (!exits[dir]) exits[dir] = targetId;
-                    }
+                    if (hasCommonRegion && !exits[dir]) exits[dir] = targetId;
                 }
             }
         }
@@ -54,17 +46,14 @@ export const MapSystem = {
         const room = WorldMap[playerData.location];
         if (!room) { UI.print("你陷入虛空...", "error"); return; }
 
-        // 切換廣播監聽頻道
         MessageSystem.listenToRoom(playerData.location);
-
         UI.updateLocationInfo(room.title);
         UI.updateHUD(playerData);
         UI.print(`【${room.title}】`, "system");
         UI.print(room.description);
 
+        // --- 人物顯示 ---
         let chars = [];
-        
-        // 1. 顯示 NPC (互動按鈕)
         if (room.npcs && room.npcs.length > 0) {
             room.npcs.forEach(npcId => {
                 const npc = NPCDB[npcId];
@@ -76,8 +65,6 @@ export const MapSystem = {
                 }
             });
         }
-
-        // 2. 顯示其他玩家 (從資料庫讀取)
         try {
             const playersRef = collection(db, "players");
             const q = query(playersRef, where("location", "==", playerData.location));
@@ -92,36 +79,55 @@ export const MapSystem = {
 
         if (chars.length > 0) UI.print(`這裡明顯的人物有：${chars.join("、")}`, "chat", true);
 
-        // 3. 顯示出口 (互動按鈕)
+        // --- 新增：顯示掉落物 (從 room_items 集合讀取) ---
+        try {
+            const itemsRef = collection(db, "room_items");
+            const qItems = query(itemsRef, where("roomId", "==", playerData.location));
+            const itemSnapshot = await getDocs(qItems);
+            let droppedItems = [];
+            
+            itemSnapshot.forEach((doc) => {
+                const item = doc.data();
+                // 顯示格式：白米飯(rice) [撿取]
+                let link = `${item.name}(${item.itemId})`;
+                // 傳入 item.itemId 以便 get 指令使用
+                link += UI.makeCmd("[撿取]", `get ${item.itemId}`, "cmd-btn");
+                droppedItems.push(link);
+            });
+
+            if (droppedItems.length > 0) {
+                UI.print(`地上的物品：${droppedItems.join("、")}`, "chat", true);
+            }
+
+        } catch (e) { console.error("讀取地面物品失敗", e); }
+        // ------------------------------------------------
+
+        // --- 出口顯示 ---
         const validExits = MapSystem.getAvailableExits(playerData.location);
         const exitKeys = Object.keys(validExits);
         
-        if (exitKeys.length === 0) {
-            UI.print(`明顯的出口：無`, "chat");
-        } else {
+        if (exitKeys.length === 0) UI.print(`明顯的出口：無`, "chat");
+        else {
             const exitLinks = exitKeys.map(dir => UI.makeCmd(dir, dir, "cmd-link")).join(", ");
             UI.print(`明顯的出口：${exitLinks}`, "chat", true);
         }
     },
 
     move: async (playerData, direction, userId) => {
+        // ... (move 函式保持不變，為節省空間略過，請使用上一版的 move) ...
+        // 請確保這裡有完整的 move 邏輯
         if (!playerData) return;
         const validExits = MapSystem.getAvailableExits(playerData.location);
-
         if (!validExits[direction]) {
             const room = WorldMap[playerData.location];
             if (room.walls && room.walls.includes(direction)) UI.print("那邊是一面牆，過不去。", "error");
             else UI.print("那個方向沒有路。", "error");
             return;
         }
-
         const attr = playerData.attributes;
         if (attr.food <= 0 || attr.water <= 0) { UI.print("你餓得頭昏眼花...", "error"); return; }
         attr.food = Math.max(0, attr.food - 1);
         attr.water = Math.max(0, attr.water - 1);
-        if (attr.food < 10) UI.print("肚子餓了。", "system");
-
-        // 廣播離開
         await MessageSystem.broadcast(playerData.location, `${playerData.name} 往 ${direction} 離開了。`);
         
         const nextRoomId = validExits[direction];
@@ -132,24 +138,20 @@ export const MapSystem = {
             const playerRef = doc(db, "players", userId);
             await updateDoc(playerRef, { location: nextRoomId, "attributes.food": attr.food, "attributes.water": attr.water });
         } catch (e) { console.error(e); }
-
-        // 執行 Look (切換監聽) 並廣播進入
         await MapSystem.look(playerData);
         await MessageSystem.broadcast(nextRoomId, `${playerData.name} 走了過來。`);
     },
 
     teleport: async (playerData, targetRoomId, userId) => {
+        // ... (teleport 函式保持不變) ...
         if (!WorldMap[targetRoomId]) return UI.print("目標地點不存在。", "error");
-        
         await MessageSystem.broadcast(playerData.location, `${playerData.name} 消失了。`);
         playerData.location = targetRoomId;
         UI.print("白光一閃...", "system");
-        
         try {
             const playerRef = doc(db, "players", userId);
             await updateDoc(playerRef, { location: targetRoomId });
         } catch (e) { console.error(e); }
-
         await MapSystem.look(playerData);
         await MessageSystem.broadcast(targetRoomId, `${playerData.name} 出現了。`);
     }
