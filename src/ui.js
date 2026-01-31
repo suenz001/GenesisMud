@@ -37,15 +37,12 @@ export const UI = {
         output.scrollTop = output.scrollHeight;
     },
 
-    // --- 新增：產生可點擊指令的 HTML 輔助函式 ---
-    // text: 顯示的文字 (如 "[吃]")
-    // cmd: 實際執行的指令 (如 "eat rice")
-    // styleClass: 額外的 CSS 類別
+    // 產生可點擊指令的 HTML 輔助函式
     makeCmd: (text, cmd, styleClass = 'cmd-link') => {
-        // 我們將指令存在 data-cmd 屬性中
         return `<span class="${styleClass}" data-cmd="${cmd}">${text}</span>`;
     },
 
+    // 更新 HUD (狀態條 + 小地圖)
     updateHUD: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
@@ -74,11 +71,16 @@ export const UI = {
         }
     },
 
+    // 繪製小地圖 (含區域檢查)
     drawRangeMap: (px, py, pz, currentId) => {
         miniMapBox.innerHTML = ''; 
         const grid = document.createElement('div');
         grid.className = 'range-map-grid';
         const radius = 2; 
+
+        // 取得當前房間的 regions (預設為 world)
+        const currentRoomData = WorldMap[currentId];
+        const currentRegions = currentRoomData ? (currentRoomData.region || ["world"]) : ["world"];
 
         for (let y = py + radius; y >= py - radius; y--) {
             for (let x = px - radius; x <= px + radius; x++) {
@@ -87,8 +89,17 @@ export const UI = {
                 let roomData = null;
 
                 for (const [key, val] of Object.entries(WorldMap)) {
+                    // 1. 座標必須吻合
                     if (val.x === x && val.y === y && val.z === pz) {
-                        roomData = val;
+                        
+                        // 2. 區域必須相容 (Region Check)
+                        // 如果目標房間的 region 與當前房間沒有交集，就不顯示
+                        const targetRegions = val.region || ["world"];
+                        const hasCommonRegion = currentRegions.some(r => targetRegions.includes(r));
+                        
+                        if (hasCommonRegion) {
+                            roomData = val;
+                        }
                         break;
                     }
                 }
@@ -158,7 +169,8 @@ export const UI = {
             if (val) {
                 UI.print(`> ${val}`);
                 callback(val);
-                input.select();
+                // 關鍵：全選文字，方便重複輸入
+                input.select(); 
             }
         };
 
@@ -167,6 +179,7 @@ export const UI = {
             if (e.key === 'Enter') sendHandler();
         });
 
+        // 固定按鈕點擊
         document.querySelectorAll('.btn-move, .btn-action').forEach(btn => {
             btn.addEventListener('click', () => {
                 const cmd = btn.dataset.dir || btn.dataset.cmd;
@@ -179,20 +192,19 @@ export const UI = {
             });
         });
 
-        // --- 新增：事件委派 (Event Delegation) 處理動態生成的按鈕 ---
+        // 動態 HTML 按鈕點擊 (Event Delegation)
         output.addEventListener('click', (e) => {
-            // 檢查點擊的元素是否有 data-cmd 屬性
             if (e.target && e.target.dataset.cmd) {
                 const cmd = e.target.dataset.cmd;
-                UI.print(`> ${cmd}`); // 模擬輸入
-                callback(cmd);        // 執行指令
-                input.value = cmd;    // 填入輸入框方便重複執行
+                UI.print(`> ${cmd}`);
+                callback(cmd);
+                input.value = cmd;
                 input.select();
             }
         });
-    }
-    // ... 其他函式 ...
-    ,onAuthAction: (callbacks) => {
+    },
+
+    onAuthAction: (callbacks) => {
         btnLogin.addEventListener('click', () => { callbacks.onLogin(emailInput.value, pwdInput.value); });
         btnRegister.addEventListener('click', () => { callbacks.onRegister(emailInput.value, pwdInput.value); });
         btnGuest.addEventListener('click', () => { callbacks.onGuest(); });
