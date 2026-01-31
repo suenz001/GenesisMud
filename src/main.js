@@ -20,6 +20,7 @@ let tempCreationData = {};
 
 UI.print("系統初始化中...", "system");
 
+// 1. 監聽登入狀態
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
@@ -27,7 +28,10 @@ onAuthStateChanged(auth, async (user) => {
         UI.enableGameInput(true);
         await checkAndLoadPlayer(user);
     } else {
-        if (regenInterval) { clearInterval(regenInterval); regenInterval = null; }
+        if (regenInterval) {
+            clearInterval(regenInterval);
+            regenInterval = null;
+        }
         currentUser = null;
         localPlayerData = null;
         gameState = 'INIT';
@@ -38,6 +42,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+// 2. 綁定按鈕
 UI.onAuthAction({
     onLogin: (email, pwd) => {
         if(!email || !pwd) return UI.showLoginError("請輸入帳號密碼");
@@ -55,12 +60,20 @@ UI.onAuthAction({
     }
 });
 
+// 3. 處理輸入
 UI.onInput((cmd) => {
-    if (!currentUser) { UI.print("請先登入。", "error"); return; }
+    if (!currentUser) {
+        UI.print("請先登入。", "error");
+        return;
+    }
+
     if (gameState === 'PLAYING') {
         CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
-        if (localPlayerData) UI.updateHUD(localPlayerData); 
-    } else if (['CREATION_ID', 'CREATION_NAME', 'CREATION_GENDER'].includes(gameState)) {
+        if (localPlayerData) {
+            UI.updateHUD(localPlayerData); 
+        }
+    } 
+    else if (['CREATION_ID', 'CREATION_NAME', 'CREATION_GENDER'].includes(gameState)) {
         handleCreationInput(cmd);
     }
 });
@@ -69,7 +82,7 @@ UI.onInput((cmd) => {
 function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
     
-    // 每 30 秒執行
+    // 每 30 秒執行一次
     regenInterval = setInterval(async () => {
         if (!localPlayerData || !user) return;
 
@@ -107,48 +120,15 @@ function startRegeneration(user) {
             try {
                 const playerRef = doc(db, "players", user.uid);
                 await updateDoc(playerRef, { attributes: attr });
-            } catch (e) { console.error("Auto regen save failed", e); }
+            } catch (e) {
+                console.error("Auto regen save failed", e);
+            }
         }
 
     }, 30000); 
 }
 
-// ... (handleCreationInput, getErrMsg, checkAndLoadPlayer, createNewCharacter 保持原樣，與上一版相同) ...
-// 為了節省空間，請確保您保留了 main.js 中剩餘的程式碼
-// 這裡僅列出 createNewCharacter 的潛能初始化部分供檢查
-async function createNewCharacter(user, data) {
-    const playerRef = doc(db, "players", user.uid);
-    UI.print("正在為您重塑肉身...", "system");
-    const initialData = {
-        id: data.id,     
-        name: data.name,
-        gender: data.gender,
-        email: user.email || "anonymous",
-        location: "inn_start",
-        savePoint: "inn_start",
-        attributes: {
-            hp: 100, maxHp: 100, mp: 100, maxMp: 100, sp: 100, maxSp: 100,
-            spiritual: 10, maxSpiritual: 10, force: 10, maxForce: 10, mana: 10, maxMana: 10,
-            food: 100, maxFood: 100, water: 100, maxWater: 100,
-            str: 20, con: 20, dex: 20, int: 20, per: 20, kar: 20, cor: 20
-        },
-        combat: { xp: 0, potential: 100, attack: 10, defense: 10, hitRate: 10, dodge: 10, parry: 10 },
-        skills: { "unarmed": 10, "dodge": 10, "parry": 10 },
-        money: 1000,
-        inventory: [{ id: "rice", name: "白米飯", count: 2 }, { id: "dumpling", name: "肉包子", count: 3 }, { id: "waterskin", name: "牛皮水袋", count: 1 }],
-        equipment: { weapon: null, armor: null },
-        sect: "none",
-        createdAt: new Date().toISOString()
-    };
-    try {
-        await setDoc(playerRef, initialData);
-        localPlayerData = initialData;
-        gameState = 'PLAYING';
-        UI.print(`角色【${data.name}(${data.id})】建立完成！`, "system");
-        CommandSystem.handle('look', localPlayerData, user.uid);
-        startRegeneration(user);
-    } catch (e) { UI.print("創建失敗：" + e.message, "error"); }
-}
+// --- 輔助函式 ---
 
 async function handleCreationInput(input) {
     const val = input.trim();
@@ -243,5 +223,54 @@ async function checkAndLoadPlayer(user) {
         }
     } catch (e) {
         UI.print("資料庫讀取失敗：" + e.message, "error");
+    }
+}
+
+async function createNewCharacter(user, data) {
+    const playerRef = doc(db, "players", user.uid);
+    UI.print("正在為您重塑肉身...", "system");
+
+    const initialData = {
+        id: data.id,     
+        name: data.name,
+        gender: data.gender,
+        email: user.email || "anonymous",
+        location: "inn_start",
+        savePoint: "inn_start",
+        attributes: {
+            hp: 100, maxHp: 100, mp: 100, maxMp: 100, sp: 100, maxSp: 100,
+            spiritual: 10, maxSpiritual: 10, force: 10, maxForce: 10, mana: 10, maxMana: 10,
+            food: 100, maxFood: 100, water: 100, maxWater: 100,
+            str: 20, con: 20, dex: 20, int: 20, per: 20, kar: 20, cor: 20
+        },
+        // --- 初始化戰鬥屬性，加入殺氣 kills ---
+        combat: { 
+            xp: 0, 
+            potential: 100, 
+            kills: 0, 
+            attack: 10, defense: 10, hitRate: 10, dodge: 10, parry: 10 
+        },
+        skills: { "unarmed": 10, "dodge": 10, "parry": 10 },
+        money: 1000,
+        inventory: [
+            { id: "rice", name: "白米飯", count: 2 },
+            { id: "dumpling", name: "肉包子", count: 3 },
+            { id: "waterskin", name: "牛皮水袋", count: 1 }
+        ],
+        equipment: { weapon: null, armor: null },
+        sect: "none",
+        createdAt: new Date().toISOString(),
+        enabled_skills: {}
+    };
+
+    try {
+        await setDoc(playerRef, initialData);
+        localPlayerData = initialData;
+        gameState = 'PLAYING';
+        UI.print(`角色【${data.name}(${data.id})】建立完成！`, "system");
+        CommandSystem.handle('look', localPlayerData, user.uid);
+        startRegeneration(user);
+    } catch (e) {
+        UI.print("創建失敗：" + e.message, "error");
     }
 }

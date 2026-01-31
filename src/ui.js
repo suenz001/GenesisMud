@@ -77,20 +77,13 @@ export const UI = {
             textEl.textContent = `${safeCurrent}/${safeMax}`;
         };
 
-        // --- 修正面板對應 ---
-        // 氣 (HP) -> 對應 bar-hp
-        updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp);
+        // --- 修正數值對應 (交換精與神) ---
+        updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp); // 氣 (HP)
         
-        // 修正：如果之前 bar-sp 顯示的是神，bar-mp 顯示的是精
-        // 這裡我們強制依照您的 HTML ID 習慣進行對應：
-        // bar-mp (Mana/Magic) -> 對應 神 (MP)
-        // bar-sp (Stamina)    -> 對應 精 (SP)
-        // 如果還是錯，請告訴我您的 HTML 中 ID="bar-sp" 的標籤文字是什麼
+        // 根據您的回報：bar-sp 顯示的是神的位置，bar-mp 顯示的是精的位置
+        updateBar('bar-sp', 'text-sp', attr.mp, attr.maxMp); // 將神(MP) 傳給 bar-sp
+        updateBar('bar-mp', 'text-mp', attr.sp, attr.maxSp); // 將精(SP) 傳給 bar-mp
         
-        updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp); // 神 (MP)
-        updateBar('bar-sp', 'text-sp', attr.sp, attr.maxSp); // 精 (SP)
-        
-        // 進階屬性
         updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual);
         updateBar('bar-force', 'text-force', attr.force, attr.maxForce);
         updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana);
@@ -101,7 +94,6 @@ export const UI = {
         }
     },
 
-    // ... (其餘函式保持不變) ...
     drawRangeMap: (px, py, pz, currentId) => {
         const miniMapBox = document.getElementById('mini-map-box');
         miniMapBox.innerHTML = ''; 
