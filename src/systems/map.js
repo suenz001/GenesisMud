@@ -1,4 +1,3 @@
-
 // src/systems/map.js
 import { doc, updateDoc, collection, query, where, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { WorldMap } from "../data/world.js";
@@ -6,7 +5,7 @@ import { UI } from "../ui.js";
 import { db, auth } from "../firebase.js"; 
 import { NPCDB } from "../data/npcs.js";
 import { MessageSystem } from "./messages.js";
-import { ItemDB } from "../data/items.js";
+import { CommandSystem } from "./commands.js"; // 引入 CommandSystem 以呼叫 stopCombat
 
 const DIR_OFFSET = {
     'north': { x: 0, y: 1, z: 0 }, 'south': { x: 0, y: -1, z: 0 },
@@ -83,7 +82,16 @@ export const MapSystem = {
                 if (!isDead) {
                     const npc = NPCDB[npcId];
                     if (npc) {
-                        let links = `${UI.txt(npc.name, "#fff")} <span style="color:#aaa">(${npc.id})</span> `;
+                        // 檢查是否為當前玩家的戰鬥目標
+                        let statusTag = "";
+                        if (playerData.state === 'fighting' && 
+                            playerData.combatTarget && 
+                            playerData.combatTarget.id === npcId && 
+                            playerData.combatTarget.index === index) {
+                            statusTag = UI.txt(" 【戰鬥中】", "#ff0000", true);
+                        }
+
+                        let links = `${UI.txt(npc.name, "#fff")} <span style="color:#aaa">(${npc.id})</span>${statusTag} `;
                         links += UI.makeCmd("[看]", `look ${npc.id}`, "cmd-btn");
                         
                         const isMyMaster = (playerData.family && playerData.family.masterId === npc.id);
@@ -94,8 +102,12 @@ export const MapSystem = {
                         if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id}`, "cmd-btn");
                         
                         // 戰鬥指令
-                        links += UI.makeCmd("[戰鬥]", `fight ${npc.id}`, "cmd-btn");
-                        links += UI.makeCmd("[下殺手]", `kill ${npc.id}`, "cmd-btn cmd-btn-buy");
+                        if (playerData.state !== 'fighting') {
+                            links += UI.makeCmd("[戰鬥]", `fight ${npc.id}`, "cmd-btn");
+                            links += UI.makeCmd("[下殺手]", `kill ${npc.id}`, "cmd-btn cmd-btn-buy");
+                        } else if (statusTag) {
+                            // 戰鬥中顯示停止或逃跑提示，或不顯示
+                        }
 
                         npcListHtml += `<div style="margin-top:4px;">${links}</div>`;
                     }
@@ -111,10 +123,15 @@ export const MapSystem = {
             const querySnapshot = await getDocs(q);
             let playerHtml = "";
             querySnapshot.forEach((doc) => {
-                if (auth.currentUser && doc.id !== auth.currentUser.uid) {
-                    const p = doc.data();
-                    let status = "";
-                    if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
+                const p = doc.data();
+                // 顯示所有玩家 (包含自己)
+                let status = "";
+                if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
+                
+                if (auth.currentUser && doc.id === auth.currentUser.uid) {
+                    // 自己
+                    playerHtml += `<div style="margin-top:2px;">[ 你 ] ${p.name}${status}</div>`;
+                } else {
                     playerHtml += `<div style="margin-top:2px;">[ 玩家 ] ${p.name} <span style="color:#aaa">(${p.id || 'unknown'})</span>${status}</div>`;
                 }
             });
@@ -152,14 +169,14 @@ export const MapSystem = {
         
         // 戰鬥中移動限制
         if (playerData.state === 'fighting') {
-            // 簡單的逃跑機制：50% 機率成功
+            // 逃跑機制：50% 機率成功
             if (Math.random() < 0.5) {
                  UI.print("你被敵人纏住了，無法脫身！", "error");
                  return;
             } else {
                  UI.print("你狼狽地逃出了戰圈...", "system");
-                 // 這裡不需手動停 loop，移動後 loop 會因為 detect 不到 target 而停止，
-                 // 但在 commands.js 裡我們會做更嚴謹的清除。
+                 // 呼叫 commands.js 的 stopCombat
+                 if(CommandSystem.stopCombat) CommandSystem.stopCombat(userId);
             }
         }
 
@@ -180,21 +197,19 @@ export const MapSystem = {
         const nextRoomId = validExits[direction];
         playerData.location = nextRoomId;
         
-        // 移動後清除戰鬥狀態
-        if (playerData.state === 'fighting') {
-             playerData.state = 'normal';
-             // Stop combat interval is handled in commands.js via state check or explicit stop
-        }
+        // 移動後清除戰鬥狀態 (保險起見)
+        playerData.state = 'normal'; 
+        playerData.combatTarget = null;
 
         UI.print(`你往 ${direction} 走去...`);
         try {
             const playerRef = doc(db, "players", userId);
-            // 同步更新狀態為 normal
             await updateDoc(playerRef, { 
                 location: nextRoomId, 
                 "attributes.food": attr.food, 
                 "attributes.water": attr.water,
-                state: 'normal' 
+                state: 'normal',
+                combatTarget: null
             });
         } catch (e) { console.error(e); }
         await MapSystem.look(playerData);
@@ -203,13 +218,24 @@ export const MapSystem = {
 
     teleport: async (playerData, targetRoomId, userId) => {
         if (!WorldMap[targetRoomId]) return UI.print("目標地點不存在。", "error");
+        
+        if (playerData.state === 'fighting' && CommandSystem.stopCombat) {
+            CommandSystem.stopCombat(userId);
+        }
+
         await MessageSystem.broadcast(playerData.location, `${playerData.name} 消失了。`);
         playerData.location = targetRoomId;
-        playerData.state = 'normal'; // 傳送強制脫戰
+        playerData.state = 'normal'; 
+        playerData.combatTarget = null;
+
         UI.print("白光一閃...", "system");
         try {
             const playerRef = doc(db, "players", userId);
-            await updateDoc(playerRef, { location: targetRoomId, state: 'normal' });
+            await updateDoc(playerRef, { 
+                location: targetRoomId, 
+                state: 'normal',
+                combatTarget: null
+            });
         } catch (e) { console.error(e); }
         await MapSystem.look(playerData);
         await MessageSystem.broadcast(targetRoomId, `${playerData.name} 出現了。`);

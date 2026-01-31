@@ -1,5 +1,5 @@
 // src/systems/commands.js
-import { doc, updateDoc, deleteDoc, addDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, updateDoc, deleteDoc, addDoc, collection, query, where, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { db, auth } from "../firebase.js";
 import { UI } from "../ui.js";
@@ -15,13 +15,14 @@ const dirMapping = {
     'nw': 'northwest', 'ne': 'northeast', 'sw': 'southwest', 'se': 'southeast'
 };
 
+// 全域變數：戰鬥計時器與狀態
+let combatInterval = null;
+let currentCombatState = null; // { targetId, targetIndex, npcHp, maxNpcHp, npcName }
+
 // --- 戰鬥與計算核心函式 ---
 
 /**
  * 計算有效技能等級
- * 規則：
- * 1. 有激發進階武學：進階等級 + (基礎等級 / 2)
- * 2. 無激發(只用基礎)：基礎等級 / 2
  */
 function getEffectiveSkillLevel(entity, baseType) {
     const skills = entity.skills || {};
@@ -34,7 +35,7 @@ function getEffectiveSkillLevel(entity, baseType) {
     let advancedLvl = 0;
     
     if (entity.id && NPCDB[entity.id]) {
-        // NPC 邏輯：掃描技能列表，若有屬於此 baseType 的進階武功則採用
+        // NPC 邏輯：掃描技能列表
         for (const [sid, lvl] of Object.entries(skills)) {
             const sInfo = SkillDB[sid];
             if (sInfo && sInfo.base === baseType && sInfo.type !== baseType) {
@@ -60,7 +61,6 @@ function getEffectiveSkillLevel(entity, baseType) {
  * 獲取戰鬥綜合屬性 (攻擊、防禦、命中、閃避)
  */
 function getCombatStats(entity) {
-    // 若 NPC 尚未設定屬性，給予默認值以防報錯
     const attr = entity.attributes || { str: 10, con: 10, per: 10, kar: 10, int: 10 };
     const equipment = entity.equipment || {};
     
@@ -74,9 +74,9 @@ function getCombatStats(entity) {
     const armorData = armorId ? ItemDB[armorId] : null;
     
     // 3. 計算各類有效技能等級
-    const effAtkSkill = getEffectiveSkillLevel(entity, atkType); // 攻擊技能 (拳或劍)
-    const effForce = getEffectiveSkillLevel(entity, 'force');    // 內功
-    const effDodge = getEffectiveSkillLevel(entity, 'dodge');    // 閃避(輕功)
+    const effAtkSkill = getEffectiveSkillLevel(entity, atkType); 
+    const effForce = getEffectiveSkillLevel(entity, 'force');    
+    const effDodge = getEffectiveSkillLevel(entity, 'dodge');    
 
     // 4. 裝備加成
     const weaponDmg = weaponData ? (weaponData.damage || 0) : 0;
@@ -84,24 +84,59 @@ function getCombatStats(entity) {
     const armorDef = armorData ? (armorData.defense || 0) : 0;
 
     // 5. 計算四大屬性
-    // 攻擊 (AP): 膂力*10 + 有效武技*5 + 有效內功*2 + 武器傷害
     const ap = (attr.str * 10) + (effAtkSkill * 5) + (effForce * 2) + weaponDmg;
-
-    // 防禦 (DP): 根骨*10 + 有效內功*5 + 有效輕功*2 + 防具防禦
     const dp = (attr.con * 10) + (effForce * 5) + (effDodge * 2) + armorDef;
-
-    // 命中 (Hit): 定力*10 + 有效武技*3 + 武器命中
     const hit = (attr.per * 10) + (effAtkSkill * 3) + weaponHit;
-
-    // 閃避 (Dodge): 定力*10 + 有效輕功*4 + 有效武技*1 (拆招)
     const dodge = (attr.per * 10) + (effDodge * 4) + (effAtkSkill * 1);
 
     return { ap, dp, hit, dodge, atkType, weaponData, effAtkSkill };
 }
 
+// 停止戰鬥函式
+function stopCombat(userId) {
+    if (combatInterval) {
+        clearInterval(combatInterval);
+        combatInterval = null;
+    }
+    currentCombatState = null;
+    // 將狀態重置回 normal
+    updatePlayer(userId, { state: 'normal', combatTarget: null });
+}
+
+// 尋找「活著」的 NPC (解決野兔殺不死 Bug)
+async function findAliveNPC(roomId, targetId) {
+    const room = MapSystem.getRoom(roomId);
+    if (!room || !room.npcs) return null;
+
+    // 取得該房間所有屍體
+    const deadRef = collection(db, "dead_npcs");
+    const q = query(deadRef, where("roomId", "==", roomId));
+    const snapshot = await getDocs(q);
+    
+    const deadIndices = [];
+    const now = Date.now();
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        if (now < data.respawnTime) {
+            // 還沒重生 = 真的死了
+            if (data.npcId === targetId) deadIndices.push(data.index);
+        }
+    });
+
+    // 遍歷房間 NPC，找出第一個 ID 符合且不在屍體名單中的
+    for (let i = 0; i < room.npcs.length; i++) {
+        if (room.npcs[i] === targetId) {
+            if (!deadIndices.includes(i)) {
+                const npcData = NPCDB[targetId];
+                return { ...npcData, index: i }; // 回傳正確 index
+            }
+        }
+    }
+    return null;
+}
+
 // --- 一般輔助函式 ---
 
-// 訓練函式
 async function trainStat(playerData, userId, typeName, attrCur, attrMax, costAttr, costName) {
     const attr = playerData.attributes;
     if (attr[costAttr] < 20) {
@@ -137,7 +172,6 @@ async function trainStat(playerData, userId, typeName, attrCur, attrMax, costAtt
         improved = true;
         let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
         UI.print(msg, "system", true);
-        UI.print(`(${typeName}: ${attr[attrCur]}/${attr[attrMax]})`, "chat");
     } else {
         attr[costAttr] -= cost;
         attr[attrCur] = Math.min(limit, curVal + gain);
@@ -179,20 +213,19 @@ function getLevel(character) {
     return maxMartial + maxForce;
 }
 
-// MUD 風格技能評語
 function getSkillLevelDesc(level) {
     let desc = "初學乍練";
-    let color = "#aaa"; // 灰色
+    let color = "#aaa"; 
     
-    if (level >= 500) { desc = "深不可測"; color = "#ff00ff"; } // 粉紅
-    else if (level >= 400) { desc = "返璞歸真"; color = "#ff0000"; } // 紅
-    else if (level >= 300) { desc = "出神入化"; color = "#ff8800"; } // 橘
-    else if (level >= 200) { desc = "登峰造極"; color = "#ffff00"; } // 黃
-    else if (level >= 150) { desc = "出類拔萃"; color = "#00ff00"; } // 綠
-    else if (level >= 100) { desc = "爐火純青"; color = "#00ffff"; } // 青
-    else if (level >= 60) { desc = "融會貫通"; color = "#0088ff"; } // 藍
-    else if (level >= 30) { desc = "駕輕就熟"; color = "#8888ff"; } // 淡藍
-    else if (level >= 10) { desc = "略有小成"; color = "#ffffff"; } // 白
+    if (level >= 500) { desc = "深不可測"; color = "#ff00ff"; }
+    else if (level >= 400) { desc = "返璞歸真"; color = "#ff0000"; }
+    else if (level >= 300) { desc = "出神入化"; color = "#ff8800"; }
+    else if (level >= 200) { desc = "登峰造極"; color = "#ffff00"; }
+    else if (level >= 150) { desc = "出類拔萃"; color = "#00ff00"; }
+    else if (level >= 100) { desc = "爐火純青"; color = "#00ffff"; }
+    else if (level >= 60) { desc = "融會貫通"; color = "#0088ff"; }
+    else if (level >= 30) { desc = "駕輕就熟"; color = "#8888ff"; }
+    else if (level >= 10) { desc = "略有小成"; color = "#ffffff"; }
 
     return UI.txt(desc, color);
 }
@@ -218,6 +251,7 @@ async function consumeItem(playerData, userId, itemId, amount = 1) {
     return await updateInventory(playerData, userId);
 }
 
+// 舊的 findNPCInRoom (用於非戰鬥的查找)
 function findNPCInRoom(roomId, npcNameOrId) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
@@ -239,10 +273,10 @@ const commandRegistry = {
         description: '查看指令列表',
         execute: () => {
             let msg = UI.titleLine("江湖指南");
-            msg += UI.txt(" 裝備指令：", "#ff5555") + "wield (裝備武器), unwield, wear (穿戴防具), unwear\n";
+            msg += UI.txt(" 裝備指令：", "#ff5555") + "wield, unwield, wear, unwear\n";
             msg += UI.txt(" 基本指令：", "#00ffff") + "score, skills, inventory (i)\n";
             msg += UI.txt(" 武學指令：", "#ff5555") + "apprentice, learn, enable, unenable, practice\n";
-            msg += UI.txt(" 修練指令：", "#ffff00") + "exercise (運氣), respirate (運精), meditate (運神)\n";
+            msg += UI.txt(" 修練指令：", "#ffff00") + "exercise, respirate, meditate\n";
             msg += UI.txt(" 戰鬥指令：", "#ff0000") + "kill (下殺手), fight (切磋)\n";
             msg += UI.txt(" 生活指令：", "#00ff00") + "eat, drink, drop, get, look\n";
             msg += UI.txt(" 交易指令：", "#ffcc00") + "list, buy\n";
@@ -251,7 +285,7 @@ const commandRegistry = {
         }
     },
 
-    // --- 裝備系統 (新增) ---
+    // --- 裝備系統 ---
     'wield': {
         description: '裝備武器',
         execute: async (playerData, args, userId) => {
@@ -315,9 +349,9 @@ const commandRegistry = {
         }
     },
 
-    // --- 吃 (Eat) ---
+    // --- 生活指令 ---
     'eat': {
-        description: '吃食物',
+        description: '吃',
         execute: async (playerData, args, userId) => {
             if (args.length === 0) return UI.print("想吃什麼？", "system");
             const targetName = args[0];
@@ -328,15 +362,11 @@ const commandRegistry = {
             if (!itemData || itemData.type !== 'food') return UI.print("那個不能吃！", "error");
             
             const attr = playerData.attributes;
-            // 檢查是否已滿
-            if (attr.food >= attr.maxFood) {
-                return UI.print("你已經吃得很飽了，再吃就要撐死了。", "system");
-            }
+            if (attr.food >= attr.maxFood) return UI.print("你已經吃得很飽了。", "system");
 
             const success = await consumeItem(playerData, userId, invItem.id);
             if (success) {
                 const recover = Math.min(attr.maxFood - attr.food, itemData.value);
-                // 確保不超過最大值
                 attr.food = Math.min(attr.maxFood, attr.food + itemData.value);
                 
                 UI.print(`你吃下了一份${invItem.name}，恢復了 ${recover} 點食物值。`, "system");
@@ -346,10 +376,8 @@ const commandRegistry = {
             }
         }
     },
-
-    // --- 喝 (Drink) ---
     'drink': {
-        description: '喝飲料',
+        description: '喝',
         execute: async (playerData, args, userId) => {
             if (args.length === 0) return UI.print("想喝什麼？", "system");
             const targetName = args[0];
@@ -360,15 +388,11 @@ const commandRegistry = {
             if (!itemData || itemData.type !== 'drink') return UI.print("那個不能喝！", "error");
             
             const attr = playerData.attributes;
-            // 檢查是否已滿
-            if (attr.water >= attr.maxWater) {
-                return UI.print("你一點也不渴。", "system");
-            }
+            if (attr.water >= attr.maxWater) return UI.print("你一點也不渴。", "system");
 
             const success = await consumeItem(playerData, userId, invItem.id);
             if (success) {
                 const recover = Math.min(attr.maxWater - attr.water, itemData.value);
-                // 確保不超過最大值
                 attr.water = Math.min(attr.maxWater, attr.water + itemData.value);
 
                 UI.print(`你喝了一口${invItem.name}，恢復了 ${recover} 點飲水值。`, "system");
@@ -384,7 +408,7 @@ const commandRegistry = {
     'respirate': { description: '運精', execute: async (p,a,u) => trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精") },
     'meditate': { description: '運神', execute: async (p,a,u) => trainStat(p,u,"法力","mana","maxMana","mp","神") },
 
-    // --- 拜師 (Apprentice) ---
+    // --- 拜師與學藝 ---
     'apprentice': {
         description: '拜師',
         execute: async (playerData, args, userId) => {
@@ -405,7 +429,7 @@ const commandRegistry = {
 
             let msg = "";
             if (npc.id === 'gym_master') {
-                msg = `${npc.name} 哈哈大笑，拍了拍你的頭說道：「好！很有精神！今日我就收你為徒，別丟我們飛龍武館的臉！」`;
+                msg = `${npc.name} 哈哈大笑，拍了拍你的頭說道：「好！很有精神！今日我就收你為徒！」`;
             } else {
                 msg = `${npc.name} 微微頷首，說道：「既然你有此誠意，我便收你為徒。」`;
             }
@@ -421,14 +445,11 @@ const commandRegistry = {
             playerData.sect = npc.family === 'common_gym' ? '飛龍武館' : npc.family;
 
             await updatePlayer(userId, { family: playerData.family, sect: playerData.sect });
-            
-            commandRegistry['look'].execute(playerData, [npc.id]);
         }
     },
 
-    // --- 激發 (Enable) ---
     'enable': {
-        description: '激發進階武功',
+        description: '激發',
         execute: async (playerData, args, userId) => {
             if (!playerData.enabled_skills) playerData.enabled_skills = {};
             if (args.length < 2) {
@@ -453,7 +474,6 @@ const commandRegistry = {
                 UI.print("類型不符。", "error"); return; 
             }
 
-            // 切換邏輯
             if (playerData.enabled_skills[type] === skillId) {
                 delete playerData.enabled_skills[type];
                 UI.print(`已解除 ${type} 的激發。`, "system");
@@ -466,30 +486,21 @@ const commandRegistry = {
         } 
     },
 
-    // --- 解除激發 (Unenable) ---
     'unenable': {
-        description: '解除激發 (unenable <type>)',
+        description: '解除激發',
         execute: async (playerData, args, userId) => {
             if (args.length === 0) { UI.print("指令格式：unenable <類型>", "error"); return; }
-            
             const type = args[0];
             if (!playerData.enabled_skills || !playerData.enabled_skills[type]) {
                 UI.print(`你目前並沒有激發 ${type} 類型的武功。`, "error");
                 return;
             }
-
-            const skillId = playerData.enabled_skills[type];
-            const skillInfo = SkillDB[skillId];
-            const skillName = skillInfo ? skillInfo.name : skillId;
-
             delete playerData.enabled_skills[type];
-            
-            UI.print(`你取消了 ${type} (${skillName}) 的激發狀態。`, "system");
+            UI.print(`你取消了 ${type} 的激發狀態。`, "system");
             await updatePlayer(userId, { enabled_skills: playerData.enabled_skills });
         }
     },
 
-    // --- 技能 (Skills) - 顯示評語 ---
     'skills': {
         description: '查看技能',
         execute: (playerData) => {
@@ -498,15 +509,13 @@ const commandRegistry = {
             if (skillList.length === 0) { UI.print("你目前什麼都不會。", "chat"); return; }
             
             let html = UI.titleLine(`${playerData.name} 的武學`);
-            // 調整 grid 以容納評語
             html += `<div style="display:grid; grid-template-columns: 1fr auto auto; gap: 5px; align-items:center;">`;
             
             for (const [id, level] of skillList) {
                 const info = SkillDB[id];
                 if(id === 'parry') continue; 
-
                 const name = info ? info.name : id;
-                const desc = getSkillLevelDesc(level); // 取得評語
+                const desc = getSkillLevelDesc(level);
                 let statusMark = "";
                 
                 if (playerData.enabled_skills) {
@@ -522,23 +531,20 @@ const commandRegistry = {
                 }
 
                 html += `<div style="color:#fff;">${name} <span style="color:#888; font-size:0.8em;">(${id})</span> ${statusMark}</div>`;
-                // 顯示等級與評語
                 html += `<div>${UI.txt(level+"級", "#00ffff")} <span style="font-size:0.8em;">${desc}</span></div>`;
                 html += `<div>${btn}</div>`;
             }
             html += `</div>` + UI.titleLine("End");
-            
             UI.print(html, 'chat', true);
         }
     },
 
-    // --- 狀態 (Score) 修正版 ---
     'score': {
         description: '查看屬性',
         execute: (playerData) => {
             if (!playerData) return;
             const attr = playerData.attributes;
-            const combatStats = getCombatStats(playerData); // 使用新函式獲取計算後的戰鬥屬性
+            const combatStats = getCombatStats(playerData); 
 
             const moneyStr = UI.formatMoney(playerData.money || 0);
             const potential = playerData.combat?.potential || 0;
@@ -583,103 +589,171 @@ const commandRegistry = {
         }
     },
 
-    // --- 殺敵 (Kill) 修正版 ---
+    // --- 殺敵 (Kill) - 重寫版：自動回合制戰鬥 ---
     'kill': {
         description: '下殺手',
         execute: async (playerData, args, userId) => {
             if (args.length === 0) { UI.print("你想殺誰？", "error"); return; }
+            if (playerData.state === 'fighting') { UI.print("你已經在戰鬥中了！", "error"); return; }
+
             const room = MapSystem.getRoom(playerData.location);
             if (room.safe) { UI.print("這裡是安全區。", "error"); return; }
             
             const targetId = args[0];
-            const npc = findNPCInRoom(playerData.location, targetId);
-            if (!npc) { UI.print("這裡沒有這個人。", "error"); return; }
+            
+            // 1. 查找活著的目標 (解決不死 Bug)
+            const npc = await findAliveNPC(playerData.location, targetId);
 
-            // 1. 獲取雙方戰鬥數據
-            const playerStats = getCombatStats(playerData);
-            const npcStats = getCombatStats(npc);
+            if (!npc) { UI.print("這裡沒有這個人，或者他已經死了。", "error"); return; }
 
-            // 2. 獲取攻擊描述 (優先使用激發的進階武功，沒有則用基礎)
-            let enabledType = playerData.enabled_skills && playerData.enabled_skills[playerStats.atkType];
-            let activeSkillId = enabledType || playerStats.atkType;
-            let skillInfo = SkillDB[activeSkillId];
+            UI.print(UI.txt(`你對 ${npc.name} 下了殺手！戰鬥開始！`, "#ff0000", true), "system", true);
+            
+            // 2. 初始化戰鬥狀態
+            currentCombatState = {
+                targetId: npc.id,
+                targetIndex: npc.index, 
+                npcHp: npc.combat.hp,
+                maxNpcHp: npc.combat.maxHp,
+                npcName: npc.name
+            };
 
-            let action = { msg: "$P對$N發起攻擊。", damage: 10 };
-            if (skillInfo && skillInfo.actions && skillInfo.actions.length > 0) {
-                action = skillInfo.actions[Math.floor(Math.random() * skillInfo.actions.length)];
-            }
+            // 3. 更新玩家狀態為戰鬥中
+            await updatePlayer(userId, { 
+                state: 'fighting', 
+                combatTarget: { id: npc.id, index: npc.index } 
+            });
 
-            let msg = action.msg
-                .replace(/\$P/g, playerData.name)
-                .replace(/\$N/g, npc.name)
-                .replace(/\$w/g, playerStats.weaponData ? playerStats.weaponData.name : "雙手");
+            // 4. 啟動自動戰鬥迴圈 (每 2 秒一回合)
+            if (combatInterval) clearInterval(combatInterval);
+            
+            const combatRound = async () => {
+                const playerStats = getCombatStats(playerData);
+                const npcStats = getCombatStats(npc); 
 
-            // 3. 命中判定
-            // 公式：隨機(0 ~ 攻方命中 + 守方閃避)。 如果 小於 攻方命中，則命中。
-            const hitChance = Math.random() * (playerStats.hit + npcStats.dodge);
-            let isHit = hitChance < playerStats.hit;
+                // --- 玩家攻擊 NPC ---
+                let enabledType = playerData.enabled_skills && playerData.enabled_skills[playerStats.atkType];
+                let activeSkillId = enabledType || playerStats.atkType;
+                let skillInfo = SkillDB[activeSkillId];
 
-            UI.print(UI.txt(msg, "#ffff00"), "system", true);
+                let action = { msg: "$P對$N發起攻擊。", damage: 10 };
+                if (skillInfo && skillInfo.actions && skillInfo.actions.length > 0) {
+                    action = skillInfo.actions[Math.floor(Math.random() * skillInfo.actions.length)];
+                }
 
-            if (isHit) {
-                // 4. 傷害計算 (AP - DP)
-                let damage = playerStats.ap - npcStats.dp;
-                
-                // 加上招式基礎傷害 (作為額外波動，減半計算避免數值膨脹)
-                damage += (action.damage / 2); 
+                let msg = action.msg
+                    .replace(/\$P/g, playerData.name)
+                    .replace(/\$N/g, npc.name)
+                    .replace(/\$w/g, playerStats.weaponData ? playerStats.weaponData.name : "雙手");
 
-                // 隨機波動 (90% ~ 110%)
-                damage = Math.floor(damage * (0.9 + Math.random() * 0.2));
+                const pHitChance = Math.random() * (playerStats.hit + npcStats.dodge);
+                const pIsHit = pHitChance < playerStats.hit;
 
-                // 破防機制：如果防禦太高打不動，給予 1~5 點強制傷害 (震傷)
-                if (damage <= 0) damage = Math.floor(Math.random() * 5) + 1;
+                UI.print(UI.txt(msg, "#ffff00"), "system", true); // 顯示招式
 
-                UI.print(`(造成了 ${damage} 點傷害)`, "chat");
-                MessageSystem.broadcast(playerData.location, `${playerData.name} 對 ${npc.name} 造成了 ${damage} 點傷害！`);
+                if (pIsHit) {
+                    let damage = playerStats.ap - npcStats.dp;
+                    damage += (action.damage / 2); 
+                    damage = Math.floor(damage * (0.9 + Math.random() * 0.2));
+                    if (damage <= 0) damage = Math.floor(Math.random() * 5) + 1;
 
-                // 5. 結算獎勵 (目前機制：一擊必殺)
-                const playerLvl = getLevel(playerData);
-                const npcLvl = getLevel(npc); 
-                let potGain = 100 + ((npcLvl - playerLvl) * 10);
-                if (potGain < 10) potGain = 10;
+                    currentCombatState.npcHp -= damage;
+                    UI.print(`(造成了 ${damage} 點傷害)`, "chat");
+                    
+                    // NPC 死亡判定
+                    if (currentCombatState.npcHp <= 0) {
+                        const playerLvl = getLevel(playerData);
+                        const npcLvl = getLevel(npc); 
+                        let potGain = 100 + ((npcLvl - playerLvl) * 10);
+                        if (potGain < 10) potGain = 10;
+                        
+                        playerData.combat.potential = (playerData.combat.potential || 0) + potGain;
+                        playerData.combat.kills = (playerData.combat.kills || 0) + 1;
 
-                if (!playerData.combat) playerData.combat = { potential: 0, kills: 0 };
-                playerData.combat.potential = (playerData.combat.potential || 0) + potGain;
-                playerData.combat.kills = (playerData.combat.kills || 0) + 1;
+                        UI.print(`經過激戰，${npc.name} 倒地身亡。`, "system");
+                        UI.print(UI.txt(`戰鬥勝利！獲得 ${potGain} 點潛能。`, "#00ff00", true), "system", true);
 
-                UI.print(`經過激戰，${npc.name} 倒地身亡。`, "system");
-                UI.print(UI.txt(`戰鬥勝利！獲得 ${potGain} 點潛能。`, "#00ff00", true), "system", true);
-
-                // 掉落與重生
-                if (npc.drops) {
-                    for (const drop of npc.drops) {
-                        if (Math.random() <= drop.rate) {
-                            const itemInfo = ItemDB[drop.id];
-                            if(itemInfo) {
-                                await addDoc(collection(db, "room_items"), {
-                                    roomId: playerData.location, itemId: drop.id, name: itemInfo.name, droppedBy: "SYSTEM", timestamp: new Date().toISOString()
-                                });
-                                UI.print(`${npc.name} 掉出了 ${itemInfo.name}。`, "system");
+                        // 掉落
+                        if (npc.drops) {
+                            for (const drop of npc.drops) {
+                                if (Math.random() <= drop.rate) {
+                                    const itemInfo = ItemDB[drop.id];
+                                    if(itemInfo) {
+                                        await addDoc(collection(db, "room_items"), {
+                                            roomId: playerData.location, itemId: drop.id, name: itemInfo.name, droppedBy: "SYSTEM", timestamp: serverTimestamp()
+                                        });
+                                        UI.print(`${npc.name} 掉出了 ${itemInfo.name}。`, "system");
+                                    }
+                                }
                             }
                         }
+                        
+                        // 記錄屍體 (5分鐘後重生)
+                        await addDoc(collection(db, "dead_npcs"), { 
+                            roomId: playerData.location, 
+                            npcId: npc.id, 
+                            index: npc.index, 
+                            respawnTime: Date.now() + 300000 
+                        });
+
+                        stopCombat(userId);
+                        await updatePlayer(userId, { 
+                            "combat.potential": playerData.combat.potential,
+                            "combat.kills": playerData.combat.kills 
+                        });
+                        MapSystem.look(playerData); // 刷新畫面
+                        return; // 結束本回合
                     }
+                } else {
+                    // 修正：這裡補上了 true
+                    UI.print(UI.txt(`${npc.name} 身形一晃，閃過了你的攻擊！`, "#aaa"), "chat", true);
                 }
-                try { await addDoc(collection(db, "dead_npcs"), { roomId: playerData.location, npcId: npc.id, index: npc.index, respawnTime: Date.now() + 300000 }); } catch (e) {}
 
-                await updatePlayer(userId, { 
-                    "combat.potential": playerData.combat.potential,
-                    "combat.kills": playerData.combat.kills 
-                });
-                MapSystem.look(playerData);
+                // --- NPC 反擊玩家 ---
+                let npcMsg = `${npc.name} 往 ${playerData.name} 撲了過來！`;
+                const nHitChance = Math.random() * (npcStats.hit + playerStats.dodge);
+                const nIsHit = nHitChance < npcStats.hit; 
+                
+                UI.print(UI.txt(npcMsg, "#ff5555"), "system", true);
 
-            } else {
-                // 閃避
-                UI.print(UI.txt(`${npc.name} 身形一晃，閃過了你的攻擊！`, "#aaa"), "chat");
-            }
+                if (nIsHit) {
+                    let dmg = npcStats.attack - playerStats.dp;
+                    if (dmg <= 0) dmg = Math.floor(Math.random() * 3) + 1;
+                    
+                    playerData.attributes.hp -= dmg;
+                    UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
+
+                    // 玩家死亡判定
+                    if (playerData.attributes.hp <= 0) {
+                        playerData.attributes.hp = 0;
+                        UI.print(UI.txt("你眼前一黑，倒在血泊之中...", "#ff0000", true), "system", true);
+                        stopCombat(userId);
+                        
+                        playerData.attributes.hp = playerData.attributes.maxHp;
+                        playerData.location = playerData.savePoint || "inn_start";
+                        await updatePlayer(userId, { 
+                            "attributes.hp": playerData.attributes.hp,
+                            "location": playerData.location 
+                        });
+                        UI.print("你已在重生點復活。", "system");
+                        MapSystem.look(playerData);
+                        return;
+                    }
+                } else {
+                    // 修正：這裡補上了 true
+                    UI.print(UI.txt(`你側身避開了 ${npc.name} 的攻擊。`, "#aaa"), "chat", true);
+                }
+
+                await updatePlayer(userId, { "attributes.hp": playerData.attributes.hp });
+            };
+
+            // 立即執行第一回合
+            combatRound();
+            // 設定排程
+            combatInterval = setInterval(combatRound, 2000); 
         }
     },
 
-    // --- 查看 (Look) ---
+    // --- 其他指令 ---
     'look': { 
         description: '觀察', 
         execute: (p, a) => { 
@@ -696,7 +770,6 @@ const commandRegistry = {
                         for(const [sid, lvl] of Object.entries(npc.skills)) {
                             const sInfo=SkillDB[sid]; 
                             if(sInfo) {
-                                // 顯示等級和評語
                                 const desc = getSkillLevelDesc(lvl);
                                 h+=`- ${sInfo.name}(${sid}) <span style="color:#ff0">${lvl}級 / ${desc}</span> ${UI.makeCmd("[學藝]", `learn ${sid} from ${npc.id}`, "cmd-btn")}<br>`;
                             }
@@ -716,7 +789,6 @@ const commandRegistry = {
         } 
     },
 
-    // --- 物品與背包 (Inventory) 修正版：支援裝備顯示 ---
     'inventory': { 
         description: '背包', 
         execute: (p) => { 
@@ -729,7 +801,6 @@ const commandRegistry = {
                     let act = ""; 
                     let status = "";
 
-                    // 檢查裝備狀態
                     const isWeaponEquipped = p.equipment && p.equipment.weapon === i.id;
                     const isArmorEquipped = p.equipment && p.equipment.armor === i.id;
 
@@ -740,7 +811,6 @@ const commandRegistry = {
                         status = UI.txt(" (已穿戴)", "#ff00ff");
                         act += UI.makeCmd("[脫下]", `unwear`, "cmd-btn");
                     } else {
-                        // 未裝備時的按鈕
                         if (dat.type === 'weapon') act += UI.makeCmd("[裝備]", `wield ${i.id}`, "cmd-btn");
                         if (dat.type === 'armor') act += UI.makeCmd("[穿戴]", `wear ${i.id}`, "cmd-btn");
                         if (dat.type === 'food') act += UI.makeCmd("[吃]", `eat ${i.id}`, "cmd-btn"); 
@@ -756,7 +826,6 @@ const commandRegistry = {
         } 
     },
 
-    // --- 其他指令 ---
     'sk': { description: 'sk', execute: (p)=>commandRegistry['skills'].execute(p) },
     'l': { description: 'look', execute: (p, a) => commandRegistry['look'].execute(p, a) },
     'i': { description: 'i', execute: (p)=>commandRegistry['inventory'].execute(p) },
@@ -765,24 +834,20 @@ const commandRegistry = {
     'practice': { description: '練習', execute: async (p,a,u)=>{ if(a.length===0){UI.print("practice <skill>","error");return;} const sid=a[0]; if(!SkillDB[sid]){UI.print("沒這招","error");return;} if(!(p.skills[sid])){UI.print("不會","error");return;} if(SkillDB[sid].base && p.skills[sid]>=p.skills[SkillDB[sid].base]){UI.print("基礎不足","error");return;} const cost=10+Math.floor(p.skills[sid]/2); if(p.attributes.hp<=cost){UI.print("氣不足","error");return;} p.attributes.hp-=cost; p.skills[sid]++; UI.print(`練習了 ${SkillDB[sid].name} (${p.skills[sid]}級)`,"system"); await updatePlayer(u,{"attributes.hp":p.attributes.hp,"skills":p.skills}); } },
     'buy': { description: '買', execute: async (p,a,u) => { if(a.length<1){UI.print("買啥?","error");return;} let n=a[0],amt=1,nn=null; if(a.length>=2&&!isNaN(a[1]))amt=parseInt(a[1]); if(a.indexOf('from')!==-1)nn=a[a.indexOf('from')+1]; else {const r=MapSystem.getRoom(p.location);if(r.npcs)nn=r.npcs[0];} const npc=findNPCInRoom(p.location,nn); if(!npc){UI.print("沒人","error");return;} let tid=null,pr=0; if(npc.shop[n]){tid=n;pr=npc.shop[n];}else{for(const[k,v]of Object.entries(npc.shop)){if(ItemDB[k]&&ItemDB[k].name===n){tid=k;pr=v;break;}}} if(!tid){UI.print("沒賣","error");return;} const tot=pr*amt; if((p.money||0)<tot){UI.print("錢不夠","error");return;} p.money-=tot; if(!p.inventory)p.inventory=[]; const ex=p.inventory.find(i=>i.id===tid); if(ex)ex.count+=amt; else p.inventory.push({id:tid,name:ItemDB[tid].name,count:amt}); UI.print(`買了 ${amt} ${ItemDB[tid].name}`,"system"); await updatePlayer(u,{money:p.money,inventory:p.inventory}); } },
     'list': { description: '列表', execute: (p,a) => { const r=MapSystem.getRoom(p.location); let nn=null; if(a.length>0)nn=a[0]; else if(r.npcs)nn=r.npcs[0]; const npc=findNPCInRoom(p.location,nn); if(!npc||!npc.shop)return UI.print("沒賣東西","error"); let h=UI.titleLine(npc.name+" 商品"); for(const[k,v]of Object.entries(npc.shop)) h+=`<div>${ItemDB[k].name}: ${UI.formatMoney(v)} ${UI.makeCmd("[買1]",`buy ${k} 1 from ${npc.id}`,"cmd-btn")}</div>`; UI.print(h,"",true); } },
-    'drop': { description: '丟', execute: async (p,a,u) => { if(a.length===0)return UI.print("丟啥?","error"); const idx=p.inventory.findIndex(x=>x.id===a[0]||x.name===a[0]); if(idx===-1)return UI.print("沒這個","error"); const it=p.inventory[idx]; if(it.count>1)it.count--; else p.inventory.splice(idx,1); await updatePlayer(u,{inventory:p.inventory}); await addDoc(collection(db,"room_items"),{roomId:p.location,itemId:it.id,name:it.name,droppedBy:p.name,timestamp:new Date().toISOString()}); UI.print("丟了 "+it.name,"system"); MapSystem.look(p); } },
+    'drop': { description: '丟', execute: async (p,a,u) => { if(a.length===0)return UI.print("丟啥?","error"); const idx=p.inventory.findIndex(x=>x.id===a[0]||x.name===a[0]); if(idx===-1)return UI.print("沒這個","error"); const it=p.inventory[idx]; if(it.count>1)it.count--; else p.inventory.splice(idx,1); await updatePlayer(u,{inventory:p.inventory}); await addDoc(collection(db,"room_items"),{roomId:p.location,itemId:it.id,name:it.name,droppedBy:p.name,timestamp:serverTimestamp()}); UI.print("丟了 "+it.name,"system"); MapSystem.look(p); } },
     'get': { description: '撿', execute: async (p,a,u) => { if(a.length===0)return UI.print("撿啥?","error"); const q=query(collection(db,"room_items"),where("roomId","==",p.location),where("itemId","==",a[0])); const snap=await getDocs(q); if(snap.empty)return UI.print("沒東西","error"); const d=snap.docs[0]; await deleteDoc(doc(db,"room_items",d.id)); const dat=d.data(); if(!p.inventory)p.inventory=[]; const ex=p.inventory.find(x=>x.id===dat.itemId); if(ex)ex.count++; else p.inventory.push({id:dat.itemId,name:dat.name,count:1}); await updatePlayer(u,{inventory:p.inventory}); UI.print("撿了 "+dat.name,"system"); MapSystem.look(p); } },
     'say': { description: '說', execute: (p,a)=>{const m=a.join(" ");UI.print(`你: ${m}`,"chat");MessageSystem.broadcast(p.location,`${p.name} 說: ${m}`);} },
     'emote': { description: '演', execute: (p,a)=>{const m=a.join(" ");UI.print(`${p.name} ${m}`,"system");MessageSystem.broadcast(p.location,`${p.name} ${m}`);} },
     'save': { 
-        description: '存檔 (在客棧或門派大廳可設定重生點)', 
+        description: '存檔', 
         execute: async(p, a, u) => {
             const room = MapSystem.getRoom(p.location);
             let updateData = { lastSaved: new Date().toISOString() };
             let msg = "遊戲進度已保存。";
-
             if (room && room.allowSave) {
                 updateData.savePoint = p.location;
                 msg += " (重生點已更新至此處)";
-            } else {
-                msg += " (此處非安全區，重生點未變更)";
             }
-
             await updatePlayer(u, updateData);
             UI.print(msg, "system");
         } 
@@ -791,6 +856,7 @@ const commandRegistry = {
     'suicide': { description: '死', execute: async(p,a,u)=>{if(a[0]==='confirm'){await deleteDoc(doc(db,"players",u));await signOut(auth);}else UI.print("confirm?","error");} }
 };
 
+// 綁定方向指令
 Object.keys(dirMapping).forEach(shortDir => {
     const fullDir = dirMapping[shortDir];
     commandRegistry[shortDir] = { description: `往 ${fullDir} 移動`, execute: (p, a, u) => MapSystem.move(p, fullDir, u) };
@@ -804,11 +870,34 @@ Object.values(dirMapping).forEach(fullDir => {
 export const CommandSystem = {
     handle: (inputStr, playerData, userId) => {
         if (!inputStr) return;
+        
+        // 戰鬥中限制：除了戰鬥相關或逃跑，無法做其他事
+        if (playerData.state === 'fighting') {
+             const args = inputStr.trim().split(/\s+/);
+             const cmd = args[0].toLowerCase();
+             // 允許移動(逃跑)
+             if (['n','s','e','w','u','d','north','south','east','west','up','down'].includes(cmd)) {
+                 // pass to map system
+             } else if (!['kill', 'look', 'score', 'hp', 'help', 'skills', 'l'].includes(cmd)) {
+                 UI.print("戰鬥中無法分心做這件事！", "error");
+                 return;
+             }
+        }
+        
         if (!playerData) { UI.print("靈魂尚未歸位...", "error"); return; }
         const args = inputStr.trim().split(/\s+/);
         const cmdName = args.shift().toLowerCase();
+        
+        // 防止戰鬥中重複 kill
+        if (cmdName === 'kill' && playerData.state === 'fighting') {
+             UI.print("戰鬥正在進行中...", "system");
+             return;
+        }
+
         const command = commandRegistry[cmdName];
         if (command) command.execute(playerData, args, userId);
         else UI.print("你胡亂比劃了一通。(輸入 help 查看指令)", "error");
-    }
+    },
+    // 匯出停止戰鬥供 MapSystem (逃跑成功時) 使用
+    stopCombat: stopCombat
 };
