@@ -17,11 +17,8 @@ const dirMapping = {
 
 // --- 輔助函式 ---
 
-// 訓練函式 (三階段：回復 -> 儲備 -> 突破)
 async function trainStat(playerData, userId, typeName, attrCur, attrMax, costAttr, costName) {
     const attr = playerData.attributes;
-    
-    // 1. 檢查消耗
     if (attr[costAttr] < 20) {
         UI.print(`你的${costName}不足，無法修練。`, "error");
         return;
@@ -29,82 +26,60 @@ async function trainStat(playerData, userId, typeName, attrCur, attrMax, costAtt
 
     const maxVal = attr[attrMax];
     const curVal = attr[attrCur];
-    const limit = maxVal * 2; // 儲備上限為 2 倍
+    const limit = maxVal * 2; 
 
-    // 2. 檢查是否已達極限
     if (curVal >= limit) {
         UI.print(`你的${typeName}修為已達瓶頸，無法再累積了。`, "system");
         return;
     }
 
-    // 3. 執行修練
-    // 基礎消耗與增益
     const cost = 10;
     const gain = 5 + Math.floor((playerData.skills?.force || 0) / 10); 
     
-    // 判斷是否為突破階段 (當前值 >= 最大值 且 潛能充足)
-    // 為了簡化操作，我們設定：當數值練到超過最大值時，就視為儲備中。
-    // 若要突破，我們設定一個隱藏規則：當儲備滿了(接近2倍)，或者玩家想突破時?
-    // 依照您的需求：
-    // "再按一次運行，就會再用最少的氣去突破" -> 這代表當 curVal >= limit (雙倍) 時觸發
+    // 突破判斷
+    let improved = false;
     
-    // 但前面有檢查 curVal >= limit 就 return，所以這裡邏輯修正：
-    // 如果 curVal 已經接近 limit (例如差一點點)，補滿它。
-    // 如果 curVal 已經是 limit，則進行突破。
-    
-    // 我們修改一下判斷順序：
-    
-    // 情境 A: 突破 (Breakthrough)
-    // 當前值已經達到雙倍上限 (或極接近)
-    if (curVal >= limit - 1) { 
+    if (curVal >= limit) {
         const pot = playerData.combat?.potential || 0;
         if (pot < 1) {
             UI.print("你的潛能不足，無法突破瓶頸。", "error");
             return;
         }
-        
-        // 消耗極少資源 + 1點潛能
         attr[costAttr] -= 1; 
         playerData.combat.potential -= 1;
-        
-        // 提升上限
         attr[attrMax] += 1;
-        // 重置當前值為新的最大值 (歸真)
         attr[attrCur] = attr[attrMax]; 
         
-        let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
+        improved = true;
+        let msg = `你運轉周天，體內真氣激盪 ... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
         UI.print(msg, "system", true);
         UI.print(`(${typeName}: ${attr[attrCur]}/${attr[attrMax]})`, "chat");
+    } else {
+        attr[costAttr] -= cost;
+        attr[attrCur] = Math.min(limit, curVal + gain);
+        
+        let msg = `你運轉周天，將${costName}轉化為${typeName} ... `;
+        if (attr[attrCur] > maxVal) {
+            msg += `(${attr[attrCur]}/${maxVal} <span style="color:#00ff00">+${attr[attrCur] - maxVal}</span>)`;
+        } else {
+            msg += `(${attr[attrCur]}/${maxVal})`;
+        }
+        UI.print(msg, "system", true);
+    }
 
+    if (improved) {
         await updatePlayer(userId, { 
             [`attributes.${costAttr}`]: attr[costAttr],
             [`attributes.${attrCur}`]: attr[attrCur],
             [`attributes.${attrMax}`]: attr[attrMax],
             "combat.potential": playerData.combat.potential
         });
-        return;
-    }
-
-    // 情境 B: 一般修練 / 儲備
-    attr[costAttr] -= cost;
-    attr[attrCur] = Math.min(limit, curVal + gain);
-    
-    let msg = `你運轉周天，將${costName}轉化為${typeName} ... `;
-    
-    // 顯示狀態
-    if (attr[attrCur] > maxVal) {
-        const over = attr[attrCur] - maxVal;
-        msg += `(${attr[attrCur]}/${maxVal} <span style="color:#00ff00">+${over}</span>)`;
     } else {
-        msg += `(${attr[attrCur]}/${maxVal})`;
+        await updatePlayer(userId, { 
+            [`attributes.${costAttr}`]: attr[costAttr],
+            [`attributes.${attrCur}`]: attr[attrCur]
+        });
     }
-    
-    UI.print(msg, "system", true);
-
-    await updatePlayer(userId, { 
-        [`attributes.${costAttr}`]: attr[costAttr],
-        [`attributes.${attrCur}`]: attr[attrCur]
-    });
 }
 
 function getLevel(character) {
@@ -121,14 +96,16 @@ function getLevel(character) {
 }
 
 function getSkillLevelDesc(level) {
-    let desc = "初學乍練", color = "#aaa";
-    if (level >= 10) { desc = "略有小成"; color = "#8f8"; }
-    if (level >= 60) { desc = "駕輕就熟"; color = "#0ff"; }
-    if (level >= 100) { desc = "融會貫通"; color = "#08f"; }
-    if (level >= 150) { desc = "爐火純青"; color = "#ff0"; }
-    if (level >= 200) { desc = "出類拔萃"; color = "#f80"; }
-    if (level >= 300) { desc = "登峰造極"; color = "#f00"; }
-    if (level >= 400) { desc = "出神入化"; color = "#f0f"; }
+    let desc = "";
+    let color = "#fff";
+    if (level < 10) { desc = "初學乍練"; color = "#aaa"; }
+    else if (level < 30) { desc = "略有小成"; color = "#88ff88"; }
+    else if (level < 60) { desc = "駕輕就熟"; color = "#00ffff"; }
+    else if (level < 100) { desc = "融會貫通"; color = "#0088ff"; }
+    else if (level < 150) { desc = "爐火純青"; color = "#ffff00"; }
+    else if (level < 200) { desc = "出類拔萃"; color = "#ff8800"; }
+    else if (level < 300) { desc = "登峰造極"; color = "#ff0000"; }
+    else { desc = "出神入化"; color = "#ff00ff"; }
     return UI.txt(desc, color);
 }
 
@@ -175,7 +152,7 @@ const commandRegistry = {
         execute: () => {
             let msg = UI.titleLine("江湖指南");
             msg += UI.txt(" 基本指令：", "#00ffff") + "score, skills, inventory (i)\n";
-            msg += UI.txt(" 武學指令：", "#ff5555") + "apprentice, learn, enable, practice\n";
+            msg += UI.txt(" 武學指令：", "#ff5555") + "apprentice, learn, enable, unenable, practice\n";
             msg += UI.txt(" 修練指令：", "#ffff00") + "exercise (運氣), respirate (運精), meditate (運神)\n";
             msg += UI.txt(" 戰鬥指令：", "#ff0000") + "kill (下殺手), fight (切磋)\n";
             msg += UI.txt(" 生活指令：", "#00ff00") + "eat, drink, drop, get, look\n";
@@ -185,113 +162,158 @@ const commandRegistry = {
         }
     },
 
-    // --- 運氣 (Exercise) - 消耗 氣(hp) 練 內力(force) ---
-    'exercise': {
-        description: '運氣練內力 (hp -> force)',
+    // --- 拜師 (Apprentice) - 增加王教頭回應 ---
+    'apprentice': {
+        description: '拜師',
         execute: async (playerData, args, userId) => {
-            await trainStat(playerData, userId, "內力", "force", "maxForce", "hp", "氣");
-            MessageSystem.broadcast(playerData.location, `${playerData.name} 盤膝坐下，閉目運氣。`);
-        }
-    },
-
-    // --- 運精 (Respirate) - 消耗 精(sp) 練 靈力(spiritual) ---
-    'respirate': {
-        description: '運精練靈力 (sp -> spiritual)',
-        execute: async (playerData, args, userId) => {
-            await trainStat(playerData, userId, "靈力", "spiritual", "maxSpiritual", "sp", "精");
-            MessageSystem.broadcast(playerData.location, `${playerData.name} 閉目吐納，神色莊嚴。`);
-        }
-    },
-
-    // --- 運神 (Meditate) - 消耗 神(mp) 練 法力(mana) ---
-    'meditate': {
-        description: '運神練法力 (mp -> mana)',
-        execute: async (playerData, args, userId) => {
-            await trainStat(playerData, userId, "法力", "mana", "maxMana", "mp", "神");
-            MessageSystem.broadcast(playerData.location, `${playerData.name} 閉上雙眼，進入冥想。`);
-        }
-    },
-
-    // --- 殺敵 (Kill) - 移除招架影響 ---
-    'kill': {
-        description: '下殺手',
-        execute: async (playerData, args, userId) => {
-            if (args.length === 0) { UI.print("你想殺誰？", "error"); return; }
-            const room = MapSystem.getRoom(playerData.location);
-            if (room.safe) { UI.print("這裡是安全區。", "error"); return; }
+            if (args.length === 0) { UI.print("你想拜誰為師？", "error"); return; }
             
-            const targetId = args[0];
-            const npc = findNPCInRoom(playerData.location, targetId);
+            const npc = findNPCInRoom(playerData.location, args[0]);
             if (!npc) { UI.print("這裡沒有這個人。", "error"); return; }
 
-            // 戰鬥參數
-            const skills = playerData.skills || {};
-            const enabled = playerData.enabled_skills || {};
+            if (!npc.family) {
+                UI.print(`${npc.name} 說道：「我只是一介平民，不懂收徒。」`, "chat");
+                return;
+            }
+
+            if (playerData.family && playerData.family.masterId) {
+                UI.print(`你已經有師父了，是 ${playerData.family.masterId}。`, "error");
+                return;
+            }
+
+            // --- 拜師成功的回應邏輯 ---
+            let msg = "";
+            if (npc.id === 'gym_master') {
+                msg = `${npc.name} 哈哈大笑，拍了拍你的頭說道：「好！很有精神！今日我就收你為徒，別丟我們飛龍武館的臉！」`;
+            } else {
+                msg = `${npc.name} 點了點頭，說道：「既然你有此誠意，我便收你為徒。」`;
+            }
+            UI.print(msg, "chat");
             
-            // 武器檢查
-            let weaponItem = playerData.equipment?.weapon ? ItemDB[playerData.equipment.weapon] : null;
-            let skillType = weaponItem ? 'sword' : 'unarmed';
-            let activeSkillId = enabled[skillType] || skillType;
-            let skillInfo = SkillDB[activeSkillId];
+            MessageSystem.broadcast(playerData.location, `${playerData.name} 恭恭敬敬地向 ${npc.name} 磕了三個響頭，拜入其門下。`);
 
-            // 招式選擇
-            let action = { msg: "$P對$N發起攻擊。", damage: 10 };
-            if (skillInfo && skillInfo.actions && skillInfo.actions.length > 0) {
-                action = skillInfo.actions[Math.floor(Math.random() * skillInfo.actions.length)];
-            }
+            playerData.family = {
+                masterId: npc.id,
+                masterName: npc.name,
+                sect: npc.family
+            };
+            playerData.sect = npc.family === 'common_gym' ? '飛龍武館' : npc.family;
 
-            let msg = action.msg
-                .replace(/\$P/g, playerData.name)
-                .replace(/\$N/g, npc.name)
-                .replace(/\$w/g, weaponItem ? weaponItem.name : "雙手");
-
-            // 傷害計算 (移除 parry 影響)
-            const skillLvl = skills[activeSkillId] || 0;
-            const dmg = Math.floor(action.damage + (skillLvl * 0.5) + (Math.random() * 10));
-
-            UI.print(UI.txt(msg, "#ffff00"), "system", true);
-            UI.print(`(造成了 ${dmg} 點傷害)`, "chat");
-            MessageSystem.broadcast(playerData.location, `${playerData.name} 對 ${npc.name} 下了毒手！`);
-
-            // 結算 (簡化：必勝)
-            const playerLvl = getLevel(playerData);
-            const npcLvl = getLevel(npc);
-            let potGain = 100 + ((npcLvl - playerLvl) * 10);
-            if (potGain < 10) potGain = 10;
-
-            if (!playerData.combat) playerData.combat = { potential: 0, kills: 0 };
-            playerData.combat.potential = (playerData.combat.potential || 0) + potGain;
-            playerData.combat.kills = (playerData.combat.kills || 0) + 1;
-
-            UI.print(`經過激戰，${npc.name} 倒地身亡。`, "system");
-            UI.print(UI.txt(`戰鬥勝利！獲得 ${potGain} 點潛能。`, "#00ff00", true), "system", true);
-
-            // 掉落
-            if (npc.drops) {
-                for (const drop of npc.drops) {
-                    if (Math.random() <= drop.rate) {
-                        const itemInfo = ItemDB[drop.id];
-                        if(itemInfo) {
-                            await addDoc(collection(db, "room_items"), {
-                                roomId: playerData.location, itemId: drop.id, name: itemInfo.name, droppedBy: "SYSTEM", timestamp: new Date().toISOString()
-                            });
-                            UI.print(`${npc.name} 掉出了 ${itemInfo.name}。`, "system");
-                        }
-                    }
-                }
-            }
-            // 記錄重生
-            try { await addDoc(collection(db, "dead_npcs"), { roomId: playerData.location, npcId: npc.id, index: npc.index, respawnTime: Date.now() + 300000 }); } catch (e) {}
-
-            await updatePlayer(userId, { 
-                "combat.potential": playerData.combat.potential,
-                "combat.kills": playerData.combat.kills 
-            });
-            MapSystem.look(playerData);
+            await updatePlayer(userId, { family: playerData.family, sect: playerData.sect });
+            
+            // 刷新畫面以顯示學藝按鈕
+            commandRegistry['look'].execute(playerData, [npc.id]);
         }
     },
 
-    // --- 狀態 (Score) - 移除招架 ---
+    // --- 激發 (Enable) ---
+    'enable': {
+        description: '激發進階武功',
+        execute: async (playerData, args, userId) => {
+            if (!playerData.enabled_skills) playerData.enabled_skills = {};
+            if (args.length < 2) {
+                let msg = UI.titleLine("目前激發的武功");
+                for (const [type, skillId] of Object.entries(playerData.enabled_skills)) {
+                    const sInfo = SkillDB[skillId];
+                    msg += `${UI.txt(type, "#00ffff")} : ${sInfo ? sInfo.name : skillId}\n`;
+                }
+                if (Object.keys(playerData.enabled_skills).length === 0) msg += "無\n";
+                UI.print(msg, 'system');
+                return;
+            }
+
+            const type = args[0]; 
+            const skillId = args[1];
+
+            if (!playerData.skills || !playerData.skills[skillId]) { 
+                UI.print("你不會這招。", "error"); return; 
+            }
+            const skillInfo = SkillDB[skillId];
+            if (skillInfo.base !== type) { 
+                UI.print("類型不符。", "error"); return; 
+            }
+
+            // 設定激發
+            playerData.enabled_skills[type] = skillId;
+            UI.print(`已將 ${type} 設定為 ${skillInfo.name}。`, "system");
+
+            await updatePlayer(userId, { enabled_skills: playerData.enabled_skills });
+        } 
+    },
+
+    // --- 解除激發 (Unenable) - 新增指令 ---
+    'unenable': {
+        description: '解除激發 (unenable <type>)',
+        execute: async (playerData, args, userId) => {
+            if (args.length === 0) { UI.print("指令格式：unenable <類型>", "error"); return; }
+            
+            const type = args[0];
+            if (!playerData.enabled_skills || !playerData.enabled_skills[type]) {
+                UI.print(`你目前並沒有激發 ${type} 類型的武功。`, "error");
+                return;
+            }
+
+            const skillId = playerData.enabled_skills[type];
+            const skillInfo = SkillDB[skillId];
+            const skillName = skillInfo ? skillInfo.name : skillId;
+
+            delete playerData.enabled_skills[type];
+            
+            UI.print(`你取消了 ${type} (${skillName}) 的激發狀態。`, "system");
+            await updatePlayer(userId, { enabled_skills: playerData.enabled_skills });
+        }
+    },
+
+    // --- 技能 (Skills) - 支援 Unenable 按鈕 ---
+    'skills': {
+        description: '查看技能',
+        execute: (playerData) => {
+            const skills = playerData.skills || {};
+            const skillList = Object.entries(skills);
+            if (skillList.length === 0) { UI.print("你目前什麼都不會。", "chat"); return; }
+            
+            let html = UI.titleLine(`${playerData.name} 的武學`);
+            html += `<div style="display:grid; grid-template-columns: 1fr auto auto; gap: 5px; align-items:center;">`;
+            
+            for (const [id, level] of skillList) {
+                const info = SkillDB[id];
+                if(id === 'parry') continue; // 確保不顯示parry
+
+                const name = info ? info.name : id;
+                const desc = getSkillLevelDesc(level);
+                let statusMark = "";
+                
+                // 顯示已激發標記
+                if (playerData.enabled_skills) {
+                    for (const [slot, equippedId] of Object.entries(playerData.enabled_skills)) {
+                        if (equippedId === id) statusMark = UI.txt(`[${slot}]`, "#00ff00");
+                    }
+                }
+
+                // 按鈕邏輯
+                let btn = "";
+                if (info && info.base) {
+                    const isEnabled = playerData.enabled_skills && playerData.enabled_skills[info.base] === id;
+                    if (isEnabled) {
+                        // 若已激發，顯示 [解除] 並呼叫 unenable
+                        btn = UI.makeCmd("[解除]", `unenable ${info.base}`, "cmd-btn");
+                    } else {
+                        // 若未激發，顯示 [激發] 並呼叫 enable
+                        btn = UI.makeCmd("[激發]", `enable ${info.base} ${id}`, "cmd-btn");
+                    }
+                }
+
+                html += `<div style="color:#fff;">${name} <span style="color:#888; font-size:0.8em;">(${id})</span> ${statusMark}</div>`;
+                html += `<div>${UI.txt(level+"級", "#00ffff")}</div>`;
+                html += `<div>${btn}</div>`;
+            }
+            html += `</div>` + UI.titleLine("End");
+            
+            UI.print(html, 'chat', true);
+        }
+    },
+
+    // --- 狀態 (Score) ---
     'score': {
         description: '查看屬性',
         execute: (playerData) => {
@@ -315,7 +337,7 @@ const commandRegistry = {
             let activeAtkSkill = hasWeapon ? effSword : effUnarmed;
 
             const atk = (attr.str * 10) + activeAtkSkill;
-            const def = (attr.con * 10); // 純看根骨
+            const def = (attr.con * 10);
             const dodge = (attr.dex * 10) + effDodge;
             const hitRate = (attr.dex * 10) + (activeAtkSkill * 2);
 
@@ -368,110 +390,95 @@ const commandRegistry = {
         }
     },
 
-    // --- 技能 (Skills) - 移除招架 ---
-    'skills': {
-        description: '查看技能',
-        execute: (playerData) => {
-            const skills = playerData.skills || {};
-            const skillList = Object.entries(skills);
-            if (skillList.length === 0) { UI.print("你目前什麼都不會。", "chat"); return; }
-            
-            let html = UI.titleLine(`${playerData.name} 的武學`);
-            html += `<div style="display:grid; grid-template-columns: 1fr auto auto; gap: 5px; align-items:center;">`;
-            
-            for (const [id, level] of skillList) {
-                const info = SkillDB[id];
-                // 排除 parry 顯示 (如果資料庫還有殘留)
-                if (id === 'parry') continue; 
-
-                const name = info ? info.name : id;
-                const desc = getSkillLevelDesc(level);
-                let statusMark = "";
-                
-                if (playerData.enabled_skills) {
-                    for (const [slot, equippedId] of Object.entries(playerData.enabled_skills)) {
-                        if (equippedId === id) statusMark = UI.txt(`[${slot}]`, "#00ff00");
-                    }
-                }
-
-                // 激發按鈕：支援切換
-                let btn = "";
-                if (info && info.base) {
-                    const isEnabled = playerData.enabled_skills[info.base] === id;
-                    btn = UI.makeCmd(isEnabled ? "[解除]" : "[激發]", `enable ${info.base} ${id}`, "cmd-btn");
-                }
-
-                html += `<div style="color:#fff;">${name} <span style="color:#888; font-size:0.8em;">(${id})</span> ${statusMark}</div>`;
-                html += `<div>${UI.txt(level+"級", "#00ffff")}</div>`;
-                html += `<div>${btn}</div>`;
-            }
-            html += `</div>` + UI.titleLine("End");
-            UI.print(html, 'chat', true);
-        }
-    },
-
-    // --- 激發 (Enable) - 支援解除，移除招架判定 ---
-    'enable': {
-        description: '激發進階武功',
-        execute: async (playerData, args, userId) => {
-            if (!playerData.enabled_skills) playerData.enabled_skills = {};
-            
-            if (args.length < 2) {
-                let msg = UI.titleLine("激發狀態");
-                for (const [type, skillId] of Object.entries(playerData.enabled_skills)) {
-                    const sInfo = SkillDB[skillId];
-                    msg += `${type.padEnd(12)}: ${sInfo ? sInfo.name : skillId}\n`;
-                }
-                if (Object.keys(playerData.enabled_skills).length === 0) msg += "無\n";
-                UI.print(msg, 'system');
-                return;
-            }
-
-            const type = args[0]; 
-            const skillId = args[1];
-
-            if (!playerData.skills || !playerData.skills[skillId]) { 
-                UI.print("你不會這招。", "error"); return; 
-            }
-            const skillInfo = SkillDB[skillId];
-            if (skillInfo.base !== type) { 
-                UI.print("類型不符。", "error"); return; 
-            }
-
-            // 切換邏輯
-            if (playerData.enabled_skills[type] === skillId) {
-                delete playerData.enabled_skills[type];
-                UI.print(`已解除 ${type} 的激發。`, "system");
-            } else {
-                playerData.enabled_skills[type] = skillId;
-                UI.print(`已將 ${type} 設定為 ${skillInfo.name}。`, "system");
-            }
-
-            await updatePlayer(userId, { enabled_skills: playerData.enabled_skills });
-        } 
-    },
-
     // --- 其他指令 (保持不變) ---
+    'exercise': { description: '運氣', execute: async (p,a,u) => trainStat(p,u,"內力","force","maxForce","hp","氣") },
+    'respirate': { description: '運精', execute: async (p,a,u) => trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精") },
+    'meditate': { description: '運神', execute: async (p,a,u) => trainStat(p,u,"法力","mana","maxMana","mp","神") },
     'sk': { description: 'sk', execute: (p)=>commandRegistry['skills'].execute(p) },
     'look': { description: '觀察', execute: (p, a) => { if(a.length>0) { const npc = findNPCInRoom(p.location, a[0]); if(npc) { let h = UI.titleLine(`${npc.name} (${npc.id})`); h+=UI.txt(npc.description+"<br>", "#ddd"); const isMaster = (p.family && p.family.masterId===npc.id); if(!isMaster && npc.family) h+=UI.makeCmd("[拜師]", `apprentice ${npc.id}`, "cmd-btn"); if(isMaster && npc.skills) { h+=UI.txt("<br>師父會的武功：<br>","#0ff"); for(const [sid,l] of Object.entries(npc.skills)) {const sInfo=SkillDB[sid]; if(sInfo) h+=`- ${sInfo.name}(${sid}) ${UI.makeCmd("[學藝]", `learn ${sid} from ${npc.id}`, "cmd-btn")}<br>`;} } UI.print(h, "system", true); return; } const invItem = p.inventory.find(i=>i.id===a[0]||i.name===a[0]); if(invItem) { const info = ItemDB[invItem.id]; UI.print(UI.titleLine(`${info.name} (${invItem.id})`)+UI.txt(info.desc,"#ddd"),"system",true); return; } } MapSystem.look(p); } },
     'l': { description: 'look', execute: (p, a) => commandRegistry['look'].execute(p, a) },
     'inventory': { description: '背包', execute: (p) => { let h=UI.titleLine("背包")+`<div>${UI.attrLine("財產", UI.formatMoney(p.money))}</div><br>`; if(!p.inventory||p.inventory.length===0)h+=UI.txt("空空如也。<br>","#888"); else p.inventory.forEach(i=>{ const dat=ItemDB[i.id]; let act=""; if(dat){ if(dat.type==='food') act+=UI.makeCmd("[吃]",`eat ${i.id}`,"cmd-btn"); if(dat.type==='drink') act+=UI.makeCmd("[喝]",`drink ${i.id}`,"cmd-btn"); } act+=UI.makeCmd("[丟]",`drop ${i.id}`,"cmd-btn"); act+=UI.makeCmd("[看]",`look ${i.id}`,"cmd-btn"); h+=`<div>${UI.txt(i.name,"#fff")} (${i.id}) x${i.count} ${act}</div>`; }); UI.print(h+UI.titleLine("End"), "chat", true); } },
     'i': { description: 'i', execute: (p)=>commandRegistry['inventory'].execute(p) },
-    'apprentice': { description: '拜師', execute: async (p,a,u)=>{if(a.length===0)return UI.print("拜誰?","error"); const npc=findNPCInRoom(p.location,a[0]); if(!npc||!npc.family)return UI.print("無法拜師","error"); p.family={masterId:npc.id,masterName:npc.name,sect:npc.family}; p.sect=npc.family; await updatePlayer(u,{family:p.family,sect:p.sect}); UI.print("拜師成功","chat");} },
-    'fight': { description: '切磋', execute: async (p,a,u)=>{if(a.length===0)return UI.print("跟誰?","error"); const npc=findNPCInRoom(p.location,a[0]); if(!npc)return UI.print("沒人","error"); UI.print(`與 ${npc.name} 切磋。`,"chat");} },
-    'learn': { description: '學藝', execute: async (p,a,u)=>{ if(a.length<3||a[1]!=='from'){UI.print("learn <skill> from <master>","error");return;} const sid=a[0], mid=a[2]; const npc=findNPCInRoom(p.location,mid); if(!npc){UI.print("沒人","error");return;} if(!p.family||p.family.masterId!==npc.id){UI.print("需拜師","error");return;} if(!npc.skills[sid]){UI.print("他不會","chat");return;} if((p.skills[sid]||0)>=npc.skills[sid]){UI.print("學滿了","chat");return;} const spC=10+Math.floor((p.skills[sid]||0)/2), potC=5+Math.floor((p.skills[sid]||0)/5); if(p.attributes.sp<=spC){UI.print("精不足","error");return;} if((p.combat.potential||0)<potC){UI.print("潛能不足","error");return;} p.attributes.sp-=spC; p.combat.potential-=potC; p.skills[sid]=(p.skills[sid]||0)+1; UI.print(`學習了 ${SkillDB[sid].name} (${p.skills[sid]}級)`,"system"); await updatePlayer(u,{"attributes.sp":p.attributes.sp,"combat.potential":p.combat.potential,"skills":p.skills}); } },
-    'practice': { description: '練習', execute: async (p,a,u)=>{ if(a.length===0){UI.print("practice <skill>","error");return;} const sid=a[0]; if(!SkillDB[sid]){UI.print("沒這招","error");return;} if(!(p.skills[sid])){UI.print("不會","error");return;} if(SkillDB[sid].base && p.skills[sid]>=p.skills[SkillDB[sid].base]){UI.print("基礎不足","error");return;} const cost=10+Math.floor(p.skills[sid]/2); if(p.attributes.hp<=cost){UI.print("氣不足","error");return;} p.attributes.hp-=cost; p.skills[sid]++; UI.print(`練習了 ${SkillDB[sid].name} (${p.skills[sid]}級)`,"system"); await updatePlayer(u,{"attributes.hp":p.attributes.hp,"skills":p.skills}); } },
-    'buy': { description: '買', execute: async (p,a,u) => { if(a.length<1){UI.print("買啥?","error");return;} let n=a[0],amt=1,nn=null; if(a.length>=2&&!isNaN(a[1]))amt=parseInt(a[1]); if(a.indexOf('from')!==-1)nn=a[a.indexOf('from')+1]; else {const r=MapSystem.getRoom(p.location);if(r.npcs)nn=r.npcs[0];} const npc=findNPCInRoom(p.location,nn); if(!npc){UI.print("沒人","error");return;} let tid=null,pr=0; if(npc.shop[n]){tid=n;pr=npc.shop[n];}else{for(const[k,v]of Object.entries(npc.shop)){if(ItemDB[k]&&ItemDB[k].name===n){tid=k;pr=v;break;}}} if(!tid){UI.print("沒賣","error");return;} const tot=pr*amt; if((p.money||0)<tot){UI.print("錢不夠","error");return;} p.money-=tot; if(!p.inventory)p.inventory=[]; const ex=p.inventory.find(i=>i.id===tid); if(ex)ex.count+=amt; else p.inventory.push({id:tid,name:ItemDB[tid].name,count:amt}); UI.print(`買了 ${amt} ${ItemDB[tid].name}`,"system"); await updatePlayer(u,{money:p.money,inventory:p.inventory}); } },
-    'list': { description: '列表', execute: (p,a) => { const r=MapSystem.getRoom(p.location); let nn=null; if(a.length>0)nn=a[0]; else if(r.npcs)nn=r.npcs[0]; const npc=findNPCInRoom(p.location,nn); if(!npc||!npc.shop)return UI.print("沒賣東西","error"); let h=UI.titleLine(npc.name+" 商品"); for(const[k,v]of Object.entries(npc.shop)) h+=`<div>${ItemDB[k].name}: ${UI.formatMoney(v)} ${UI.makeCmd("[買1]",`buy ${k} 1 from ${npc.id}`,"cmd-btn")}</div>`; UI.print(h,"",true); } },
-    'eat': { description: '吃', execute: async (p, a, u) => { if(a.length===0)return UI.print("吃啥?","error"); const i=p.inventory.find(x=>x.id===a[0]||x.name===a[0]); if(!i)return UI.print("沒這個","error"); await consumeItem(p,u,i.id); p.attributes.food+=ItemDB[i.id].value; UI.print("吃了 "+i.name,"system"); await updatePlayer(u,{"attributes.food":p.attributes.food}); } },
-    'drink': { description: '喝', execute: async (p,a,u) => { if(a.length===0)return UI.print("喝啥?","error"); const i=p.inventory.find(x=>x.id===a[0]||x.name===a[0]); if(!i)return UI.print("沒這個","error"); await consumeItem(p,u,i.id); p.attributes.water+=ItemDB[i.id].value; UI.print("喝了 "+i.name,"system"); await updatePlayer(u,{"attributes.water":p.attributes.water}); } },
+    'eat': { description: '吃', execute: async (p, a, u) => { if(a.length===0)return UI.print("吃啥?","error"); const i=p.inventory.find(x=>x.id===a[0]||x.name===a[0]); if(!i)return UI.print("沒這個","error"); await consumeItem(p,u,i.id); p.attributes.food+=ItemDB[i.id].value; UI.print(`吃下${i.name}，恢復 ${ItemDB[i.id].value} 食物。`,"system"); await updatePlayer(u,{"attributes.food":p.attributes.food}); } },
+    'drink': { description: '喝', execute: async (p,a,u) => { if(a.length===0)return UI.print("喝啥?","error"); const i=p.inventory.find(x=>x.id===a[0]||x.name===a[0]); if(!i)return UI.print("沒這個","error"); await consumeItem(p,u,i.id); p.attributes.water+=ItemDB[i.id].value; UI.print(`喝下${i.name}，恢復 ${ItemDB[i.id].value} 飲水。`,"system"); await updatePlayer(u,{"attributes.water":p.attributes.water}); } },
     'drop': { description: '丟', execute: async (p,a,u) => { if(a.length===0)return UI.print("丟啥?","error"); const idx=p.inventory.findIndex(x=>x.id===a[0]||x.name===a[0]); if(idx===-1)return UI.print("沒這個","error"); const it=p.inventory[idx]; if(it.count>1)it.count--; else p.inventory.splice(idx,1); await updatePlayer(u,{inventory:p.inventory}); await addDoc(collection(db,"room_items"),{roomId:p.location,itemId:it.id,name:it.name,droppedBy:p.name,timestamp:new Date().toISOString()}); UI.print("丟了 "+it.name,"system"); MapSystem.look(p); } },
     'get': { description: '撿', execute: async (p,a,u) => { if(a.length===0)return UI.print("撿啥?","error"); const q=query(collection(db,"room_items"),where("roomId","==",p.location),where("itemId","==",a[0])); const snap=await getDocs(q); if(snap.empty)return UI.print("沒東西","error"); const d=snap.docs[0]; await deleteDoc(doc(db,"room_items",d.id)); const dat=d.data(); if(!p.inventory)p.inventory=[]; const ex=p.inventory.find(x=>x.id===dat.itemId); if(ex)ex.count++; else p.inventory.push({id:dat.itemId,name:dat.name,count:1}); await updatePlayer(u,{inventory:p.inventory}); UI.print("撿了 "+dat.name,"system"); MapSystem.look(p); } },
+    'buy': { description: '買', execute: async (p,a,u) => { if(a.length<1){UI.print("買啥?","error");return;} let n=a[0],amt=1,nn=null; if(a.length>=2&&!isNaN(a[1]))amt=parseInt(a[1]); if(a.indexOf('from')!==-1)nn=a[a.indexOf('from')+1]; else {const r=MapSystem.getRoom(p.location);if(r.npcs)nn=r.npcs[0];} const npc=findNPCInRoom(p.location,nn); if(!npc){UI.print("沒人","error");return;} let tid=null,pr=0; if(npc.shop[n]){tid=n;pr=npc.shop[n];}else{for(const[k,v]of Object.entries(npc.shop)){if(ItemDB[k]&&ItemDB[k].name===n){tid=k;pr=v;break;}}} if(!tid){UI.print("沒賣","error");return;} const tot=pr*amt; if((p.money||0)<tot){UI.print("錢不夠","error");return;} p.money-=tot; if(!p.inventory)p.inventory=[]; const ex=p.inventory.find(i=>i.id===tid); if(ex)ex.count+=amt; else p.inventory.push({id:tid,name:ItemDB[tid].name,count:amt}); UI.print(`買了 ${amt} ${ItemDB[tid].name}`,"system"); await updatePlayer(u,{money:p.money,inventory:p.inventory}); } },
+    'list': { description: '列表', execute: (p,a) => { const r=MapSystem.getRoom(p.location); let nn=null; if(a.length>0)nn=a[0]; else if(r.npcs)nn=r.npcs[0]; const npc=findNPCInRoom(p.location,nn); if(!npc||!npc.shop)return UI.print("沒賣東西","error"); let h=UI.titleLine(npc.name+" 商品"); for(const[k,v]of Object.entries(npc.shop)) h+=`<div>${ItemDB[k].name}: ${UI.formatMoney(v)} ${UI.makeCmd("[買1]",`buy ${k} 1 from ${npc.id}`,"cmd-btn")}</div>`; UI.print(h,"",true); } },
     'say': { description: '說', execute: (p,a)=>{const m=a.join(" ");UI.print(`你: ${m}`,"chat");MessageSystem.broadcast(p.location,`${p.name} 說: ${m}`);} },
     'emote': { description: '演', execute: (p,a)=>{const m=a.join(" ");UI.print(`${p.name} ${m}`,"system");MessageSystem.broadcast(p.location,`${p.name} ${m}`);} },
     'save': { description: '存', execute: async(p,a,u)=>{await updatePlayer(u,{savePoint:p.location});UI.print("已存檔","system");} },
     'recall': { description: '回', execute: (p,a,u)=>MapSystem.teleport(p,p.savePoint||"inn_start",u) },
-    'suicide': { description: '死', execute: async(p,a,u)=>{if(a[0]==='confirm'){await deleteDoc(doc(db,"players",u));await signOut(auth);}else UI.print("confirm?","error");} }
+    'suicide': { description: '死', execute: async(p,a,u)=>{if(a[0]==='confirm'){await deleteDoc(doc(db,"players",u));await signOut(auth);}else UI.print("confirm?","error");} },
+    'fight': { description: '切磋', execute: async (p,a,u)=>{if(a.length===0)return UI.print("跟誰?","error"); const npc=findNPCInRoom(p.location,a[0]); if(!npc)return UI.print("沒人","error"); UI.print(`與 ${npc.name} 切磋。`,"chat");} },
+    'learn': { description: '學藝', execute: async (p,a,u)=>{ if(a.length<3||a[1]!=='from'){UI.print("learn <skill> from <master>","error");return;} const sid=a[0], mid=a[2]; const npc=findNPCInRoom(p.location,mid); if(!npc){UI.print("沒人","error");return;} if(!p.family||p.family.masterId!==npc.id){UI.print("需拜師","error");return;} if(!npc.skills[sid]){UI.print("他不會","chat");return;} if((p.skills[sid]||0)>=npc.skills[sid]){UI.print("學滿了","chat");return;} const spC=10+Math.floor((p.skills[sid]||0)/2), potC=5+Math.floor((p.skills[sid]||0)/5); if(p.attributes.sp<=spC){UI.print("精不足","error");return;} if((p.combat.potential||0)<potC){UI.print("潛能不足","error");return;} p.attributes.sp-=spC; p.combat.potential-=potC; p.skills[sid]=(p.skills[sid]||0)+1; UI.print(`學習了 ${SkillDB[sid].name} (${p.skills[sid]}級)`,"system"); await updatePlayer(u,{"attributes.sp":p.attributes.sp,"combat.potential":p.combat.potential,"skills":p.skills}); } },
+    'practice': { description: '練習', execute: async (p,a,u)=>{ if(a.length===0){UI.print("practice <skill>","error");return;} const sid=a[0]; if(!SkillDB[sid]){UI.print("沒這招","error");return;} if(!(p.skills[sid])){UI.print("不會","error");return;} if(SkillDB[sid].base && p.skills[sid]>=p.skills[SkillDB[sid].base]){UI.print("基礎不足","error");return;} const cost=10+Math.floor(p.skills[sid]/2); if(p.attributes.hp<=cost){UI.print("氣不足","error");return;} p.attributes.hp-=cost; p.skills[sid]++; UI.print(`練習了 ${SkillDB[sid].name} (${p.skills[sid]}級)`,"system"); await updatePlayer(u,{"attributes.hp":p.attributes.hp,"skills":p.skills}); } },
+    'kill': {
+        description: '下殺手',
+        execute: async (playerData, args, userId) => {
+            if (args.length === 0) { UI.print("你想殺誰？", "error"); return; }
+            const room = MapSystem.getRoom(playerData.location);
+            if (room.safe) { UI.print("這裡是安全區。", "error"); return; }
+            
+            const targetId = args[0];
+            const npc = findNPCInRoom(playerData.location, targetId);
+            if (!npc) { UI.print("這裡沒有這個人。", "error"); return; }
+
+            const skills = playerData.skills || {};
+            const enabled = playerData.enabled_skills || {};
+            let weaponItem = playerData.equipment?.weapon ? ItemDB[playerData.equipment.weapon] : null;
+            let skillType = weaponItem ? 'sword' : 'unarmed';
+            let activeSkillId = enabled[skillType] || skillType;
+            let skillInfo = SkillDB[activeSkillId];
+
+            let action = { msg: "$P對$N發起攻擊。", damage: 10 };
+            if (skillInfo && skillInfo.actions && skillInfo.actions.length > 0) {
+                action = skillInfo.actions[Math.floor(Math.random() * skillInfo.actions.length)];
+            }
+
+            let msg = action.msg
+                .replace(/\$P/g, playerData.name)
+                .replace(/\$N/g, npc.name)
+                .replace(/\$w/g, weaponItem ? weaponItem.name : "雙手");
+
+            const skillLvl = skills[activeSkillId] || 0;
+            const dmg = Math.floor(action.damage + (skillLvl * 0.5) + (Math.random() * 10));
+
+            UI.print(UI.txt(msg, "#ffff00"), "system", true);
+            UI.print(`(造成了 ${dmg} 點傷害)`, "chat");
+            MessageSystem.broadcast(playerData.location, `${playerData.name} 對 ${npc.name} 下了毒手！`);
+
+            // 結算
+            const playerLvl = getLevel(playerData);
+            const npcLvl = getLevel(npc);
+            let potGain = 100 + ((npcLvl - playerLvl) * 10);
+            if (potGain < 10) potGain = 10;
+
+            if (!playerData.combat) playerData.combat = { potential: 0, kills: 0 };
+            playerData.combat.potential = (playerData.combat.potential || 0) + potGain;
+            playerData.combat.kills = (playerData.combat.kills || 0) + 1;
+
+            UI.print(`經過激戰，${npc.name} 倒地身亡。`, "system");
+            UI.print(UI.txt(`戰鬥勝利！獲得 ${potGain} 點潛能。`, "#00ff00", true), "system", true);
+
+            // 掉落與重生
+            if (npc.drops) {
+                for (const drop of npc.drops) {
+                    if (Math.random() <= drop.rate) {
+                        const itemInfo = ItemDB[drop.id];
+                        if(itemInfo) await addDoc(collection(db, "room_items"), { roomId: playerData.location, itemId: drop.id, name: itemInfo.name, droppedBy: "SYSTEM", timestamp: new Date().toISOString() });
+                    }
+                }
+            }
+            try { await addDoc(collection(db, "dead_npcs"), { roomId: playerData.location, npcId: npc.id, index: npc.index, respawnTime: Date.now() + 300000 }); } catch (e) {}
+
+            await updatePlayer(userId, { 
+                "combat.potential": playerData.combat.potential,
+                "combat.kills": playerData.combat.kills 
+            });
+            MapSystem.look(playerData);
+        }
+    }
 };
 
 Object.keys(dirMapping).forEach(shortDir => {
