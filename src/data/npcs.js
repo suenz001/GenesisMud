@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: npcs.js
+fullContent:
 // src/data/npcs.js
 
 export const NPCDB = {
@@ -5,13 +9,16 @@ export const NPCDB = {
         id: "waiter",
         name: "店小二",
         description: "一位勤快的店小二。",
+        // 平民屬性
+        attributes: { str: 15, con: 15, per: 15, kar: 15, int: 15, cor: 15 },
         shop: { "rice": 50, "dumpling": 100, "bread": 30, "roast_chicken": 500, "waterskin": 200, "tea": 50, "wine": 1000 }
     },
     "gym_master": {
         id: "gym_master",
         name: "王教頭",
         description: "飛龍武館的總教頭。",
-        // 移除 parry
+        // 武師屬性
+        attributes: { str: 60, con: 60, per: 50, kar: 30, int: 40, cor: 30 },
         skills: { "unarmed": 100, "sword": 100, "force": 100, "dodge": 100, "iron-palm": 80, "swift-sword": 80, "turtle-force": 80, "leaf-steps": 80 },
         family: "common_gym",
         title: "飛龍武館館主"
@@ -20,6 +27,8 @@ export const NPCDB = {
         id: "rabbit",
         name: "野兔",
         description: "一隻可愛的小野兔，正在吃草。",
+        // 弱小但靈活
+        attributes: { str: 5, con: 5, per: 25, kar: 20, int: 10, cor: 10 },
         skills: { "dodge": 20, "unarmed": 10 }, 
         drops: [{ id: "rabbit_meat", rate: 1.0 }, { id: "rabbit_skin", rate: 0.5 }]
     },
@@ -27,7 +36,8 @@ export const NPCDB = {
         id: "boar",
         name: "野豬",
         description: "一隻兇猛的野豬。",
-        // 移除 parry
+        // 皮厚力大，但笨重
+        attributes: { str: 35, con: 40, per: 10, kar: 10, int: 5, cor: 5 },
         skills: { "dodge": 40, "unarmed": 50 },
         drops: [{ id: "boar_meat", rate: 1.0 }, { id: "boar_tooth", rate: 0.3 }]
     },
@@ -35,7 +45,8 @@ export const NPCDB = {
         id: "wolf",
         name: "野狼",
         description: "眼神兇惡的野狼。",
-        // 移除 parry
+        // 均衡的獵食者
+        attributes: { str: 45, con: 30, per: 30, kar: 10, int: 15, cor: 10 },
         skills: { "dodge": 80, "unarmed": 80 },
         drops: [{ id: "wolf_skin", rate: 0.4 }, { id: "rabbit_meat", rate: 0.5 }]
     },
@@ -43,8 +54,10 @@ export const NPCDB = {
         id: "bear",
         name: "黑熊",
         description: "一頭巨大的黑熊。",
-        // 移除 parry
+        // 力量與體質的頂點
+        attributes: { str: 90, con: 90, per: 15, kar: 10, int: 10, cor: 10 },
         skills: { "dodge": 60, "unarmed": 120, "force": 100 },
         drops: [{ id: "bear_skin", rate: 1.0 }, { id: "bear_paw", rate: 0.2 }]
     }
 };
+}
