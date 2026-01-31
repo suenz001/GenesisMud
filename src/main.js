@@ -5,7 +5,7 @@ import {
     createUserWithEmailAndPassword, 
     signInAnonymously 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { UI } from "./ui.js";
 import { CommandSystem } from "./systems/commands.js"; 
@@ -13,6 +13,7 @@ import { auth, db } from "./firebase.js";
 
 let currentUser = null;
 let localPlayerData = null; 
+let regenInterval = null; // 用來儲存回復計時器
 
 // 遊戲狀態控制
 let gameState = 'INIT'; 
@@ -28,6 +29,11 @@ onAuthStateChanged(auth, async (user) => {
         UI.enableGameInput(true);
         await checkAndLoadPlayer(user);
     } else {
+        // 登出時清除計時器
+        if (regenInterval) {
+            clearInterval(regenInterval);
+            regenInterval = null;
+        }
         currentUser = null;
         localPlayerData = null;
         gameState = 'INIT';
@@ -65,6 +71,7 @@ UI.onInput((cmd) => {
 
     if (gameState === 'PLAYING') {
         CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
+        // 每次指令後更新 HUD，確保數值同步
         if (localPlayerData) {
             UI.updateHUD(localPlayerData); 
         }
@@ -74,13 +81,61 @@ UI.onInput((cmd) => {
     }
 });
 
+// --- 自動回復系統 ---
+function startRegeneration(user) {
+    if (regenInterval) clearInterval(regenInterval);
+    
+    // 每 30 秒執行一次 (30000 ms)
+    regenInterval = setInterval(async () => {
+        if (!localPlayerData || !user) return;
+
+        const attr = localPlayerData.attributes;
+        let changed = false;
+
+        // 回復 HP (氣)
+        if (attr.hp < attr.maxHp) {
+            const recover = Math.floor(attr.maxHp * 0.1); // 回復 10%
+            attr.hp = Math.min(attr.maxHp, attr.hp + recover);
+            changed = true;
+        }
+
+        // 回復 SP (精)
+        if (attr.sp < attr.maxSp) {
+            const recover = Math.floor(attr.maxSp * 0.1);
+            attr.sp = Math.min(attr.maxSp, attr.sp + recover);
+            changed = true;
+        }
+
+        // 回復 MP (神)
+        if (attr.mp < attr.maxMp) {
+            const recover = Math.floor(attr.maxMp * 0.1);
+            attr.mp = Math.min(attr.maxMp, attr.mp + recover);
+            changed = true;
+        }
+
+        // 注意：靈力、內力、法力不自然回復，所以不處理
+
+        if (changed) {
+            UI.print("你覺得精神好多了。", "system");
+            UI.updateHUD(localPlayerData);
+            // 同步回資料庫
+            try {
+                const playerRef = doc(db, "players", user.uid);
+                await updateDoc(playerRef, { attributes: attr });
+            } catch (e) {
+                console.error("Auto regen save failed", e);
+            }
+        }
+
+    }, 30000); 
+}
+
 // --- 輔助函式 ---
 
 async function handleCreationInput(input) {
     const val = input.trim();
     if (!val) return;
 
-    // 步驟 1: 輸入英文 ID
     if (gameState === 'CREATION_ID') {
         const idRegex = /^[a-zA-Z]{2,12}$/;
         if (!idRegex.test(val)) {
@@ -92,7 +147,6 @@ async function handleCreationInput(input) {
         UI.print(`正在檢查 ID [${newId}] 是否可用...`, "system");
 
         try {
-            // 檢查唯一性
             const playersRef = collection(db, "players");
             const q = query(playersRef, where("id", "==", newId));
             const querySnapshot = await getDocs(q);
@@ -108,12 +162,11 @@ async function handleCreationInput(input) {
             UI.print("請問大俠尊姓大名？(中文名稱)");
         } catch (e) {
             console.error(e);
-            UI.print("檢查 ID 失敗 (請確認 Firestore 權限規則已更新)：" + e.message, "error");
+            UI.print("檢查 ID 失敗：" + e.message, "error");
         }
         return;
     }
 
-    // 步驟 2: 輸入中文名稱
     if (gameState === 'CREATION_NAME') {
         if (val.length < 2) {
             UI.print("名字太短了，請重新輸入：", "error");
@@ -126,7 +179,6 @@ async function handleCreationInput(input) {
         return;
     }
 
-    // 步驟 3: 輸入性別
     if (gameState === 'CREATION_GENDER') {
         let gender = "";
         if (['男', 'm', 'male'].includes(val.toLowerCase())) gender = "男";
@@ -163,6 +215,9 @@ async function checkAndLoadPlayer(user) {
             localPlayerData = docSnap.data();
             gameState = 'PLAYING'; 
             CommandSystem.handle('look', localPlayerData, user.uid);
+            
+            // 啟動自動回復
+            startRegeneration(user);
         } else {
             UI.print("檢測到新面孔...", "system");
             UI.print("請輸入您想使用的【英文 ID】(純英文字母，不可重複)：");
@@ -209,6 +264,9 @@ async function createNewCharacter(user, data) {
         gameState = 'PLAYING';
         UI.print(`角色【${data.name}(${data.id})】建立完成！`, "system");
         CommandSystem.handle('look', localPlayerData, user.uid);
+        
+        // 啟動自動回復
+        startRegeneration(user);
     } catch (e) {
         UI.print("創建失敗：" + e.message, "error");
     }

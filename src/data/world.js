@@ -1,22 +1,21 @@
 // src/data/world.js
 
 export const WorldMap = {
-    // === 悅來客棧 (連接點) ===
+    // === 悅來客棧 ===
     "inn_start": {
         title: "悅來客棧",
         description: "這是一間名震江湖的老字號客棧。牆上掛著『賓至如歸』的牌匾。",
         allowSave: true,
         x: 0, y: 0, z: 0,
         npcs: ["waiter"],
-        // 關鍵：它既連接著外面(world)，也連接著樓上(inn)
         region: ["world", "inn"] 
     },
     "inn_2f": {
         title: "客棧二樓",
-        description: "這裡是客棧的客房區，一條長長的走廊，兩旁是整潔的廂房。環境比樓下安靜許多。",
+        description: "這裡是客棧的客房區，環境比樓下安靜許多。",
         allowSave: true,
-        x: 0, y: 0, z: 1, // 雖然高度是 1
-        region: ["inn"]   // 但它只屬於 inn，所以看不到茅山(maoshan)
+        x: 0, y: 0, z: 1,
+        region: ["inn"]
     },
 
     // === 揚州公共區域 ===
@@ -47,10 +46,21 @@ export const WorldMap = {
     },
     "street_ne1": {
         title: "青龍街",
-        description: "街道兩旁種滿了柳樹。",
+        description: "街道兩旁種滿了柳樹。北邊傳來陣陣喝采聲，似乎有間武館。",
         x: 1, y: 1, z: 0,
         region: ["world"]
     },
+    
+    // --- 新增：飛龍武館 ---
+    "gym_hall": {
+        title: "飛龍武館",
+        description: "一間寬敞的武館，場地中央豎著幾根木樁。許多學徒正在練習基本功。\n【這裡可以拜師 (apprentice) 和學藝 (learn)】",
+        x: 1, y: 2, z: 0, // 位於青龍街 (1,1) 的北邊
+        region: ["world"],
+        npcs: ["gym_master"], // 放置王教頭
+        allowSave: true // 方便玩家練功存檔
+    },
+
     "weapon_shop": {
         title: "神鋒武器鋪",
         description: "叮叮噹噹的打鐵聲。",
@@ -71,20 +81,19 @@ export const WorldMap = {
         region: ["world"]
     },
     
-    // === 茅山區域 (獨立次元) ===
+    // === 茅山區域 ===
     "maoshan_foot": {
         title: "茅山腳下",
         description: "茅山腳下，霧氣瀰漫。",
         x: -2, y: -1, z: 0,
-        // 連接世界與茅山
         region: ["world", "maoshan"] 
     },
     "maoshan_gate": {
         title: "茅山派山門",
-        description: "一座古樸陰森的道觀矗立在眼前。\n【此處可 save】",
+        description: "一座古樸陰森的道觀矗立在眼前。",
         allowSave: true,
         x: -2, y: -1, z: 1,
-        region: ["maoshan"] // 純茅山區域
+        region: ["maoshan"]
     },
     "maoshan_hall": {
         title: "三清大殿",
