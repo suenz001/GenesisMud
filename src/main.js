@@ -31,6 +31,10 @@ onAuthStateChanged(auth, async (user) => {
             clearInterval(regenInterval);
             regenInterval = null;
         }
+
+        // === [修正] 強制停止戰鬥，防止登出後背景戰鬥繼續 ===
+        CommandSystem.stopCombat();
+        
         currentUser = null;
         localPlayerData = null;
         gameState = 'INIT';
@@ -227,7 +231,6 @@ async function createNewCharacter(user, data) {
             hp: 100, maxHp: 100, mp: 100, maxMp: 100, sp: 100, maxSp: 100,
             spiritual: 10, maxSpiritual: 10, force: 10, maxForce: 10, mana: 10, maxMana: 10,
             food: 100, maxFood: 100, water: 100, maxWater: 100,
-            // 移除 dex (身法)
             str: 20, con: 20, int: 20, per: 20, kar: 20, cor: 20
         },
         combat: { 

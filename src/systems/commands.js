@@ -17,13 +17,10 @@ const dirMapping = {
 
 // 全域變數：戰鬥計時器與狀態
 let combatInterval = null;
-let currentCombatState = null; // { targetId, targetIndex, npcHp, maxNpcHp, npcName }
+let currentCombatState = null; // { targetId, targetIndex, npcHp, maxNpcHp, npcName, roomId }
 
 // --- 戰鬥與計算核心函式 ---
 
-/**
- * 計算有效技能等級
- */
 function getEffectiveSkillLevel(entity, baseType) {
     const skills = entity.skills || {};
     const enabled = entity.enabled_skills || {};
@@ -57,9 +54,6 @@ function getEffectiveSkillLevel(entity, baseType) {
     }
 }
 
-/**
- * 獲取戰鬥綜合屬性 (攻擊、防禦、命中、閃避)
- */
 function getCombatStats(entity) {
     const attr = entity.attributes || { str: 10, con: 10, per: 10, kar: 10, int: 10 };
     const equipment = entity.equipment || {};
@@ -92,18 +86,20 @@ function getCombatStats(entity) {
     return { ap, dp, hit, dodge, atkType, weaponData, effAtkSkill };
 }
 
-// 停止戰鬥函式
+// 停止戰鬥函式 (修正版)
 function stopCombat(userId) {
     if (combatInterval) {
         clearInterval(combatInterval);
         combatInterval = null;
     }
     currentCombatState = null;
-    // 將狀態重置回 normal
-    updatePlayer(userId, { state: 'normal', combatTarget: null });
+    
+    // [修正] 增加更新玩家狀態的邏輯
+    if (userId) {
+        updatePlayer(userId, { state: 'normal', combatTarget: null });
+    }
 }
 
-// 尋找「活著」的 NPC (解決野兔殺不死 Bug)
 async function findAliveNPC(roomId, targetId) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
@@ -128,7 +124,7 @@ async function findAliveNPC(roomId, targetId) {
         if (room.npcs[i] === targetId) {
             if (!deadIndices.includes(i)) {
                 const npcData = NPCDB[targetId];
-                return { ...npcData, index: i }; // 回傳正確 index
+                return { ...npcData, index: i }; 
             }
         }
     }
@@ -251,7 +247,6 @@ async function consumeItem(playerData, userId, itemId, amount = 1) {
     return await updateInventory(playerData, userId);
 }
 
-// 舊的 findNPCInRoom (用於非戰鬥的查找)
 function findNPCInRoom(roomId, npcNameOrId) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
@@ -285,7 +280,6 @@ const commandRegistry = {
         }
     },
 
-    // --- 裝備系統 ---
     'wield': {
         description: '裝備武器',
         execute: async (playerData, args, userId) => {
@@ -349,7 +343,6 @@ const commandRegistry = {
         }
     },
 
-    // --- 生活指令 ---
     'eat': {
         description: '吃',
         execute: async (playerData, args, userId) => {
@@ -403,12 +396,10 @@ const commandRegistry = {
         }
     },
 
-    // --- 修練指令 ---
     'exercise': { description: '運氣', execute: async (p,a,u) => trainStat(p,u,"內力","force","maxForce","hp","氣") },
     'respirate': { description: '運精', execute: async (p,a,u) => trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精") },
     'meditate': { description: '運神', execute: async (p,a,u) => trainStat(p,u,"法力","mana","maxMana","mp","神") },
 
-    // --- 拜師與學藝 ---
     'apprentice': {
         description: '拜師',
         execute: async (playerData, args, userId) => {
@@ -589,7 +580,7 @@ const commandRegistry = {
         }
     },
 
-    // --- 殺敵 (Kill) - 重寫版：自動回合制戰鬥 ---
+    // --- 殺敵 (Kill) - 修正版：加入位置與狀態檢查 ---
     'kill': {
         description: '下殺手',
         execute: async (playerData, args, userId) => {
@@ -600,33 +591,45 @@ const commandRegistry = {
             if (room.safe) { UI.print("這裡是安全區。", "error"); return; }
             
             const targetId = args[0];
-            
-            // 1. 查找活著的目標 (解決不死 Bug)
             const npc = await findAliveNPC(playerData.location, targetId);
 
             if (!npc) { UI.print("這裡沒有這個人，或者他已經死了。", "error"); return; }
 
             UI.print(UI.txt(`你對 ${npc.name} 下了殺手！戰鬥開始！`, "#ff0000", true), "system", true);
             
-            // 2. 初始化戰鬥狀態
+            // [修正] 初始化戰鬥狀態時，記錄「發生戰鬥的地點 (roomId)」
             currentCombatState = {
                 targetId: npc.id,
                 targetIndex: npc.index, 
                 npcHp: npc.combat.hp,
                 maxNpcHp: npc.combat.maxHp,
-                npcName: npc.name
+                npcName: npc.name,
+                roomId: playerData.location 
             };
 
-            // 3. 更新玩家狀態為戰鬥中
             await updatePlayer(userId, { 
                 state: 'fighting', 
                 combatTarget: { id: npc.id, index: npc.index } 
             });
 
-            // 4. 啟動自動戰鬥迴圈 (每 2 秒一回合)
             if (combatInterval) clearInterval(combatInterval);
             
             const combatRound = async () => {
+                // === [新增] 安全檢查 ===
+                // 1. 如果戰鬥狀態被清除了 (例如外部呼叫了 stopCombat)
+                if (!currentCombatState) {
+                    if (combatInterval) clearInterval(combatInterval);
+                    return;
+                }
+
+                // 2. [關鍵] 檢查玩家位置是否改變
+                if (playerData.location !== currentCombatState.roomId) {
+                    // 玩家已經離開現場，強制停止戰鬥
+                    stopCombat(userId);
+                    return; 
+                }
+                // =======================
+
                 const playerStats = getCombatStats(playerData);
                 const npcStats = getCombatStats(npc); 
 
@@ -648,7 +651,7 @@ const commandRegistry = {
                 const pHitChance = Math.random() * (playerStats.hit + npcStats.dodge);
                 const pIsHit = pHitChance < playerStats.hit;
 
-                UI.print(UI.txt(msg, "#ffff00"), "system", true); // 顯示招式
+                UI.print(UI.txt(msg, "#ffff00"), "system", true); 
 
                 if (pIsHit) {
                     let damage = playerStats.ap - npcStats.dp;
@@ -659,7 +662,6 @@ const commandRegistry = {
                     currentCombatState.npcHp -= damage;
                     UI.print(`(造成了 ${damage} 點傷害)`, "chat");
                     
-                    // NPC 死亡判定
                     if (currentCombatState.npcHp <= 0) {
                         const playerLvl = getLevel(playerData);
                         const npcLvl = getLevel(npc); 
@@ -672,7 +674,6 @@ const commandRegistry = {
                         UI.print(`經過激戰，${npc.name} 倒地身亡。`, "system");
                         UI.print(UI.txt(`戰鬥勝利！獲得 ${potGain} 點潛能。`, "#00ff00", true), "system", true);
 
-                        // 掉落
                         if (npc.drops) {
                             for (const drop of npc.drops) {
                                 if (Math.random() <= drop.rate) {
@@ -687,7 +688,6 @@ const commandRegistry = {
                             }
                         }
                         
-                        // 記錄屍體 (5分鐘後重生)
                         await addDoc(collection(db, "dead_npcs"), { 
                             roomId: playerData.location, 
                             npcId: npc.id, 
@@ -700,11 +700,10 @@ const commandRegistry = {
                             "combat.potential": playerData.combat.potential,
                             "combat.kills": playerData.combat.kills 
                         });
-                        MapSystem.look(playerData); // 刷新畫面
-                        return; // 結束本回合
+                        MapSystem.look(playerData); 
+                        return; 
                     }
                 } else {
-                    // 修正：這裡補上了 true
                     UI.print(UI.txt(`${npc.name} 身形一晃，閃過了你的攻擊！`, "#aaa"), "chat", true);
                 }
 
@@ -722,7 +721,6 @@ const commandRegistry = {
                     playerData.attributes.hp -= dmg;
                     UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
 
-                    // 玩家死亡判定
                     if (playerData.attributes.hp <= 0) {
                         playerData.attributes.hp = 0;
                         UI.print(UI.txt("你眼前一黑，倒在血泊之中...", "#ff0000", true), "system", true);
@@ -739,21 +737,17 @@ const commandRegistry = {
                         return;
                     }
                 } else {
-                    // 修正：這裡補上了 true
                     UI.print(UI.txt(`你側身避開了 ${npc.name} 的攻擊。`, "#aaa"), "chat", true);
                 }
 
                 await updatePlayer(userId, { "attributes.hp": playerData.attributes.hp });
             };
 
-            // 立即執行第一回合
             combatRound();
-            // 設定排程
             combatInterval = setInterval(combatRound, 2000); 
         }
     },
 
-    // --- 其他指令 ---
     'look': { 
         description: '觀察', 
         execute: (p, a) => { 
@@ -898,6 +892,5 @@ export const CommandSystem = {
         if (command) command.execute(playerData, args, userId);
         else UI.print("你胡亂比劃了一通。(輸入 help 查看指令)", "error");
     },
-    // 匯出停止戰鬥供 MapSystem (逃跑成功時) 使用
     stopCombat: stopCombat
 };
