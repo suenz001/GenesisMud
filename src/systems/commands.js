@@ -1,4 +1,4 @@
-// src/systems/commands.js (請完全覆蓋)
+// src/systems/commands.js
 import { doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { db, auth } from "../firebase.js";
@@ -6,6 +6,7 @@ import { UI } from "../ui.js";
 import { MapSystem } from "./map.js";
 import { ItemDB } from "../data/items.js"; 
 import { NPCDB } from "../data/npcs.js"; 
+import { MessageSystem } from "./messages.js"; 
 
 const dirMapping = {
     'n': 'north', 's': 'south', 'e': 'east', 'w': 'west',
@@ -24,6 +25,7 @@ function getSkillLevelDesc(level) {
     return "出神入化";
 }
 
+// 輔助：消耗物品
 async function consumeItem(playerData, userId, itemId, amount = 1) {
     const inventory = playerData.inventory || [];
     const itemIndex = inventory.findIndex(i => i.id === itemId || i.name === itemId);
@@ -42,16 +44,25 @@ async function consumeItem(playerData, userId, itemId, amount = 1) {
         const playerRef = doc(db, "players", userId);
         await updateDoc(playerRef, { inventory: inventory });
         return true;
-    } catch (e) { return false; }
+    } catch (e) {
+        console.error("更新背包失敗", e);
+        return false;
+    }
 }
 
+// 輔助：尋找房間內的 NPC
 function findNPCInRoom(roomId, npcNameOrId) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
-    if (room.npcs.includes(npcNameOrId)) return NPCDB[npcNameOrId];
+
+    if (room.npcs.includes(npcNameOrId)) {
+        return NPCDB[npcNameOrId];
+    }
     for (const npcId of room.npcs) {
         const npc = NPCDB[npcId];
-        if (npc && npc.name === npcNameOrId) return npc;
+        if (npc && npc.name === npcNameOrId) {
+            return npc;
+        }
     }
     return null;
 }
@@ -63,14 +74,15 @@ const commandRegistry = {
             let msg = "【江湖指南】\n";
             msg += "基本指令：score, skills, inventory (i)\n";
             msg += "生活指令：eat, drink, drop, look\n";
-            msg += "交易指令：list, buy\n";
+            msg += "交易指令：list (看商品), buy\n";
             msg += "社交指令：say, emote\n";
             msg += "特殊指令：save, recall, suicide\n";
+            msg += "移動指令：n, s, e, w, u, d\n";
             UI.print(msg, 'system');
         }
     },
     
-    // --- 互動版 list ---
+    // --- 互動版 list (查看商品) ---
     'list': {
         description: '查看NPC販賣的商品',
         execute: (playerData, args) => {
@@ -79,7 +91,9 @@ const commandRegistry = {
             if (args.length > 0) {
                 targetNPC = findNPCInRoom(playerData.location, args[0]);
             } else {
-                if (room.npcs && room.npcs.length > 0) targetNPC = NPCDB[room.npcs[0]];
+                if (room.npcs && room.npcs.length > 0) {
+                    targetNPC = NPCDB[room.npcs[0]];
+                }
             }
 
             if (!targetNPC) {
@@ -88,7 +102,7 @@ const commandRegistry = {
             }
 
             if (!targetNPC.shop) {
-                UI.print(`${targetNPC.name} 身上沒帶什麼東西賣。`, "chat");
+                UI.print(`${targetNPC.name}(${targetNPC.id}) 身上沒帶什麼東西賣。`, "chat");
                 return;
             }
 
@@ -111,7 +125,7 @@ const commandRegistry = {
         }
     },
 
-    // --- 互動版 inventory ---
+    // --- 互動版 inventory (背包) ---
     'inventory': {
         description: '查看背包與金錢',
         execute: (playerData) => {
@@ -147,38 +161,53 @@ const commandRegistry = {
     },
     'i': { description: 'inventory 簡寫', execute: (p) => commandRegistry['inventory'].execute(p) },
 
-    // ... (其他 buy, eat, drink, look 等指令保持邏輯不變，但請保留在檔案中) ...
-    // 為確保檔案完整，以下重複貼上其他指令
+    // --- 購買 (Buy) + 廣播 ---
     'buy': {
         description: '向NPC購買物品',
         execute: async (playerData, args, userId) => {
-            if (args.length < 1) { UI.print("你想買什麼？", "error"); return; }
+            if (args.length < 1) { UI.print("你想買什麼？(範例: buy rice)", "error"); return; }
             let itemName = args[0];
             let amount = 1;
             let npcName = null;
+
             if (args.length >= 2 && !isNaN(args[1])) amount = parseInt(args[1]);
+            
             const fromIndex = args.indexOf('from');
-            if (fromIndex !== -1 && fromIndex + 1 < args.length) npcName = args[fromIndex + 1];
-            else {
+            if (fromIndex !== -1 && fromIndex + 1 < args.length) {
+                npcName = args[fromIndex + 1];
+            } else {
                 const room = MapSystem.getRoom(playerData.location);
                 if (room.npcs && room.npcs.length > 0) npcName = room.npcs[0];
             }
+
+            if (amount <= 0) { UI.print("你要買空氣嗎？", "error"); return; }
 
             const npc = findNPCInRoom(playerData.location, npcName);
             if (!npc) { UI.print("這裡沒有這個人。", "error"); return; }
 
             let targetItemId = null;
             let price = 0;
-            if (npc.shop[itemName]) { targetItemId = itemName; price = npc.shop[itemName]; }
-            else {
+
+            if (npc.shop[itemName]) {
+                targetItemId = itemName;
+                price = npc.shop[itemName];
+            } else {
                 for (const [sid, p] of Object.entries(npc.shop)) {
-                    if (ItemDB[sid] && ItemDB[sid].name === itemName) { targetItemId = sid; price = p; break; }
+                    if (ItemDB[sid] && ItemDB[sid].name === itemName) {
+                        targetItemId = sid;
+                        price = p;
+                        break;
+                    }
                 }
             }
 
-            if (!targetItemId) { UI.print(`沒有賣這個。`, "chat"); return; }
+            if (!targetItemId) { UI.print(`${npc.name}(${npc.id}) 搖搖頭說：「客官，小店沒賣這個。」`, "chat"); return; }
+
             const totalPrice = price * amount;
-            if ((playerData.money || 0) < totalPrice) { UI.print("錢不夠。", "error"); return; }
+            if ((playerData.money || 0) < totalPrice) {
+                UI.print("你的錢不夠。(需要 " + totalPrice + " 兩)", "error");
+                return;
+            }
 
             playerData.money -= totalPrice;
             if (!playerData.inventory) playerData.inventory = [];
@@ -188,13 +217,25 @@ const commandRegistry = {
             if (existingItem) existingItem.count += amount;
             else playerData.inventory.push({ id: targetItemId, name: itemInfo.name, count: amount });
 
-            UI.print(`你買了 ${amount} 份${itemInfo.name}，花了 ${totalPrice} 兩。`, "system");
+            UI.print(`你從 ${npc.name}(${npc.id}) 那裡買下了 ${amount} 份${itemInfo.name}(${targetItemId})，花費了 ${totalPrice} 兩。`, "system");
+            
+            // 廣播
+            MessageSystem.broadcast(playerData.location, `${playerData.name} 向 ${npc.name} 買了一些 ${itemInfo.name}。`);
+
             try {
                 const playerRef = doc(db, "players", userId);
-                await updateDoc(playerRef, { money: playerData.money, inventory: playerData.inventory });
-            } catch (e) { UI.print("交易錯誤。", "error"); }
+                await updateDoc(playerRef, {
+                    money: playerData.money,
+                    inventory: playerData.inventory
+                });
+            } catch (e) {
+                console.error("交易失敗", e);
+                UI.print("交易發生錯誤。", "error");
+            }
         }
     },
+
+    // --- 吃 (Eat) + 廣播 ---
     'eat': {
         description: '吃食物',
         execute: async (playerData, args, userId) => {
@@ -211,11 +252,16 @@ const commandRegistry = {
             if (success) {
                 attr.food = Math.min(attr.maxFood, attr.food + itemData.value);
                 UI.print(`你吃下了一份${invItem.name}。`, "system");
+                // 廣播
+                MessageSystem.broadcast(playerData.location, `${playerData.name} 拿出 ${invItem.name} 吃幾口。`);
+                
                 const playerRef = doc(db, "players", userId);
                 await updateDoc(playerRef, { "attributes.food": attr.food });
             }
         }
     },
+
+    // --- 喝 (Drink) + 廣播 ---
     'drink': {
         description: '喝飲料',
         execute: async (playerData, args, userId) => {
@@ -232,19 +278,55 @@ const commandRegistry = {
             if (success) {
                 attr.water = Math.min(attr.maxWater, attr.water + itemData.value);
                 UI.print(`你喝了一口${invItem.name}。`, "system");
+                // 廣播
+                MessageSystem.broadcast(playerData.location, `${playerData.name} 拿起 ${invItem.name} 喝了幾口。`);
+
                 const playerRef = doc(db, "players", userId);
                 await updateDoc(playerRef, { "attributes.water": attr.water });
             }
         }
     },
+
+    // --- 丟棄 (Drop) + 廣播 ---
     'drop': {
         description: '丟棄物品',
         execute: async (playerData, args, userId) => {
             if (args.length === 0) return UI.print("你要丟掉什麼？", "system");
-            const success = await consumeItem(playerData, userId, args[0]);
-            if (success) UI.print(`你將 ${args[0]} 丟棄在地上。`, "system");
+            const targetName = args[0];
+            const success = await consumeItem(playerData, userId, targetName);
+            if (success) {
+                UI.print(`你將 ${targetName} 丟棄在地上。`, "system");
+                // 廣播
+                MessageSystem.broadcast(playerData.location, `${playerData.name} 丟掉了 ${targetName}。`);
+            }
         }
     },
+
+    // --- 說話 (Say) + 廣播 ---
+    'say': {
+        description: '說話',
+        execute: (playerData, args) => {
+            if (args.length === 0) return UI.print("你想說什麼？", "system");
+            const msg = args.join(" ");
+            UI.print(`你說道：「${msg}」`, "chat");
+            // 廣播
+            MessageSystem.broadcast(playerData.location, `${playerData.name} 說道：「${msg}」`, 'chat');
+        }
+    },
+
+    // --- 動作 (Emote) + 廣播 ---
+    'emote': {
+        description: '動作',
+        execute: (playerData, args) => {
+            if (args.length === 0) return UI.print("你想做什麼動作？", "system");
+            const action = args.join(" ");
+            UI.print(`${playerData.name} ${action}`, "system");
+            // 廣播
+            MessageSystem.broadcast(playerData.location, `${playerData.name} ${action}`, 'system');
+        }
+    },
+
+    // --- 觀察 (Look) ---
     'look': {
         description: '觀察四周 (簡寫: l)',
         execute: (playerData, args) => {
@@ -270,8 +352,8 @@ const commandRegistry = {
         }
     },
     'l': { description: 'look 簡寫', execute: (p, a) => commandRegistry['look'].execute(p, a) },
-    'say': { description: '說話', execute: (p, a) => { UI.print(`你說道：「${a.join(" ")}」`, "chat"); } },
-    'emote': { description: '動作', execute: (p, a) => { UI.print(`${p.name} ${a.join(" ")}`, "system"); } },
+
+    // --- 其他指令 (保持不變) ---
     'score': {
         description: '查看詳細屬性',
         execute: (playerData) => {
@@ -295,6 +377,7 @@ const commandRegistry = {
     },
     'sc': { description: 'score 簡寫', execute: (p) => commandRegistry['score'].execute(p) },
     'hp': { description: 'score 簡寫', execute: (p) => commandRegistry['score'].execute(p) },
+
     'skills': {
         description: '查看已習得武學',
         execute: (playerData) => {
@@ -313,6 +396,7 @@ const commandRegistry = {
         }
     },
     'sk': { description: 'skills 簡寫', execute: (p) => commandRegistry['skills'].execute(p) },
+
     'suicide': {
         description: '刪除角色',
         execute: async (playerData, args, userId) => {
@@ -329,6 +413,7 @@ const commandRegistry = {
             } catch (e) { UI.print("自殺失敗：" + e.message, "error"); }
         }
     },
+
     'save': {
         description: '設定重生點',
         execute: async (playerData, args, userId) => {
@@ -343,6 +428,7 @@ const commandRegistry = {
             } else { UI.print("這裡環境險惡，無法靜心紀錄。", "error"); }
         }
     },
+
     'recall': {
         description: '傳送回紀錄點',
         execute: (playerData, args, userId) => {
