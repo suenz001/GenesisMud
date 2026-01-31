@@ -1,7 +1,4 @@
-{
-type: uploaded file
-fileName: npcs.js
-fullContent:
+
 // src/data/npcs.js
 
 export const NPCDB = {
@@ -68,4 +65,3 @@ export const NPCDB = {
         drops: [{ id: "bear_skin", rate: 1.0 }, { id: "bear_paw", rate: 0.2 }]
     }
 };
-}
