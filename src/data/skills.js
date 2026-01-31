@@ -24,7 +24,8 @@ export const SkillDB = {
     },
     "force": { name: "基本內功", type: "force", desc: "修練內息的入門功夫。" },
     "dodge": { name: "基本閃躲", type: "dodge", desc: "閃避敵人攻擊的基礎身法。" },
-    "parry": { name: "基本招架", type: "martial", desc: "格擋敵人攻擊的技巧。" },
+    
+    // (已移除 parry)
 
     // === 進階武學 ===
     "iron-palm": {

@@ -243,14 +243,15 @@ async function createNewCharacter(user, data) {
             food: 100, maxFood: 100, water: 100, maxWater: 100,
             str: 20, con: 20, dex: 20, int: 20, per: 20, kar: 20, cor: 20
         },
-        // --- 初始化戰鬥屬性，加入殺氣 kills ---
+        // --- 初始化戰鬥屬性 (已移除 parry) ---
         combat: { 
             xp: 0, 
             potential: 100, 
             kills: 0, 
-            attack: 10, defense: 10, hitRate: 10, dodge: 10, parry: 10 
+            attack: 10, defense: 10, hitRate: 10, dodge: 10 
         },
-        skills: { "unarmed": 10, "dodge": 10, "parry": 10 },
+        // --- 技能 (已移除 parry) ---
+        skills: { "unarmed": 10, "dodge": 10 },
         money: 1000,
         inventory: [
             { id: "rice", name: "白米飯", count: 2 },
