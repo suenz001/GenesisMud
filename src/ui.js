@@ -77,20 +77,20 @@ export const UI = {
             textEl.textContent = `${safeCurrent}/${safeMax}`;
         };
 
-        // --- 修正對應 (交換精與氣) ---
-        // bar-hp (HTML中顯示為"精"的條) -> 顯示 SP
-        updateBar('bar-hp', 'text-hp', attr.sp, attr.maxSp); 
+        // === 絕對修正：變數名稱嚴格對應 ID ===
+        // hp -> bar-hp (氣)
+        updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp);
         
-        // bar-sp (HTML中顯示為"氣"的條) -> 顯示 HP
-        updateBar('bar-sp', 'text-sp', attr.hp, attr.maxHp);
-        
-        // bar-mp (HTML中顯示為"神"的條) -> 顯示 MP
+        // mp -> bar-mp (神)
         updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp);
         
+        // sp -> bar-sp (精)
+        updateBar('bar-sp', 'text-sp', attr.sp, attr.maxSp);
+        
         // 進階屬性
-        updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual);
-        updateBar('bar-force', 'text-force', attr.force, attr.maxForce);
-        updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana);
+        updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual); // 靈力
+        updateBar('bar-force', 'text-force', attr.force, attr.maxForce); // 內力
+        updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana); // 法力
 
         const currentRoom = WorldMap[playerData.location];
         if (currentRoom) {
@@ -164,7 +164,6 @@ export const UI = {
         if (show) emailInput.focus();
     },
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
-    
     onInput: (callback) => {
         const sendHandler = () => {
             const val = input.value.trim();
