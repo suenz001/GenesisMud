@@ -40,8 +40,8 @@ export const NPCDB = {
         id: "boar",
         name: "野豬",
         description: "一隻兇猛的野豬。",
-        attributes: { str: 35, con: 40, per: 10, kar: 10, int: 5, cor: 5 },
-        combat: { hp: 300, maxHp: 300, attack: 30, defense: 20, xp: 50 },
+        attributes: { str: 20, con: 20, per: 10, kar: 10, int: 5, cor: 5 },
+        combat: { hp: 120, maxHp: 120, attack: 30, defense: 20, xp: 50 },
         skills: { "dodge": 40, "unarmed": 50 },
         drops: [{ id: "boar_meat", rate: 1.0 }, { id: "boar_tooth", rate: 0.3 }]
     },
@@ -49,8 +49,8 @@ export const NPCDB = {
         id: "wolf",
         name: "野狼",
         description: "眼神兇惡的野狼。",
-        attributes: { str: 45, con: 30, per: 30, kar: 10, int: 15, cor: 10 },
-        combat: { hp: 400, maxHp: 400, attack: 45, defense: 15, xp: 80 },
+        attributes: { str: 25, con: 20, per: 30, kar: 10, int: 15, cor: 10 },
+        combat: { hp: 150, maxHp: 150, attack: 45, defense: 15, xp: 80 },
         skills: { "dodge": 80, "unarmed": 80 },
         drops: [{ id: "wolf_skin", rate: 0.4 }, { id: "rabbit_meat", rate: 0.5 }]
     },
@@ -58,8 +58,8 @@ export const NPCDB = {
         id: "bear",
         name: "黑熊",
         description: "一頭巨大的黑熊。",
-        attributes: { str: 90, con: 90, per: 15, kar: 10, int: 10, cor: 10 },
-        combat: { hp: 1200, maxHp: 1200, attack: 90, defense: 60, xp: 300 },
+        attributes: { str: 80, con: 80, per: 15, kar: 10, int: 10, cor: 10 },
+        combat: { hp: 800, maxHp: 800, attack: 90, defense: 60, xp: 300 },
         skills: { "dodge": 60, "unarmed": 120, "force": 100 },
         drops: [{ id: "bear_skin", rate: 1.0 }, { id: "bear_paw", rate: 0.2 }]
     }
