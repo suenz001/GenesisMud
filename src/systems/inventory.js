@@ -53,7 +53,7 @@ export const InventorySystem = {
     inventory: (p) => { 
         let h = UI.titleLine("背包") + `<div>${UI.attrLine("財產", UI.formatMoney(p.money))}</div><br>`; 
         
-        // === [新增] 檢查房間內是否有商人，決定是否顯示賣出按鈕 ===
+        // 檢查房間內是否有商人，決定是否顯示賣出按鈕
         const shopkeeper = findShopkeeperInRoom(p.location);
         const canSell = !!shopkeeper;
 
@@ -81,9 +81,8 @@ export const InventorySystem = {
                     if (dat.type === 'food') act += UI.makeCmd("[吃]", `eat ${i.id}`, "cmd-btn"); 
                     if (dat.type === 'drink') act += UI.makeCmd("[喝]", `drink ${i.id}`, "cmd-btn"); 
                     
-                    // === [新增] 賣出按鈕 ===
+                    // 賣出按鈕
                     if (canSell) {
-                        // 使用 cmd-btn-buy 樣式讓它看起來像交易相關
                         act += UI.makeCmd("[賣]", `sell ${i.id}`, "cmd-btn cmd-btn-buy");
                     }
                     
@@ -240,7 +239,7 @@ export const InventorySystem = {
         await updatePlayer(u,{money:p.money,inventory:p.inventory}); 
     },
 
-    // === [新增] 賣出指令 ===
+    // === 販賣指令 ===
     sell: async (p, a, u) => {
         // 1. 檢查參數
         if (a.length < 1) return UI.print("賣啥？ (sell <item_id> [amount])", "error");
@@ -275,7 +274,7 @@ export const InventorySystem = {
 
         // 5. 計算價格
         const itemInfo = ItemDB[itemId];
-        if (!itemInfo) return; // 理論上不該發生
+        if (!itemInfo) return; 
         
         const baseValue = itemInfo.value || 0;
         if (baseValue <= 0) {
@@ -295,7 +294,8 @@ export const InventorySystem = {
 
         p.money = (p.money || 0) + totalGet;
 
-        UI.print(`你賣掉了 ${amount} ${item.name}，獲得了 ${UI.formatMoney(totalGet)}。`, "system");
+        // === [修正] 加上 true 參數，因為 UI.formatMoney 回傳的是 HTML ===
+        UI.print(`你賣掉了 ${amount} ${item.name}，獲得了 ${UI.formatMoney(totalGet)}。`, "system", true);
         UI.print(`${shopkeeper.name} 笑嘻嘻地把 ${item.name} 收了起來。`, "chat");
 
         await updatePlayer(u, { money: p.money, inventory: p.inventory });
