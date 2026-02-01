@@ -96,11 +96,12 @@ function getCombatStats(entity) {
     const weaponHit = weaponData ? (weaponData.hit || 0) : 0;
     const armorDef = armorData ? (armorData.defense || 0) : 0;
 
-    // 5. 計算四大屬性 (加權運算)
-    const ap = (str * 10) + (effAtkSkill * 5) + (effForce * 2) + weaponDmg;
-    const dp = (con * 10) + (effForce * 5) + (effDodge * 2) + armorDef;
-    const hit = (per * 10) + (effAtkSkill * 3) + weaponHit;
-    const dodge = (per * 10) + (effDodge * 4) + (effAtkSkill * 1);
+    // 5. 計算四大屬性 (加權運算 - [平衡修正] 倍率由 10 降為 2.5)
+    // 讓裝備和技能的影響力提升，並避免數值差距過大導致無法破防
+    const ap = (str * 2.5) + (effAtkSkill * 5) + (effForce * 2) + weaponDmg;
+    const dp = (con * 2.5) + (effForce * 5) + (effDodge * 2) + armorDef;
+    const hit = (per * 2.5) + (effAtkSkill * 3) + weaponHit;
+    const dodge = (per * 2.5) + (effDodge * 4) + (effAtkSkill * 1);
 
     return { ap, dp, hit, dodge, atkType, weaponData, effAtkSkill };
 }
@@ -825,7 +826,9 @@ const commandRegistry = {
                     UI.print(UI.txt(npcMsg, "#ff5555"), "system", true);
 
                     if (nIsHit) {
-                        let dmg = npcStats.attack - playerStats.dp;
+                        // [BUG FIX] 修正攻擊力讀取錯誤 (npcStats.attack -> npcStats.ap)
+                        // 之前版本因為讀不到 attack (undefined) 導致傷害計算錯誤 (變成 NaN 觸發保底 1 點)
+                        let dmg = npcStats.ap - playerStats.dp;
                         if (dmg <= 0) dmg = Math.floor(Math.random() * 3) + 1;
                         if (isNaN(dmg)) dmg = 1;
                         
