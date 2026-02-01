@@ -37,9 +37,8 @@ const btnAutoDrink = document.getElementById('btn-auto-drink');
 
 // 儀表板元素 - 內力控制
 const valEnforce = document.getElementById('val-enforce');
-// 注意：在現代 UI 中，步進按鈕是透過 document.body 的委派事件處理的，這裡不需要直接選取 .btn-step
 
-// 暫存目前的內力值 (因為 UI 沒有 slider 了，需要變數暫存)
+// 暫存目前的內力值
 let currentEnforceValue = 0;
 
 export const UI = {
@@ -82,7 +81,6 @@ export const UI = {
         if (!playerData) return;
         const attr = playerData.attributes;
         
-        // Helper: 更新進度條寬度與文字
         const updateBar = (barEl, textEl, current, max) => {
             if (!barEl) return;
             const safeMax = max || 1;
@@ -92,7 +90,6 @@ export const UI = {
             barEl.style.width = `${percent}%`;
             
             if (textEl) {
-                // 如果是生存條，顯示狀態文字而非數字
                 if (textEl.id.includes('status')) {
                     if (percent < 20) textEl.textContent = "飢渴";
                     else if (percent < 50) textEl.textContent = "普通";
@@ -106,27 +103,20 @@ export const UI = {
             }
         };
 
-        // 1. 核心條
         updateBar(barHp, textHp, attr.hp, attr.maxHp);
         updateBar(barForce, textForce, attr.force, attr.maxForce);
-
-        // 2. 精神條
         updateBar(barSp, textSp, attr.sp, attr.maxSp);
         updateBar(barMp, textMp, attr.mp, attr.maxMp);
-
-        // 3. 生存條
         updateBar(barFood, statusFood, attr.food, attr.maxFood);
         updateBar(barWater, statusWater, attr.water, attr.maxWater);
 
-        // 4. 更新內力顯示
         const serverEnforce = (playerData.combat && playerData.combat.enforce) ? playerData.combat.enforce : 0;
-        currentEnforceValue = serverEnforce; // 同步本地變數
+        currentEnforceValue = serverEnforce;
         if(valEnforce) {
             valEnforce.textContent = currentEnforceValue;
             valEnforce.style.color = currentEnforceValue > 0 ? "#ff9800" : "#444";
         }
 
-        // 5. 更新地圖
         const currentRoom = WorldMap[playerData.location];
         if (currentRoom) {
             UI.drawRangeMap(currentRoom.x, currentRoom.y, currentRoom.z, playerData.location);
@@ -140,9 +130,8 @@ export const UI = {
         
         const grid = document.createElement('div');
         grid.className = 'range-map-grid';
-        const radius = 2; // 5x5 的半徑是 2
+        const radius = 2;
         
-        // 取得當前房間的區域，用於地圖過濾
         const currentRoomData = WorldMap[currentId];
         const currentRegions = currentRoomData ? (currentRoomData.region || ["world"]) : ["world"];
 
@@ -152,7 +141,6 @@ export const UI = {
                 div.className = 'map-cell-range';
                 
                 let roomData = null;
-                // 搜尋該座標的房間
                 for (const [key, val] of Object.entries(WorldMap)) {
                     if (val.x === x && val.y === y && val.z === pz) {
                         const targetRegions = val.region || ["world"];
@@ -166,14 +154,12 @@ export const UI = {
 
                 if (roomData) {
                     div.classList.add('room-exists');
-                    div.title = roomData.title; // Tooltip
+                    div.title = roomData.title;
                     
-                    // 我
                     if (x === px && y === py) {
                         div.classList.add('current-pos');
                         div.innerHTML = '<i class="fas fa-user"></i>';
                     } else {
-                        // 其他房間，依據出口畫牆壁
                         if (roomData.walls) {
                             if (roomData.walls.includes('north')) div.classList.add('wall-north');
                             if (roomData.walls.includes('south')) div.classList.add('wall-south');
@@ -186,7 +172,6 @@ export const UI = {
             }
         }
         
-        // 顯示樓層 Z 軸
         const zInfo = document.createElement('div');
         zInfo.style.position = 'absolute';
         zInfo.style.bottom = '5px';
@@ -208,8 +193,6 @@ export const UI = {
     enableGameInput: (enabled) => {
         input.disabled = !enabled;
         sendBtn.disabled = !enabled;
-        
-        // 禁用/啟用所有按鈕
         const allBtns = document.querySelectorAll('button:not(#btn-login):not(#btn-register):not(#btn-guest)');
         allBtns.forEach(btn => btn.disabled = !enabled);
 
@@ -224,7 +207,6 @@ export const UI = {
 
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
     
-    // === 自動按鈕改為圖示點擊事件 ===
     onAutoToggle: (callbacks) => {
         btnAutoEat.addEventListener('click', () => {
             const isActive = callbacks.toggleEat();
@@ -248,32 +230,40 @@ export const UI = {
     },
 
     onInput: (callback) => {
+        // === 核心功能：更新輸入框狀態 (填值 + 聚焦 + 全選) ===
+        const updateInputState = (text) => {
+            input.value = text;
+            input.focus();
+            input.select(); // 關鍵：全選文字，方便直接按 Enter 重複或直接打字覆蓋
+        };
+
         const sendHandler = () => {
             const val = input.value.trim();
             if (val) {
                 UI.print(`> ${val}`);
                 callback(val);
-                input.value = ''; // 清空
+                // 發送後不再清空，而是全選，方便重複執行
+                updateInputState(val);
             }
         };
 
         sendBtn.addEventListener('click', sendHandler);
         input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendHandler(); });
 
-        // 綁定所有帶有 data-cmd 或 data-dir 的實體 BUTTON 按鈕 (右側面板)
         document.body.addEventListener('click', (e) => {
             const btn = e.target.closest('button');
             if (!btn) return;
             
-            // 處理通用指令按鈕
             const cmd = btn.dataset.cmd || btn.dataset.dir;
             if (cmd) {
                 UI.print(`> ${cmd}`);
                 callback(cmd);
+                // 按鈕點擊後，同步更新輸入框並全選
+                updateInputState(cmd);
                 return;
             }
 
-            // === 內力控制按鈕邏輯 ===
+            // 內力控制
             if (btn.classList.contains('btn-step') || btn.classList.contains('btn-step-set')) {
                 let newVal = currentEnforceValue;
 
@@ -283,7 +273,6 @@ export const UI = {
                     newVal += parseInt(btn.dataset.enforceMod);
                 }
 
-                // 限制範圍 0-10
                 newVal = Math.max(0, Math.min(10, newVal));
 
                 if (newVal !== currentEnforceValue) {
@@ -294,21 +283,21 @@ export const UI = {
                     const cmdStr = `enforce ${currentEnforceValue}`;
                     UI.print(`> ${cmdStr}`);
                     callback(cmdStr);
+                    // 內力指令也同步到輸入框
+                    updateInputState(cmdStr);
                 }
             }
         });
 
-        // === [修正關鍵] 處理主畫面 (output) 內動態生成的按鈕與連結 ===
-        // 使用 closest 查找最近的帶有 data-cmd 的元素，確保點擊內部圖示或 span 時也能觸發
         output.addEventListener('click', (e) => {
             const target = e.target.closest('[data-cmd]');
-            
-            // 確保找到的元素確實在 output 內 (安全性檢查)
             if (target && output.contains(target)) {
                 const cmd = target.dataset.cmd;
                 if (cmd) {
                     UI.print(`> ${cmd}`);
                     callback(cmd);
+                    // 連結點擊後，同步更新輸入框並全選
+                    updateInputState(cmd);
                 }
             }
         });
