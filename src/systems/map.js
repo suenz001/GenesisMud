@@ -8,6 +8,8 @@ import { MessageSystem } from "./messages.js";
 import { CommandSystem } from "./commands.js"; 
 import { SkillDB } from "../data/skills.js"; 
 import { CombatSystem } from "./combat.js";
+// === [新增] 引入物品資料庫以供查詢 ===
+import { ItemDB } from "../data/items.js";
 
 const DIR_OFFSET = {
     'north': { x: 0, y: 1, z: 0 }, 'south': { x: 0, y: -1, z: 0 },
@@ -157,7 +159,6 @@ export const MapSystem = {
             if (itemHtml) UI.print(itemHtml, "chat", true);
         } catch (e) { console.error(e); }
 
-        // === [新增] 如果房間有水井，顯示喝水選項 ===
         if (room.hasWell) {
             UI.print(`這裡有一口清澈的${UI.txt("水井", "#00ffff")}。 ${UI.makeCmd("[喝水]", "drink water", "cmd-btn")}`, "chat", true);
         }
@@ -173,6 +174,27 @@ export const MapSystem = {
     },
 
     lookTarget: (playerData, targetId) => {
+        // === [新增] 1. 優先檢查玩家身上的背包 ===
+        if (playerData.inventory) {
+            const item = playerData.inventory.find(i => i.id === targetId || i.name === targetId);
+            if (item) {
+                const info = ItemDB[item.id];
+                if (info) {
+                    UI.print(UI.titleLine(info.name), "chat", true);
+                    UI.print(info.desc || "看起來平平無奇。");
+                    UI.print(UI.attrLine("價值", UI.formatMoney(info.value)), "chat", true);
+                    
+                    // 如果是武器或防具，可以顯示數值
+                    if (info.damage) UI.print(UI.attrLine("殺傷力", info.damage), "chat", true);
+                    if (info.defense) UI.print(UI.attrLine("防禦力", info.defense), "chat", true);
+                    
+                    UI.print(UI.titleLine("End"), "chat", true);
+                    return; // 找到就結束，不繼續找 NPC
+                }
+            }
+        }
+
+        // 2. 檢查房間內的 NPC
         const room = WorldMap[playerData.location];
         if (room.npcs && room.npcs.includes(targetId)) {
             const npc = NPCDB[targetId];

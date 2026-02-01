@@ -10,14 +10,14 @@ export const ItemDB = {
     "tea": { name: "烏龍茶", type: "drink", value: 30, desc: "一杯清茶。" },
     "wine": { name: "女兒紅", type: "drink", value: 20, desc: "一罈好酒。" },
 
-    // --- 素材與戰利品 ---
+    // --- 素材與戰利品 (已修正價值) ---
     "rabbit_meat": { name: "兔肉", type: "food", value: 30, desc: "一塊鮮紅的生兔肉，烤過應該不錯吃。" },
-    "rabbit_skin": { name: "兔皮", type: "misc", value: 0, desc: "柔軟的兔毛皮，可以拿去賣錢。" },
+    "rabbit_skin": { name: "兔皮", type: "misc", value: 50, desc: "柔軟的兔毛皮，可以拿去賣錢。" },
     "boar_meat": { name: "野豬肉", type: "food", value: 50, desc: "一塊肥嫩的野豬肉。" },
-    "boar_tooth": { name: "野豬獠牙", type: "misc", value: 0, desc: "尖銳的獠牙，是勇氣的象徵。" },
-    "wolf_skin": { name: "狼皮", type: "misc", value: 0, desc: "一張完整的狼皮，價值不菲。" },
-    "bear_paw": { name: "熊掌", type: "food", value: 100, desc: "極為珍貴的食材，大補！" },
-    "bear_skin": { name: "黑熊皮", type: "misc", value: 0, desc: "厚實的黑熊皮，做成大衣一定很保暖。" },
+    "boar_tooth": { name: "野豬獠牙", type: "misc", value: 100, desc: "尖銳的獠牙，是勇氣的象徵。" },
+    "wolf_skin": { name: "狼皮", type: "misc", value: 300, desc: "一張完整的狼皮，價值不菲。" },
+    "bear_paw": { name: "熊掌", type: "food", value: 500, desc: "極為珍貴的食材，大補！" },
+    "bear_skin": { name: "黑熊皮", type: "misc", value: 800, desc: "厚實的黑熊皮，做成大衣一定很保暖。" },
 
     // --- 武器 (Swords/Blades) ---
     "iron_sword": { name: "鐵劍", type: "sword", damage: 15, hit: 5, value: 500, desc: "一把普通的鐵劍，適合新手使用。" },
