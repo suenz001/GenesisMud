@@ -104,7 +104,8 @@ export const MapSystem = {
                         // 戰鬥指令
                         if (playerData.state !== 'fighting') {
                             links += UI.makeCmd("[戰鬥]", `fight ${npc.id}`, "cmd-btn");
-                            links += UI.makeCmd("[下殺手]", `kill ${npc.id}`, "cmd-btn cmd-btn-buy");
+                            // === [修改] 按鈕文字由 "下殺手" 改為 "殺" ===
+                            links += UI.makeCmd("[殺]", `kill ${npc.id}`, "cmd-btn cmd-btn-buy");
                         } else if (statusTag) {
                             // 戰鬥中顯示停止或逃跑提示，或不顯示
                         }
@@ -127,7 +128,8 @@ export const MapSystem = {
                 // 顯示所有玩家 (包含自己)
                 let status = "";
                 if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
-                
+                if (p.isUnconscious) status += UI.txt(" (昏迷)", "#888");
+
                 if (auth.currentUser && doc.id === auth.currentUser.uid) {
                     // 自己
                     playerHtml += `<div style="margin-top:2px;">[ 你 ] ${p.name}${status}</div>`;
