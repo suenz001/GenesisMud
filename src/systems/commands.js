@@ -19,6 +19,20 @@ const dirMapping = {
 let combatInterval = null;
 let currentCombatState = null; 
 
+// --- 輔助：取得受傷狀態描述 ---
+function getStatusDesc(name, current, max) {
+    if (max <= 0) return null;
+    const pct = current / max;
+    
+    if (pct <= 0.1 && pct > 0) {
+        return UI.txt(`${name} 搖頭晃腦，眼看就要倒在地上了！`, "#ff5555");
+    }
+    if (pct <= 0.4 && pct > 0.1) {
+        return UI.txt(`${name} 氣喘呼呼，看起來狀況不太好。`, "#ffaa00");
+    }
+    return null;
+}
+
 // --- 戰鬥與計算核心函式 ---
 
 function getEffectiveSkillLevel(entity, baseType) {
@@ -100,7 +114,7 @@ function stopCombat(userId) {
     currentCombatState = null;
     
     if (userId) {
-        // 戰鬥結束，移除戰鬥狀態，但保留暈倒狀態(如果有的話)由後續邏輯處理
+        // 戰鬥結束，移除戰鬥狀態
         updatePlayer(userId, { state: 'normal', combatTarget: null });
     }
 }
@@ -636,6 +650,11 @@ const commandRegistry = {
             html += `<div>${UI.attrLine("悟性", attr.int)}</div><div>${UI.attrLine("定力", attr.per)}</div>`;
             html += `<div>${UI.attrLine("福緣", attr.kar)}</div><div>${UI.attrLine("靈性", attr.cor)}</div>`;
             html += `</div><br>`;
+            
+            // [修正] 加回食物與飲水
+            html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
+            html += `<div>${UI.attrLine("食物", attr.food+"/"+attr.maxFood)}</div><div>${UI.attrLine("飲水", attr.water+"/"+attr.maxWater)}</div>`;
+            html += `</div><br>`;
 
             html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
             html += `<div>${UI.txt("【 精 與 靈 】", "#ff5555")}</div><div>${UI.makeCmd("[運精]", "respirate", "cmd-btn")}</div>`;
@@ -662,7 +681,7 @@ const commandRegistry = {
         }
     },
 
-    // --- 殺敵 (Kill) - 包含位置檢查與暈倒/補刀機制 ---
+    // --- 殺敵 (Kill) - 包含狀態描述更新 ---
     'kill': {
         description: '下殺手',
         execute: async (playerData, args, userId) => {
@@ -679,7 +698,6 @@ const commandRegistry = {
 
             UI.print(UI.txt(`你對 ${npc.name} 下了殺手！戰鬥開始！`, "#ff0000", true), "system", true);
             
-            // 初始化戰鬥狀態
             currentCombatState = {
                 targetId: npc.id,
                 targetIndex: npc.index, 
@@ -706,7 +724,6 @@ const commandRegistry = {
                 const npcStats = getCombatStats(npc); 
 
                 // === 玩家 攻擊 NPC ===
-                // 如果玩家暈倒了，就不能攻擊
                 if (!playerData.isUnconscious) {
                     let enabledType = playerData.enabled_skills && playerData.enabled_skills[playerStats.atkType];
                     let activeSkillId = enabledType || playerStats.atkType;
@@ -725,8 +742,6 @@ const commandRegistry = {
                         .replace(/\$w/g, playerStats.weaponData ? playerStats.weaponData.name : "雙手");
 
                     const pHitChance = Math.random() * (playerStats.hit + npcStats.dodge);
-                    
-                    // 如果 NPC 已經暈倒，必中
                     const isHit = currentCombatState.npcIsUnconscious ? true : (pHitChance < playerStats.hit);
 
                     UI.print(UI.txt(msg, "#ffff00"), "system", true); 
@@ -736,25 +751,27 @@ const commandRegistry = {
                         damage += (skillBaseDmg / 2); 
                         damage = Math.floor(damage * (0.9 + Math.random() * 0.2));
                         if (damage <= 0) damage = Math.floor(Math.random() * 5) + 1;
-                        if (isNaN(damage)) damage = 1; // 最終防呆
+                        if (isNaN(damage)) damage = 1; 
 
                         currentCombatState.npcHp -= damage;
                         UI.print(`(造成了 ${damage} 點傷害)`, "chat");
+
+                        // [新增] 顯示 NPC 受傷狀態描述
+                        const statusMsg = getStatusDesc(npc.name, currentCombatState.npcHp, currentCombatState.maxNpcHp);
+                        if (statusMsg) UI.print(statusMsg, "chat", true);
                         
                         // --- NPC 狀態判定 ---
                         if (currentCombatState.npcHp <= 0) {
                             if (!currentCombatState.npcIsUnconscious) {
                                 // 第一次歸零 -> 進入暈倒狀態
                                 currentCombatState.npcIsUnconscious = true;
-                                currentCombatState.npcHp = 0; // 鎖定在 0
+                                currentCombatState.npcHp = 0; 
                                 // [UI修正] 補上 true
-                                UI.print(UI.txt(`${npc.name} 搖頭晃腦，腳步踉蹌，咚的一聲倒在地上，動彈不得！`, "#ff8800"), "system", true);
-                                // 暈倒後，本回合不做死亡處理，等待下一次攻擊「補刀」
+                                UI.print(UI.txt(`${npc.name} 搖頭晃腦，腳步踉蹌，咚的一聲倒在地上，動彈不得！`, "#888"), "system", true);
                             } else {
                                 // 已經暈倒又被打 -> 真的死亡
                                 UI.print(UI.txt(`${npc.name} 慘叫一聲，被你結果了性命。`, "#ff0000", true), "system", true);
                                 
-                                // 結算獎勵
                                 const playerLvl = getLevel(playerData);
                                 const npcLvl = getLevel(npc); 
                                 let potGain = 100 + ((npcLvl - playerLvl) * 10);
@@ -800,11 +817,9 @@ const commandRegistry = {
                 }
 
                 // --- NPC 反擊 玩家 ---
-                // 只有當 NPC 沒暈倒，且 玩家還活著/在場 時才反擊
                 if (!currentCombatState.npcIsUnconscious && playerData.location === currentCombatState.roomId) {
                     let npcMsg = `${npc.name} 往 ${playerData.name} 撲了過來！`;
                     const nHitChance = Math.random() * (npcStats.hit + playerStats.dodge);
-                    // 如果玩家暈倒，必中
                     const nIsHit = playerData.isUnconscious ? true : (nHitChance < npcStats.hit);
                     
                     UI.print(UI.txt(npcMsg, "#ff5555"), "system", true);
@@ -816,10 +831,14 @@ const commandRegistry = {
                         
                         playerData.attributes.hp -= dmg;
                         
-                        // [UI修正] 玩家受傷後，立即更新 UI
+                        // [UI修正] 玩家受傷後，立即更新右側 UI
                         UI.updateHUD(playerData);
 
                         UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
+
+                        // [新增] 顯示玩家受傷狀態描述
+                        const statusMsg = getStatusDesc("你", playerData.attributes.hp, playerData.attributes.maxHp);
+                        if (statusMsg) UI.print(statusMsg, "chat", true);
 
                         // --- 玩家 狀態判定 ---
                         if (playerData.attributes.hp <= 0) {
@@ -828,7 +847,6 @@ const commandRegistry = {
                                 playerData.isUnconscious = true;
                                 playerData.attributes.hp = 0;
                                 UI.print(UI.txt("你只覺天旋地轉，站立不穩，咚的一聲倒在地上...", "#ff8800", true), "system", true);
-                                // 更新資料庫狀態，這樣別人看你也是暈倒的
                                 await updatePlayer(userId, { "attributes.hp": 0, isUnconscious: true });
                             } else {
                                 // 已經暈倒又被打 -> 玩家死亡
@@ -841,7 +859,8 @@ const commandRegistry = {
                         UI.print(UI.txt(`你側身避開了 ${npc.name} 的攻擊。`, "#aaa"), "chat", true);
                     }
                 } else if (currentCombatState.npcIsUnconscious) {
-                    UI.print(UI.txt(`${npc.name} 倒在地上，毫無反抗之力。`, "#888"), "chat");
+                    // [UI修正] 補上 true
+                    UI.print(UI.txt(`${npc.name} 倒在地上，毫無反抗之力。`, "#888"), "chat", true);
                 }
 
                 await updatePlayer(userId, { "attributes.hp": playerData.attributes.hp });
@@ -947,9 +966,26 @@ const commandRegistry = {
             UI.print(h,"",true); 
         } 
     },
-    
     'drop': { description: '丟', execute: async (p,a,u) => { if(a.length===0)return UI.print("丟啥?","error"); const idx=p.inventory.findIndex(x=>x.id===a[0]||x.name===a[0]); if(idx===-1)return UI.print("沒這個","error"); const it=p.inventory[idx]; if(it.count>1)it.count--; else p.inventory.splice(idx,1); await updatePlayer(u,{inventory:p.inventory}); await addDoc(collection(db,"room_items"),{roomId:p.location,itemId:it.id,name:it.name,droppedBy:p.name,timestamp:serverTimestamp()}); UI.print("丟了 "+it.name,"system"); MapSystem.look(p); } },
-    'get': { description: '撿', execute: async (p,a,u) => { if(a.length===0)return UI.print("撿啥?","error"); const q=query(collection(db,"room_items"),where("roomId","==",p.location),where("itemId","==",a[0])); const snap=await getDocs(q); if(snap.empty)return UI.print("沒東西","error"); const d=snap.docs[0]; await deleteDoc(doc(db,"room_items",d.id)); const dat=d.data(); if(!p.inventory)p.inventory=[]; const ex=p.inventory.find(x=>x.id===dat.itemId); if(ex)ex.count++; else p.inventory.push({id:dat.itemId,name:dat.name,count:1}); await updatePlayer(u,{inventory:p.inventory}); UI.print("撿了 "+dat.name,"system"); MapSystem.look(p); } },
+    
+    // [優化] 撿東西後不再刷新 Look，避免洗版
+    'get': { 
+        description: '撿', 
+        execute: async (p,a,u) => { 
+            if(a.length===0)return UI.print("撿啥?","error"); 
+            const q=query(collection(db,"room_items"),where("roomId","==",p.location),where("itemId","==",a[0])); 
+            const snap=await getDocs(q); 
+            if(snap.empty)return UI.print("沒東西","error"); 
+            const d=snap.docs[0]; 
+            await deleteDoc(doc(db,"room_items",d.id)); 
+            const dat=d.data(); 
+            if(!p.inventory)p.inventory=[]; 
+            const ex=p.inventory.find(x=>x.id===dat.itemId); 
+            if(ex)ex.count++; else p.inventory.push({id:dat.itemId,name:dat.name,count:1}); 
+            await updatePlayer(u,{inventory:p.inventory}); 
+            UI.print("撿了 "+dat.name,"system"); 
+        } 
+    },
     'say': { description: '說', execute: (p,a)=>{const m=a.join(" ");UI.print(`你: ${m}`,"chat");MessageSystem.broadcast(p.location,`${p.name} 說: ${m}`);} },
     'emote': { description: '演', execute: (p,a)=>{const m=a.join(" ");UI.print(`${p.name} ${m}`,"system");MessageSystem.broadcast(p.location,`${p.name} ${m}`);} },
     'save': { 
@@ -970,7 +1006,6 @@ const commandRegistry = {
     'suicide': { description: '死', execute: async(p,a,u)=>{if(a[0]==='confirm'){await deleteDoc(doc(db,"players",u));await signOut(auth);}else UI.print("confirm?","error");} }
 };
 
-// 綁定方向指令
 Object.keys(dirMapping).forEach(shortDir => {
     const fullDir = dirMapping[shortDir];
     commandRegistry[shortDir] = { description: `往 ${fullDir} 移動`, execute: (p, a, u) => MapSystem.move(p, fullDir, u) };
@@ -985,20 +1020,16 @@ export const CommandSystem = {
     handle: (inputStr, playerData, userId) => {
         if (!inputStr) return;
         
-        // 戰鬥中限制：除了戰鬥相關或逃跑，無法做其他事
         if (playerData.state === 'fighting') {
              const args = inputStr.trim().split(/\s+/);
              const cmd = args[0].toLowerCase();
-             // 允許移動(逃跑)
              if (['n','s','e','w','u','d','north','south','east','west','up','down'].includes(cmd)) {
-                 // pass to map system
              } else if (!['kill', 'look', 'score', 'hp', 'help', 'skills', 'l'].includes(cmd)) {
                  UI.print("戰鬥中無法分心做這件事！", "error");
                  return;
              }
         }
         
-        // 如果暈倒了，禁止大部分指令
         if (playerData.isUnconscious) {
              UI.print("你現在暈過去了，動彈不得！", "error");
              return;
@@ -1008,7 +1039,6 @@ export const CommandSystem = {
         const args = inputStr.trim().split(/\s+/);
         const cmdName = args.shift().toLowerCase();
         
-        // 防止戰鬥中重複 kill
         if (cmdName === 'kill' && playerData.state === 'fighting') {
              UI.print("戰鬥正在進行中...", "system");
              return;
