@@ -70,7 +70,8 @@ export const SkillSystem = {
             const maxCap = (forceSkillLvl + conBonus) * 10;
 
             if (maxVal >= maxCap) {
-                UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system");
+                // [修正] 加入 true 參數以正確顯示顏色
+                UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system", true);
                 UI.print(`(內力上限已達 ${maxVal}，需提升基本內功等級或根骨才能突破)`, "system");
                 return;
             }
@@ -102,7 +103,8 @@ export const SkillSystem = {
             if (typeName === "內力") {
                 attr.maxHp = (attr.maxHp || 100) + 1;
                 attr.hp += 1;
-                UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system");
+                // [修正] 加入 true 參數以正確顯示顏色
+                UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system", true);
             }
 
         } else {
