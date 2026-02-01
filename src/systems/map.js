@@ -8,7 +8,6 @@ import { MessageSystem } from "./messages.js";
 import { CommandSystem } from "./commands.js"; 
 import { SkillDB } from "../data/skills.js"; 
 import { CombatSystem } from "./combat.js";
-// === [新增] 引入物品資料庫以供查詢 ===
 import { ItemDB } from "../data/items.js";
 
 const DIR_OFFSET = {
@@ -70,6 +69,28 @@ export const MapSystem = {
         if (room.safe) UI.print(UI.txt("【 安全區 】", "#00ff00"), "system", true);
         UI.print(room.description);
 
+        // === [新增] 先讀取房間內所有玩家資料，以便判斷 NPC 是否正在被戰鬥 ===
+        let playersInRoom = [];
+        try {
+            const playersRef = collection(db, "players");
+            const q = query(playersRef, where("location", "==", playerData.location));
+            const querySnapshot = await getDocs(q);
+            querySnapshot.forEach(doc => {
+                const p = doc.data();
+                // 順便排除自己，但在判斷 NPC 狀態時自己也要算進去，所以這裡先存原始資料
+                playersInRoom.push(p); 
+            });
+        } catch (e) { console.error(e); }
+
+        // 建立一個 "正在被戰鬥的 NPC" 集合 (格式: npcId_index)
+        const fightingNpcKeys = new Set();
+        playersInRoom.forEach(p => {
+            if (p.state === 'fighting' && p.combatTarget) {
+                fightingNpcKeys.add(`${p.combatTarget.id}_${p.combatTarget.index}`);
+            }
+        });
+
+        // === 顯示 NPC 列表 ===
         if (room.npcs && room.npcs.length > 0) {
             let deadNPCs = [];
             try {
@@ -95,10 +116,9 @@ export const MapSystem = {
                     const npc = NPCDB[npcId];
                     if (npc) {
                         let statusTag = "";
-                        if (playerData.state === 'fighting' && 
-                            playerData.combatTarget && 
-                            playerData.combatTarget.id === npcId && 
-                            playerData.combatTarget.index === index) {
+                        
+                        // [修改] 檢查這個 NPC 是否在戰鬥名單中 (不論是被我打，還是被別人打)
+                        if (fightingNpcKeys.has(`${npcId}_${index}`)) {
                             statusTag = UI.txt(" 【戰鬥中】", "#ff0000", true);
                         }
 
@@ -127,23 +147,22 @@ export const MapSystem = {
             if (npcListHtml) UI.print(npcListHtml, "chat", true);
         }
 
-        try {
-            const playersRef = collection(db, "players");
-            const q = query(playersRef, where("location", "==", playerData.location));
-            const querySnapshot = await getDocs(q);
+        // === 顯示玩家列表 (使用剛才預先讀取的 playersInRoom) ===
+        if (playersInRoom.length > 0) {
             let playerHtml = "";
-            querySnapshot.forEach((doc) => {
-                const p = doc.data();
-                if (auth.currentUser && doc.id === auth.currentUser.uid) return;
+            playersInRoom.forEach((p) => {
+                // 排除自己
+                if (auth.currentUser && p.id === playerData.id) return; 
 
                 let status = "";
+                // [修改] 只要狀態是 fighting，就加上紅字
                 if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
                 if (p.isUnconscious) status += UI.txt(" (昏迷)", "#888");
 
                 playerHtml += `<div style="margin-top:2px;">[ 玩家 ] ${p.name} <span style="color:#aaa">(${p.id || 'unknown'})</span>${status}</div>`;
             });
             if (playerHtml) UI.print(playerHtml, "chat", true);
-        } catch (e) { console.error(e); }
+        }
 
         try {
             const itemsRef = collection(db, "room_items");
@@ -174,7 +193,7 @@ export const MapSystem = {
     },
 
     lookTarget: (playerData, targetId) => {
-        // === [新增] 1. 優先檢查玩家身上的背包 ===
+        // 1. 優先檢查玩家身上的背包
         if (playerData.inventory) {
             const item = playerData.inventory.find(i => i.id === targetId || i.name === targetId);
             if (item) {
@@ -184,12 +203,11 @@ export const MapSystem = {
                     UI.print(info.desc || "看起來平平無奇。");
                     UI.print(UI.attrLine("價值", UI.formatMoney(info.value)), "chat", true);
                     
-                    // 如果是武器或防具，可以顯示數值
                     if (info.damage) UI.print(UI.attrLine("殺傷力", info.damage), "chat", true);
                     if (info.defense) UI.print(UI.attrLine("防禦力", info.defense), "chat", true);
                     
                     UI.print(UI.titleLine("End"), "chat", true);
-                    return; // 找到就結束，不繼續找 NPC
+                    return; 
                 }
             }
         }

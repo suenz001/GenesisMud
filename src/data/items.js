@@ -2,13 +2,13 @@
 
 export const ItemDB = {
     // --- 食物與飲水 (價格大幅調降) ---
-    "rice": { name: "白米飯", type: "food", value: 5, desc: "一碗熱騰騰的白米飯。" },
-    "dumpling": { name: "肉包子", type: "food", value: 2, desc: "皮薄餡多的大肉包。" },
+    "rice": { name: "白米飯", type: "food", value: 35, desc: "一碗熱騰騰的白米飯。" },
+    "dumpling": { name: "肉包子", type: "food", value: 32, desc: "皮薄餡多的大肉包。" },
     "bread": { name: "乾糧", type: "food", value: 1, desc: "硬硬的大餅。" },
-    "roast_chicken": { name: "烤雞", type: "food", value: 10, desc: "香噴噴的烤雞。" },
-    "waterskin": { name: "牛皮水袋", type: "drink", value: 5, desc: "裝滿清水的水袋。" },
-    "tea": { name: "烏龍茶", type: "drink", value: 3, desc: "一杯清茶。" },
-    "wine": { name: "女兒紅", type: "drink", value: 10, desc: "一罈好酒。" },
+    "roast_chicken": { name: "烤雞", type: "food", value: 60, desc: "香噴噴的烤雞。" },
+    "waterskin": { name: "牛皮水袋", type: "drink", value: 50, desc: "裝滿清水的水袋。" },
+    "tea": { name: "烏龍茶", type: "drink", value: 30, desc: "一杯清茶。" },
+    "wine": { name: "女兒紅", type: "drink", value: 100, desc: "一罈好酒。" },
 
     // --- 素材與戰利品 ---
     "rabbit_meat": { name: "兔肉", type: "food", value: 30, desc: "一塊鮮紅的生兔肉，烤過應該不錯吃。" },

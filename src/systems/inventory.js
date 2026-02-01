@@ -35,7 +35,6 @@ function findNPCInRoom(roomId, npcNameOrId) {
     return null;
 }
 
-// 輔助：尋找房間內的任意一位商人
 function findShopkeeperInRoom(roomId) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
@@ -172,7 +171,6 @@ export const InventorySystem = {
         if (args.length === 0) return UI.print("想喝什麼？", "system");
         const targetName = args[0];
 
-        // === [新增] 喝井水邏輯 ===
         if (targetName === 'water') {
             const room = MapSystem.getRoom(playerData.location);
             if (room && room.hasWell) {
@@ -181,11 +179,9 @@ export const InventorySystem = {
                     UI.print("你一點也不渴。", "system");
                     return;
                 }
-                // 補滿水
                 attr.water = attr.maxWater;
                 UI.print("你走到井邊，大口喝著甘甜的井水，頓時覺得清涼解渴。", "system");
                 MessageSystem.broadcast(playerData.location, `${playerData.name} 走到井邊喝了幾口水。`);
-                
                 UI.updateHUD(playerData);
                 await updatePlayer(userId, { "attributes.water": attr.water });
                 return;
@@ -223,11 +219,43 @@ export const InventorySystem = {
         await updatePlayer(u,{inventory:p.inventory}); 
         await addDoc(collection(db,"room_items"),{roomId:p.location,itemId:it.id,name:it.name,droppedBy:p.name,timestamp:serverTimestamp()}); 
         UI.print("丟了 "+it.name,"system"); 
-        // [修改] 移除了 MapSystem.look(p);
     },
 
     get: async (p,a,u) => { 
-        if(a.length===0)return UI.print("撿啥?","error"); 
+        if(a.length===0) return UI.print("撿啥?","error"); 
+        
+        // === [新增] get all 指令 ===
+        if (a[0] === 'all') {
+            const q = query(collection(db, "room_items"), where("roomId", "==", p.location));
+            const snap = await getDocs(q);
+            if (snap.empty) return UI.print("這裡沒什麼好撿的。", "system");
+
+            let pickedNames = [];
+            if (!p.inventory) p.inventory = [];
+
+            // 使用 Promise.all 並行刪除，提高效能
+            const deletePromises = [];
+
+            snap.forEach(d => {
+                const itemData = d.data();
+                // 檢查堆疊
+                const ex = p.inventory.find(x => x.id === itemData.itemId);
+                if (ex) ex.count++; 
+                else p.inventory.push({ id: itemData.itemId, name: itemData.name, count: 1 });
+
+                pickedNames.push(itemData.name);
+                deletePromises.push(deleteDoc(doc(db, "room_items", d.id)));
+            });
+
+            await Promise.all(deletePromises);
+            await updatePlayer(u, { inventory: p.inventory });
+            
+            // 整理顯示訊息，避免洗頻
+            UI.print(`你撿起了：${pickedNames.join("、")}。`, "system");
+            return;
+        }
+
+        // 單一撿取邏輯
         const q=query(collection(db,"room_items"),where("roomId","==",p.location),where("itemId","==",a[0])); 
         const snap=await getDocs(q); 
         if(snap.empty)return UI.print("沒東西","error"); 
