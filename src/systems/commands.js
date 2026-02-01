@@ -1,5 +1,5 @@
 // src/systems/commands.js
-import { doc, updateDoc, deleteDoc, addDoc, collection, query, where, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, updateDoc, deleteDoc, addDoc, collection, query, where, getDocs, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { db, auth } from "../firebase.js";
 import { UI } from "../ui.js";
@@ -17,7 +17,7 @@ const dirMapping = {
 
 // 全域變數：戰鬥計時器與狀態
 let combatInterval = null;
-let currentCombatState = null; // { targetId, targetIndex, npcHp, maxNpcHp, npcName, roomId }
+let currentCombatState = null; // { targetId, targetIndex, npcHp, maxNpcHp, npcName, roomId, npcIsUnconscious }
 
 // --- 戰鬥與計算核心函式 ---
 
@@ -55,7 +55,12 @@ function getEffectiveSkillLevel(entity, baseType) {
 }
 
 function getCombatStats(entity) {
-    const attr = entity.attributes || { str: 10, con: 10, per: 10, kar: 10, int: 10 };
+    // [NaN Fix] 確保所有屬性都有預設值 0
+    const attr = entity.attributes || {};
+    const str = attr.str || 10;
+    const con = attr.con || 10;
+    const per = attr.per || 10;
+    
     const equipment = entity.equipment || {};
     
     // 1. 判斷使用武器類型
@@ -77,16 +82,16 @@ function getCombatStats(entity) {
     const weaponHit = weaponData ? (weaponData.hit || 0) : 0;
     const armorDef = armorData ? (armorData.defense || 0) : 0;
 
-    // 5. 計算四大屬性
-    const ap = (attr.str * 10) + (effAtkSkill * 5) + (effForce * 2) + weaponDmg;
-    const dp = (attr.con * 10) + (effForce * 5) + (effDodge * 2) + armorDef;
-    const hit = (attr.per * 10) + (effAtkSkill * 3) + weaponHit;
-    const dodge = (attr.per * 10) + (effDodge * 4) + (effAtkSkill * 1);
+    // 5. 計算四大屬性 (加權運算)
+    const ap = (str * 10) + (effAtkSkill * 5) + (effForce * 2) + weaponDmg;
+    const dp = (con * 10) + (effForce * 5) + (effDodge * 2) + armorDef;
+    const hit = (per * 10) + (effAtkSkill * 3) + weaponHit;
+    const dodge = (per * 10) + (effDodge * 4) + (effAtkSkill * 1);
 
     return { ap, dp, hit, dodge, atkType, weaponData, effAtkSkill };
 }
 
-// 停止戰鬥函式 (修正版)
+// 停止戰鬥函式
 function stopCombat(userId) {
     if (combatInterval) {
         clearInterval(combatInterval);
@@ -94,11 +99,79 @@ function stopCombat(userId) {
     }
     currentCombatState = null;
     
-    // [修正] 增加更新玩家狀態的邏輯
     if (userId) {
+        // 戰鬥結束，移除戰鬥狀態，但保留暈倒狀態(如果有的話)由後續邏輯處理
         updatePlayer(userId, { state: 'normal', combatTarget: null });
     }
 }
+
+// --- 死亡與重生處理邏輯 ---
+
+async function handlePlayerDeath(playerData, userId) {
+    UI.print(UI.txt("你眼前一黑，感覺靈魂脫離了軀體...", "#ff0000", true), "system", true);
+    stopCombat(userId);
+
+    // 1. 技能懲罰：所有技能扣 1 等
+    let skillMsg = [];
+    if (playerData.skills) {
+        for (let skillId in playerData.skills) {
+            if (playerData.skills[skillId] > 0) {
+                playerData.skills[skillId] -= 1;
+            }
+        }
+    }
+
+    // 2. 傳送到鬼門關
+    const deathLocation = "ghost_gate";
+    
+    // 補滿狀態 (變成鬼是滿血狀態)
+    playerData.attributes.hp = playerData.attributes.maxHp;
+    playerData.attributes.sp = playerData.attributes.maxSp;
+    playerData.attributes.mp = playerData.attributes.maxMp;
+    
+    // 清除暈倒狀態
+    delete playerData.isUnconscious;
+
+    await updatePlayer(userId, {
+        location: deathLocation,
+        skills: playerData.skills,
+        attributes: playerData.attributes,
+        state: 'normal',
+        combatTarget: null,
+        isUnconscious: false
+    });
+
+    UI.print("你悠悠醒來，發現自己身處【鬼門關】。", "system");
+    UI.print("你的武功修為受到了一些損耗。", "system");
+    UI.print(UI.txt("黑白無常說道：「陽壽未盡？在這反省 3 分鐘再回去吧！」", "#aaa"), "chat");
+    MapSystem.look(playerData);
+
+    // 3. 設定 3 分鐘後重生 (180000 ms)
+    setTimeout(async () => {
+        // 重新讀取玩家資料確認他還在線上 (或沒登出)
+        const pRef = doc(db, "players", userId);
+        const pSnap = await getDoc(pRef);
+        if (pSnap.exists()) {
+            const currentP = pSnap.data();
+            // 只有當玩家還在鬼門關時才傳送 (避免bug)
+            if (currentP.location === "ghost_gate") {
+                const respawnPoint = currentP.savePoint || "inn_start";
+                
+                // 本地更新
+                playerData.location = respawnPoint;
+                await updatePlayer(userId, { location: respawnPoint });
+                
+                // 如果是當前客戶端，顯示訊息
+                if (auth.currentUser && auth.currentUser.uid === userId) {
+                    UI.print("一道金光閃過，你還陽了！", "system");
+                    MapSystem.look(playerData);
+                }
+            }
+        }
+    }, 180000); // 3分鐘 = 180000毫秒
+}
+
+// --- 一般輔助函式 ---
 
 async function findAliveNPC(roomId, targetId) {
     const room = MapSystem.getRoom(roomId);
@@ -124,14 +197,13 @@ async function findAliveNPC(roomId, targetId) {
         if (room.npcs[i] === targetId) {
             if (!deadIndices.includes(i)) {
                 const npcData = NPCDB[targetId];
-                return { ...npcData, index: i }; 
+                // 初始化暈倒狀態 (如果沒有的話)
+                return { ...npcData, index: i, isUnconscious: false }; 
             }
         }
     }
     return null;
 }
-
-// --- 一般輔助函式 ---
 
 async function trainStat(playerData, userId, typeName, attrCur, attrMax, costAttr, costName) {
     const attr = playerData.attributes;
@@ -196,19 +268,6 @@ async function trainStat(playerData, userId, typeName, attrCur, attrMax, costAtt
     }
 }
 
-function getLevel(character) {
-    const skills = character.skills || {};
-    let maxMartial = 0, maxForce = 0;
-    for (const [sid, lvl] of Object.entries(skills)) {
-        const skillInfo = SkillDB[sid];
-        if (skillInfo && skillInfo.base) {
-            if (skillInfo.type === 'martial' && lvl > maxMartial) maxMartial = lvl;
-            if (skillInfo.type === 'force' && lvl > maxForce) maxForce = lvl;
-        }
-    }
-    return maxMartial + maxForce;
-}
-
 function getSkillLevelDesc(level) {
     let desc = "初學乍練";
     let color = "#aaa"; 
@@ -224,6 +283,19 @@ function getSkillLevelDesc(level) {
     else if (level >= 10) { desc = "略有小成"; color = "#ffffff"; }
 
     return UI.txt(desc, color);
+}
+
+function getLevel(character) {
+    const skills = character.skills || {};
+    let maxMartial = 0, maxForce = 0;
+    for (const [sid, lvl] of Object.entries(skills)) {
+        const skillInfo = SkillDB[sid];
+        if (skillInfo && skillInfo.base) {
+            if (skillInfo.type === 'martial' && lvl > maxMartial) maxMartial = lvl;
+            if (skillInfo.type === 'force' && lvl > maxForce) maxForce = lvl;
+        }
+    }
+    return maxMartial + maxForce;
 }
 
 async function updatePlayer(userId, data) {
@@ -580,7 +652,7 @@ const commandRegistry = {
         }
     },
 
-    // --- 殺敵 (Kill) - 修正版：加入位置與狀態檢查 ---
+    // --- 殺敵 (Kill) - 包含位置檢查與暈倒/補刀機制 ---
     'kill': {
         description: '下殺手',
         execute: async (playerData, args, userId) => {
@@ -597,14 +669,15 @@ const commandRegistry = {
 
             UI.print(UI.txt(`你對 ${npc.name} 下了殺手！戰鬥開始！`, "#ff0000", true), "system", true);
             
-            // [修正] 初始化戰鬥狀態時，記錄「發生戰鬥的地點 (roomId)」
+            // 初始化戰鬥狀態
             currentCombatState = {
                 targetId: npc.id,
                 targetIndex: npc.index, 
                 npcHp: npc.combat.hp,
                 maxNpcHp: npc.combat.maxHp,
                 npcName: npc.name,
-                roomId: playerData.location 
+                roomId: playerData.location, // 記住戰鬥地點
+                npcIsUnconscious: false // NPC 暈倒狀態
             };
 
             await updatePlayer(userId, { 
@@ -615,129 +688,145 @@ const commandRegistry = {
             if (combatInterval) clearInterval(combatInterval);
             
             const combatRound = async () => {
-                // === [新增] 安全檢查 ===
-                // 1. 如果戰鬥狀態被清除了 (例如外部呼叫了 stopCombat)
-                if (!currentCombatState) {
-                    if (combatInterval) clearInterval(combatInterval);
-                    return;
-                }
-
-                // 2. [關鍵] 檢查玩家位置是否改變
-                if (playerData.location !== currentCombatState.roomId) {
-                    // 玩家已經離開現場，強制停止戰鬥
-                    stopCombat(userId);
-                    return; 
-                }
-                // =======================
+                // 安全檢查：戰鬥停止或位置改變
+                if (!currentCombatState) { if (combatInterval) clearInterval(combatInterval); return; }
+                if (playerData.location !== currentCombatState.roomId) { stopCombat(userId); return; }
 
                 const playerStats = getCombatStats(playerData);
                 const npcStats = getCombatStats(npc); 
 
-                // --- 玩家攻擊 NPC ---
-                let enabledType = playerData.enabled_skills && playerData.enabled_skills[playerStats.atkType];
-                let activeSkillId = enabledType || playerStats.atkType;
-                let skillInfo = SkillDB[activeSkillId];
+                // === 玩家 攻擊 NPC ===
+                // 如果玩家暈倒了，就不能攻擊
+                if (!playerData.isUnconscious) {
+                    let enabledType = playerData.enabled_skills && playerData.enabled_skills[playerStats.atkType];
+                    let activeSkillId = enabledType || playerStats.atkType;
+                    let skillInfo = SkillDB[activeSkillId];
 
-                let action = { msg: "$P對$N發起攻擊。", damage: 10 };
-                if (skillInfo && skillInfo.actions && skillInfo.actions.length > 0) {
-                    action = skillInfo.actions[Math.floor(Math.random() * skillInfo.actions.length)];
-                }
+                    let action = { msg: "$P對$N發起攻擊。", damage: 10 };
+                    if (skillInfo && skillInfo.actions && skillInfo.actions.length > 0) {
+                        action = skillInfo.actions[Math.floor(Math.random() * skillInfo.actions.length)];
+                    }
 
-                let msg = action.msg
-                    .replace(/\$P/g, playerData.name)
-                    .replace(/\$N/g, npc.name)
-                    .replace(/\$w/g, playerStats.weaponData ? playerStats.weaponData.name : "雙手");
-
-                const pHitChance = Math.random() * (playerStats.hit + npcStats.dodge);
-                const pIsHit = pHitChance < playerStats.hit;
-
-                UI.print(UI.txt(msg, "#ffff00"), "system", true); 
-
-                if (pIsHit) {
-                    let damage = playerStats.ap - npcStats.dp;
-                    damage += (action.damage / 2); 
-                    damage = Math.floor(damage * (0.9 + Math.random() * 0.2));
-                    if (damage <= 0) damage = Math.floor(Math.random() * 5) + 1;
-
-                    currentCombatState.npcHp -= damage;
-                    UI.print(`(造成了 ${damage} 點傷害)`, "chat");
+                    let skillBaseDmg = action.damage || 10;
                     
-                    if (currentCombatState.npcHp <= 0) {
-                        const playerLvl = getLevel(playerData);
-                        const npcLvl = getLevel(npc); 
-                        let potGain = 100 + ((npcLvl - playerLvl) * 10);
-                        if (potGain < 10) potGain = 10;
+                    let msg = action.msg
+                        .replace(/\$P/g, playerData.name)
+                        .replace(/\$N/g, npc.name)
+                        .replace(/\$w/g, playerStats.weaponData ? playerStats.weaponData.name : "雙手");
+
+                    const pHitChance = Math.random() * (playerStats.hit + npcStats.dodge);
+                    
+                    // 如果 NPC 已經暈倒，必中
+                    const isHit = currentCombatState.npcIsUnconscious ? true : (pHitChance < playerStats.hit);
+
+                    UI.print(UI.txt(msg, "#ffff00"), "system", true); 
+
+                    if (isHit) {
+                        let damage = playerStats.ap - npcStats.dp;
+                        damage += (skillBaseDmg / 2); 
+                        damage = Math.floor(damage * (0.9 + Math.random() * 0.2));
+                        if (damage <= 0) damage = Math.floor(Math.random() * 5) + 1;
+                        if (isNaN(damage)) damage = 1; // 最終防呆
+
+                        currentCombatState.npcHp -= damage;
+                        UI.print(`(造成了 ${damage} 點傷害)`, "chat");
                         
-                        playerData.combat.potential = (playerData.combat.potential || 0) + potGain;
-                        playerData.combat.kills = (playerData.combat.kills || 0) + 1;
+                        // --- NPC 狀態判定 ---
+                        if (currentCombatState.npcHp <= 0) {
+                            if (!currentCombatState.npcIsUnconscious) {
+                                // 第一次歸零 -> 進入暈倒狀態
+                                currentCombatState.npcIsUnconscious = true;
+                                currentCombatState.npcHp = 0; // 鎖定在 0
+                                UI.print(UI.txt(`${npc.name} 搖頭晃腦，腳步踉蹌，咚的一聲倒在地上，動彈不得！`, "#ff8800"), "system");
+                                // 暈倒後，本回合不做死亡處理，等待下一次攻擊「補刀」
+                            } else {
+                                // 已經暈倒又被打 -> 真的死亡
+                                UI.print(UI.txt(`${npc.name} 慘叫一聲，被你結果了性命。`, "#ff0000", true), "system", true);
+                                
+                                // 結算獎勵
+                                const playerLvl = getLevel(playerData);
+                                const npcLvl = getLevel(npc); 
+                                let potGain = 100 + ((npcLvl - playerLvl) * 10);
+                                if (potGain < 10) potGain = 10;
+                                
+                                playerData.combat.potential = (playerData.combat.potential || 0) + potGain;
+                                playerData.combat.kills = (playerData.combat.kills || 0) + 1;
+                                UI.print(UI.txt(`戰鬥勝利！獲得 ${potGain} 點潛能。`, "#00ff00", true), "system", true);
 
-                        UI.print(`經過激戰，${npc.name} 倒地身亡。`, "system");
-                        UI.print(UI.txt(`戰鬥勝利！獲得 ${potGain} 點潛能。`, "#00ff00", true), "system", true);
-
-                        if (npc.drops) {
-                            for (const drop of npc.drops) {
-                                if (Math.random() <= drop.rate) {
-                                    const itemInfo = ItemDB[drop.id];
-                                    if(itemInfo) {
-                                        await addDoc(collection(db, "room_items"), {
-                                            roomId: playerData.location, itemId: drop.id, name: itemInfo.name, droppedBy: "SYSTEM", timestamp: serverTimestamp()
-                                        });
-                                        UI.print(`${npc.name} 掉出了 ${itemInfo.name}。`, "system");
+                                // 掉落物
+                                if (npc.drops) {
+                                    for (const drop of npc.drops) {
+                                        if (Math.random() <= drop.rate) {
+                                            const itemInfo = ItemDB[drop.id];
+                                            if(itemInfo) {
+                                                await addDoc(collection(db, "room_items"), {
+                                                    roomId: playerData.location, itemId: drop.id, name: itemInfo.name, droppedBy: "SYSTEM", timestamp: serverTimestamp()
+                                                });
+                                                UI.print(`${npc.name} 掉出了 ${itemInfo.name}。`, "system");
+                                            }
+                                        }
                                     }
                                 }
+
+                                await addDoc(collection(db, "dead_npcs"), { 
+                                    roomId: playerData.location, npcId: npc.id, index: npc.index, respawnTime: Date.now() + 300000 
+                                });
+
+                                stopCombat(userId);
+                                await updatePlayer(userId, { 
+                                    "combat.potential": playerData.combat.potential,
+                                    "combat.kills": playerData.combat.kills 
+                                });
+                                MapSystem.look(playerData); 
+                                return; 
                             }
                         }
-                        
-                        await addDoc(collection(db, "dead_npcs"), { 
-                            roomId: playerData.location, 
-                            npcId: npc.id, 
-                            index: npc.index, 
-                            respawnTime: Date.now() + 300000 
-                        });
-
-                        stopCombat(userId);
-                        await updatePlayer(userId, { 
-                            "combat.potential": playerData.combat.potential,
-                            "combat.kills": playerData.combat.kills 
-                        });
-                        MapSystem.look(playerData); 
-                        return; 
+                    } else {
+                        UI.print(UI.txt(`${npc.name} 身形一晃，閃過了你的攻擊！`, "#aaa"), "chat", true);
                     }
                 } else {
-                    UI.print(UI.txt(`${npc.name} 身形一晃，閃過了你的攻擊！`, "#aaa"), "chat", true);
+                    UI.print("你現在暈頭轉向，根本無法攻擊！", "error");
                 }
 
-                // --- NPC 反擊玩家 ---
-                let npcMsg = `${npc.name} 往 ${playerData.name} 撲了過來！`;
-                const nHitChance = Math.random() * (npcStats.hit + playerStats.dodge);
-                const nIsHit = nHitChance < npcStats.hit; 
-                
-                UI.print(UI.txt(npcMsg, "#ff5555"), "system", true);
-
-                if (nIsHit) {
-                    let dmg = npcStats.attack - playerStats.dp;
-                    if (dmg <= 0) dmg = Math.floor(Math.random() * 3) + 1;
+                // --- NPC 反擊 玩家 ---
+                // 只有當 NPC 沒暈倒，且 玩家還活著/在場 時才反擊
+                if (!currentCombatState.npcIsUnconscious && playerData.location === currentCombatState.roomId) {
+                    let npcMsg = `${npc.name} 往 ${playerData.name} 撲了過來！`;
+                    const nHitChance = Math.random() * (npcStats.hit + playerStats.dodge);
+                    // 如果玩家暈倒，必中
+                    const nIsHit = playerData.isUnconscious ? true : (nHitChance < npcStats.hit);
                     
-                    playerData.attributes.hp -= dmg;
-                    UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
+                    UI.print(UI.txt(npcMsg, "#ff5555"), "system", true);
 
-                    if (playerData.attributes.hp <= 0) {
-                        playerData.attributes.hp = 0;
-                        UI.print(UI.txt("你眼前一黑，倒在血泊之中...", "#ff0000", true), "system", true);
-                        stopCombat(userId);
+                    if (nIsHit) {
+                        let dmg = npcStats.attack - playerStats.dp;
+                        if (dmg <= 0) dmg = Math.floor(Math.random() * 3) + 1;
+                        if (isNaN(dmg)) dmg = 1;
                         
-                        playerData.attributes.hp = playerData.attributes.maxHp;
-                        playerData.location = playerData.savePoint || "inn_start";
-                        await updatePlayer(userId, { 
-                            "attributes.hp": playerData.attributes.hp,
-                            "location": playerData.location 
-                        });
-                        UI.print("你已在重生點復活。", "system");
-                        MapSystem.look(playerData);
-                        return;
+                        playerData.attributes.hp -= dmg;
+                        UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
+
+                        // --- 玩家 狀態判定 ---
+                        if (playerData.attributes.hp <= 0) {
+                            if (!playerData.isUnconscious) {
+                                // 第一次歸零 -> 玩家暈倒
+                                playerData.isUnconscious = true;
+                                playerData.attributes.hp = 0;
+                                UI.print(UI.txt("你只覺天旋地轉，站立不穩，咚的一聲倒在地上...", "#ff8800", true), "system", true);
+                                // 更新資料庫狀態，這樣別人看你也是暈倒的
+                                await updatePlayer(userId, { "attributes.hp": 0, isUnconscious: true });
+                            } else {
+                                // 已經暈倒又被打 -> 玩家死亡
+                                UI.print(UI.txt("這致命的一擊奪走了你最後的生機！", "#ff0000", true), "system", true);
+                                await handlePlayerDeath(playerData, userId);
+                                return; // 結束迴圈
+                            }
+                        }
+                    } else {
+                        UI.print(UI.txt(`你側身避開了 ${npc.name} 的攻擊。`, "#aaa"), "chat", true);
                     }
-                } else {
-                    UI.print(UI.txt(`你側身避開了 ${npc.name} 的攻擊。`, "#aaa"), "chat", true);
+                } else if (currentCombatState.npcIsUnconscious) {
+                    UI.print(UI.txt(`${npc.name} 倒在地上，毫無反抗之力。`, "#888"), "chat");
                 }
 
                 await updatePlayer(userId, { "attributes.hp": playerData.attributes.hp });
@@ -876,6 +965,12 @@ export const CommandSystem = {
                  UI.print("戰鬥中無法分心做這件事！", "error");
                  return;
              }
+        }
+        
+        // 如果暈倒了，禁止大部分指令
+        if (playerData.isUnconscious) {
+             UI.print("你現在暈過去了，動彈不得！", "error");
+             return;
         }
         
         if (!playerData) { UI.print("靈魂尚未歸位...", "error"); return; }

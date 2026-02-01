@@ -1,4 +1,3 @@
-
 // src/data/world.js
 
 export const WorldMap = {
@@ -69,7 +68,7 @@ export const WorldMap = {
         x: 2, y: 1, z: 0,
         walls: ["south"],
         region: ["world"],
-        npcs: ["blacksmith"] // 新增鐵匠
+        npcs: ["blacksmith"]
     },
 
     // === 北方森林 ===
@@ -138,5 +137,15 @@ export const WorldMap = {
         safe: true,
         x: -2, y: -1, z: 2,
         region: ["maoshan"]
+    },
+
+    // === 特殊區域：鬼門關 ===
+    "ghost_gate": {
+        title: "鬼門關",
+        description: "四周陰風慘慘，鬼哭神號。濃霧之中隱約可見無數亡魂在排隊，等著孟婆湯...",
+        safe: true,
+        x: 9999, y: 9999, z: -9999, // 設在一個無法走到的座標
+        region: ["underworld"]
+        // 沒有 exits，玩家無法自行離開
     }
 };
