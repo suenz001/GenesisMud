@@ -17,7 +17,7 @@ const dirMapping = {
 
 // 全域變數：戰鬥計時器與狀態
 let combatInterval = null;
-let currentCombatState = null; // { targetId, targetIndex, npcHp, maxNpcHp, npcName, roomId, npcIsUnconscious }
+let currentCombatState = null; 
 
 // --- 戰鬥與計算核心函式 ---
 
@@ -112,7 +112,6 @@ async function handlePlayerDeath(playerData, userId) {
     stopCombat(userId);
 
     // 1. 技能懲罰：所有技能扣 1 等
-    let skillMsg = [];
     if (playerData.skills) {
         for (let skillId in playerData.skills) {
             if (playerData.skills[skillId] > 0) {
@@ -140,6 +139,9 @@ async function handlePlayerDeath(playerData, userId) {
         combatTarget: null,
         isUnconscious: false
     });
+
+    // [UI修正] 復活補滿血後，立即更新 UI
+    UI.updateHUD(playerData);
 
     UI.print("你悠悠醒來，發現自己身處【鬼門關】。", "system");
     UI.print("你的武功修為受到了一些損耗。", "system");
@@ -253,6 +255,9 @@ async function trainStat(playerData, userId, typeName, attrCur, attrMax, costAtt
         UI.print(msg, "system", true);
     }
 
+    // [UI修正] 修練後立即更新 UI
+    UI.updateHUD(playerData);
+
     if (improved) {
         await updatePlayer(userId, { 
             [`attributes.${costAttr}`]: attr[costAttr],
@@ -316,6 +321,10 @@ async function consumeItem(playerData, userId, itemId, amount = 1) {
     if (itemIndex === -1) { UI.print(`你身上沒有 ${itemId} 這樣東西。`, "error"); return false; }
     const item = inventory[itemIndex];
     if (item.count > amount) item.count -= amount; else inventory.splice(itemIndex, 1);
+    
+    // [UI修正] 吃東西/喝水後，物品減少與屬性恢復，需更新UI
+    UI.updateHUD(playerData);
+    
     return await updateInventory(playerData, userId);
 }
 
@@ -593,6 +602,7 @@ const commandRegistry = {
                     btn = UI.makeCmd(isEnabled ? "[解除]" : "[激發]", isEnabled ? `unenable ${info.base}` : `enable ${info.base} ${id}`, "cmd-btn");
                 }
 
+                // [UI修正] 名稱後方顯示 ID
                 html += `<div style="color:#fff;">${name} <span style="color:#888; font-size:0.8em;">(${id})</span> ${statusMark}</div>`;
                 html += `<div>${UI.txt(level+"級", "#00ffff")} <span style="font-size:0.8em;">${desc}</span></div>`;
                 html += `<div>${btn}</div>`;
@@ -676,8 +686,8 @@ const commandRegistry = {
                 npcHp: npc.combat.hp,
                 maxNpcHp: npc.combat.maxHp,
                 npcName: npc.name,
-                roomId: playerData.location, // 記住戰鬥地點
-                npcIsUnconscious: false // NPC 暈倒狀態
+                roomId: playerData.location, 
+                npcIsUnconscious: false 
             };
 
             await updatePlayer(userId, { 
@@ -737,7 +747,8 @@ const commandRegistry = {
                                 // 第一次歸零 -> 進入暈倒狀態
                                 currentCombatState.npcIsUnconscious = true;
                                 currentCombatState.npcHp = 0; // 鎖定在 0
-                                UI.print(UI.txt(`${npc.name} 搖頭晃腦，腳步踉蹌，咚的一聲倒在地上，動彈不得！`, "#ff8800"), "system");
+                                // [UI修正] 補上 true
+                                UI.print(UI.txt(`${npc.name} 搖頭晃腦，腳步踉蹌，咚的一聲倒在地上，動彈不得！`, "#ff8800"), "system", true);
                                 // 暈倒後，本回合不做死亡處理，等待下一次攻擊「補刀」
                             } else {
                                 // 已經暈倒又被打 -> 真的死亡
@@ -804,6 +815,10 @@ const commandRegistry = {
                         if (isNaN(dmg)) dmg = 1;
                         
                         playerData.attributes.hp -= dmg;
+                        
+                        // [UI修正] 玩家受傷後，立即更新 UI
+                        UI.updateHUD(playerData);
+
                         UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
 
                         // --- 玩家 狀態判定 ---
@@ -916,7 +931,23 @@ const commandRegistry = {
     'learn': { description: '學藝', execute: async (p,a,u)=>{ if(a.length<3||a[1]!=='from'){UI.print("learn <skill> from <master>","error");return;} const sid=a[0], mid=a[2]; const npc=findNPCInRoom(p.location,mid); if(!npc){UI.print("沒人","error");return;} if(!p.family||p.family.masterId!==npc.id){UI.print("需拜師","error");return;} if(!npc.skills[sid]){UI.print("他不會","chat");return;} if((p.skills[sid]||0)>=npc.skills[sid]){UI.print("學滿了","chat");return;} const spC=10+Math.floor((p.skills[sid]||0)/2), potC=5+Math.floor((p.skills[sid]||0)/5); if(p.attributes.sp<=spC){UI.print("精不足","error");return;} if((p.combat.potential||0)<potC){UI.print("潛能不足","error");return;} p.attributes.sp-=spC; p.combat.potential-=potC; p.skills[sid]=(p.skills[sid]||0)+1; UI.print(`學習了 ${SkillDB[sid].name} (${p.skills[sid]}級)`,"system"); await updatePlayer(u,{"attributes.sp":p.attributes.sp,"combat.potential":p.combat.potential,"skills":p.skills}); } },
     'practice': { description: '練習', execute: async (p,a,u)=>{ if(a.length===0){UI.print("practice <skill>","error");return;} const sid=a[0]; if(!SkillDB[sid]){UI.print("沒這招","error");return;} if(!(p.skills[sid])){UI.print("不會","error");return;} if(SkillDB[sid].base && p.skills[sid]>=p.skills[SkillDB[sid].base]){UI.print("基礎不足","error");return;} const cost=10+Math.floor(p.skills[sid]/2); if(p.attributes.hp<=cost){UI.print("氣不足","error");return;} p.attributes.hp-=cost; p.skills[sid]++; UI.print(`練習了 ${SkillDB[sid].name} (${p.skills[sid]}級)`,"system"); await updatePlayer(u,{"attributes.hp":p.attributes.hp,"skills":p.skills}); } },
     'buy': { description: '買', execute: async (p,a,u) => { if(a.length<1){UI.print("買啥?","error");return;} let n=a[0],amt=1,nn=null; if(a.length>=2&&!isNaN(a[1]))amt=parseInt(a[1]); if(a.indexOf('from')!==-1)nn=a[a.indexOf('from')+1]; else {const r=MapSystem.getRoom(p.location);if(r.npcs)nn=r.npcs[0];} const npc=findNPCInRoom(p.location,nn); if(!npc){UI.print("沒人","error");return;} let tid=null,pr=0; if(npc.shop[n]){tid=n;pr=npc.shop[n];}else{for(const[k,v]of Object.entries(npc.shop)){if(ItemDB[k]&&ItemDB[k].name===n){tid=k;pr=v;break;}}} if(!tid){UI.print("沒賣","error");return;} const tot=pr*amt; if((p.money||0)<tot){UI.print("錢不夠","error");return;} p.money-=tot; if(!p.inventory)p.inventory=[]; const ex=p.inventory.find(i=>i.id===tid); if(ex)ex.count+=amt; else p.inventory.push({id:tid,name:ItemDB[tid].name,count:amt}); UI.print(`買了 ${amt} ${ItemDB[tid].name}`,"system"); await updatePlayer(u,{money:p.money,inventory:p.inventory}); } },
-    'list': { description: '列表', execute: (p,a) => { const r=MapSystem.getRoom(p.location); let nn=null; if(a.length>0)nn=a[0]; else if(r.npcs)nn=r.npcs[0]; const npc=findNPCInRoom(p.location,nn); if(!npc||!npc.shop)return UI.print("沒賣東西","error"); let h=UI.titleLine(npc.name+" 商品"); for(const[k,v]of Object.entries(npc.shop)) h+=`<div>${ItemDB[k].name}: ${UI.formatMoney(v)} ${UI.makeCmd("[買1]",`buy ${k} 1 from ${npc.id}`,"cmd-btn")}</div>`; UI.print(h,"",true); } },
+    
+    // [UI修正] list 指令中，商品名稱後方加入 (id)
+    'list': { 
+        description: '列表', 
+        execute: (p,a) => { 
+            const r=MapSystem.getRoom(p.location); 
+            let nn=null; 
+            if(a.length>0)nn=a[0]; else if(r.npcs)nn=r.npcs[0]; 
+            const npc=findNPCInRoom(p.location,nn); 
+            if(!npc||!npc.shop)return UI.print("沒賣東西","error"); 
+            let h=UI.titleLine(npc.name+" 商品"); 
+            for(const[k,v]of Object.entries(npc.shop)) 
+                h+=`<div>${ItemDB[k].name} <span style="color:#888">(${k})</span>: ${UI.formatMoney(v)} ${UI.makeCmd("[買1]",`buy ${k} 1 from ${npc.id}`,"cmd-btn")}</div>`; 
+            UI.print(h,"",true); 
+        } 
+    },
+    
     'drop': { description: '丟', execute: async (p,a,u) => { if(a.length===0)return UI.print("丟啥?","error"); const idx=p.inventory.findIndex(x=>x.id===a[0]||x.name===a[0]); if(idx===-1)return UI.print("沒這個","error"); const it=p.inventory[idx]; if(it.count>1)it.count--; else p.inventory.splice(idx,1); await updatePlayer(u,{inventory:p.inventory}); await addDoc(collection(db,"room_items"),{roomId:p.location,itemId:it.id,name:it.name,droppedBy:p.name,timestamp:serverTimestamp()}); UI.print("丟了 "+it.name,"system"); MapSystem.look(p); } },
     'get': { description: '撿', execute: async (p,a,u) => { if(a.length===0)return UI.print("撿啥?","error"); const q=query(collection(db,"room_items"),where("roomId","==",p.location),where("itemId","==",a[0])); const snap=await getDocs(q); if(snap.empty)return UI.print("沒東西","error"); const d=snap.docs[0]; await deleteDoc(doc(db,"room_items",d.id)); const dat=d.data(); if(!p.inventory)p.inventory=[]; const ex=p.inventory.find(x=>x.id===dat.itemId); if(ex)ex.count++; else p.inventory.push({id:dat.itemId,name:dat.name,count:1}); await updatePlayer(u,{inventory:p.inventory}); UI.print("撿了 "+dat.name,"system"); MapSystem.look(p); } },
     'say': { description: '說', execute: (p,a)=>{const m=a.join(" ");UI.print(`你: ${m}`,"chat");MessageSystem.broadcast(p.location,`${p.name} 說: ${m}`);} },
