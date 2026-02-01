@@ -5,7 +5,6 @@ const output = document.getElementById('output');
 const input = document.getElementById('cmd-input');
 const sendBtn = document.getElementById('send-btn');
 const loginPanel = document.getElementById('login-panel');
-const loginMsg = document.getElementById('login-msg');
 
 const emailInput = document.getElementById('email-input');
 const pwdInput = document.getElementById('pwd-input');
@@ -15,14 +14,34 @@ const btnGuest = document.getElementById('btn-guest');
 
 const elRoomName = document.getElementById('current-room-name');
 
-// 自動功能按鈕參考
+// 儀表板元素 - 核心
+const barHp = document.getElementById('bar-hp');
+const textHp = document.getElementById('text-hp');
+const barForce = document.getElementById('bar-force');
+const textForce = document.getElementById('text-force');
+
+// 儀表板元素 - 精神
+const barSp = document.getElementById('bar-sp');
+const textSp = document.getElementById('text-sp');
+const barMp = document.getElementById('bar-mp');
+const textMp = document.getElementById('text-mp');
+
+// 儀表板元素 - 生存
+const barFood = document.getElementById('bar-food');
+const statusFood = document.getElementById('status-food');
 const btnAutoEat = document.getElementById('btn-auto-eat');
+
+const barWater = document.getElementById('bar-water');
+const statusWater = document.getElementById('status-water');
 const btnAutoDrink = document.getElementById('btn-auto-drink');
 
-// Enforce UI 參考
-const sliderEnforce = document.getElementById('slider-enforce');
+// 儀表板元素 - 內力控制
 const valEnforce = document.getElementById('val-enforce');
-const btnsEnforce = document.querySelectorAll('.btn-tiny[data-enforce]');
+const btnsEnforceStep = document.querySelectorAll('.btn-step');
+const btnsEnforceSet = document.querySelectorAll('.btn-step-set');
+
+// 暫存目前的內力值 (因為 UI 沒有 slider 了，需要變數暫存)
+let currentEnforceValue = 0;
 
 export const UI = {
     txt: (text, color = '#ccc', bold = false) => {
@@ -59,122 +78,176 @@ export const UI = {
         output.appendChild(div);
         output.scrollTop = output.scrollHeight;
     },
+    
     updateHUD: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
-        const updateBar = (barId, textId, current, max) => {
-            const barEl = document.getElementById(barId);
-            const textEl = document.getElementById(textId);
-            if (!barEl || !textEl) return;
-            const safeMax = max || 1; 
-            const safeCurrent = current || 0;
-            const percent = Math.max(0, Math.min(100, (safeCurrent / safeMax) * 100));
+        
+        // Helper: 更新進度條寬度與文字
+        const updateBar = (barEl, textEl, current, max, isThin = false) => {
+            if (!barEl) return;
+            const safeMax = max || 1;
+            const safeCurrent = Math.max(0, current || 0);
+            const percent = Math.min(100, (safeCurrent / safeMax) * 100);
+            
             barEl.style.width = `${percent}%`;
-            textEl.textContent = `${safeCurrent}/${safeMax}`;
+            
+            if (textEl) {
+                // 如果是生存條，顯示狀態文字而非數字
+                if (textEl.id.includes('status')) {
+                    if (percent < 20) textEl.textContent = "飢渴";
+                    else if (percent < 50) textEl.textContent = "普通";
+                    else textEl.textContent = "充盈";
+                    
+                    if (percent < 20) textEl.style.color = "#ff5555";
+                    else textEl.style.color = "#888";
+                } else {
+                    textEl.textContent = `${safeCurrent}/${safeMax}`;
+                }
+            }
         };
 
-        updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp);
-        updateBar('bar-sp', 'text-sp', attr.sp, attr.maxSp);
-        updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp);
-        updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual);
-        updateBar('bar-force', 'text-force', attr.force, attr.maxForce);
-        updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana);
-        updateBar('bar-food', 'text-food', attr.food, attr.maxFood);
-        updateBar('bar-water', 'text-water', attr.water, attr.maxWater);
+        // 1. 核心條
+        updateBar(barHp, textHp, attr.hp, attr.maxHp);
+        updateBar(barForce, textForce, attr.force, attr.maxForce);
 
-        if (sliderEnforce && valEnforce) {
-            const currentEnforce = (playerData.combat && playerData.combat.enforce) ? playerData.combat.enforce : 0;
-            if (parseInt(sliderEnforce.value) !== currentEnforce) {
-                sliderEnforce.value = currentEnforce;
-            }
-            valEnforce.textContent = `${currentEnforce} 成`;
-            valEnforce.style.color = currentEnforce > 0 ? "#ff9800" : "#aaa";
+        // 2. 精神條 (使用 SP/MP)
+        // 這裡將 精神(SP) 與 精(Spiritual) 的概念做一些視覺整合
+        // 介面上顯示 SP(精) 與 MP(神) 為主
+        updateBar(barSp, textSp, attr.sp, attr.maxSp);
+        updateBar(barMp, textMp, attr.mp, attr.maxMp);
+
+        // 3. 生存條
+        updateBar(barFood, statusFood, attr.food, attr.maxFood);
+        updateBar(barWater, statusWater, attr.water, attr.maxWater);
+
+        // 4. 更新內力顯示 (Server 同步)
+        const serverEnforce = (playerData.combat && playerData.combat.enforce) ? playerData.combat.enforce : 0;
+        currentEnforceValue = serverEnforce; // 同步本地變數
+        if(valEnforce) {
+            valEnforce.textContent = currentEnforceValue;
+            valEnforce.style.color = currentEnforceValue > 0 ? "#ff9800" : "#444";
         }
 
+        // 5. 更新地圖
         const currentRoom = WorldMap[playerData.location];
         if (currentRoom) {
             UI.drawRangeMap(currentRoom.x, currentRoom.y, currentRoom.z, playerData.location);
         }
     },
+
     drawRangeMap: (px, py, pz, currentId) => {
         const miniMapBox = document.getElementById('mini-map-box');
+        if(!miniMapBox) return;
         miniMapBox.innerHTML = ''; 
+        
         const grid = document.createElement('div');
         grid.className = 'range-map-grid';
-        const radius = 2; 
+        const radius = 2; // 5x5 的半徑是 2
+        
+        // 取得當前房間的區域，用於地圖過濾 (只顯示同區域)
         const currentRoomData = WorldMap[currentId];
         const currentRegions = currentRoomData ? (currentRoomData.region || ["world"]) : ["world"];
+
         for (let y = py + radius; y >= py - radius; y--) {
             for (let x = px - radius; x <= px + radius; x++) {
                 const div = document.createElement('div');
                 div.className = 'map-cell-range';
+                
                 let roomData = null;
+                // 搜尋該座標的房間
                 for (const [key, val] of Object.entries(WorldMap)) {
                     if (val.x === x && val.y === y && val.z === pz) {
                         const targetRegions = val.region || ["world"];
                         const hasCommonRegion = currentRegions.some(r => targetRegions.includes(r));
-                        if (hasCommonRegion) roomData = val;
-                        break;
+                        if (hasCommonRegion) {
+                            roomData = val;
+                            break;
+                        }
                     }
                 }
+
                 if (roomData) {
                     div.classList.add('room-exists');
-                    div.title = roomData.title;
+                    div.title = roomData.title; // Tooltip
+                    
+                    // 我
                     if (x === px && y === py) {
                         div.classList.add('current-pos');
-                        div.textContent = "我";
+                        // 使用 FontAwesome 圖示代表玩家
+                        div.innerHTML = '<i class="fas fa-user"></i>';
                     } else {
-                        div.textContent = roomData.title.substring(0, 1);
+                        // 其他房間，依據出口畫牆壁
+                        if (roomData.walls) {
+                            if (roomData.walls.includes('north')) div.classList.add('wall-north');
+                            if (roomData.walls.includes('south')) div.classList.add('wall-south');
+                            if (roomData.walls.includes('east'))  div.classList.add('wall-east');
+                            if (roomData.walls.includes('west'))  div.classList.add('wall-west');
+                        }
                     }
-                    if (roomData.walls) {
-                        if (roomData.walls.includes('north')) div.classList.add('wall-north');
-                        if (roomData.walls.includes('south')) div.classList.add('wall-south');
-                        if (roomData.walls.includes('east'))  div.classList.add('wall-east');
-                        if (roomData.walls.includes('west'))  div.classList.add('wall-west');
-                    }
-                } else {
-                    div.classList.add('empty');
-                }
+                } 
                 grid.appendChild(div);
             }
         }
+        
+        // 顯示樓層 Z 軸
         const zInfo = document.createElement('div');
         zInfo.style.position = 'absolute';
-        zInfo.style.bottom = '2px';
+        zInfo.style.bottom = '5px';
         zInfo.style.right = '5px';
         zInfo.style.fontSize = '10px';
         zInfo.style.color = '#555';
-        zInfo.textContent = `層級: ${pz}`;
+        zInfo.style.background = 'rgba(0,0,0,0.5)';
+        zInfo.style.padding = '2px 4px';
+        zInfo.style.borderRadius = '3px';
+        zInfo.textContent = `層: ${pz}`;
         miniMapBox.appendChild(zInfo);
         miniMapBox.appendChild(grid);
     },
-    updateLocationInfo: (roomTitle) => { elRoomName.textContent = roomTitle; },
+
+    updateLocationInfo: (roomTitle) => { 
+        if(elRoomName) elRoomName.textContent = roomTitle; 
+    },
+
     enableGameInput: (enabled) => {
         input.disabled = !enabled;
         sendBtn.disabled = !enabled;
-        document.querySelectorAll('.btn-move, .btn-action, .btn-toggle').forEach(btn => btn.disabled = !enabled);
-        if (sliderEnforce) sliderEnforce.disabled = !enabled; 
-        btnsEnforce.forEach(btn => btn.disabled = !enabled); 
+        
+        // 禁用/啟用所有按鈕
+        const allBtns = document.querySelectorAll('button:not(#btn-login):not(#btn-register):not(#btn-guest)');
+        allBtns.forEach(btn => btn.disabled = !enabled);
 
         if (enabled) { input.placeholder = "請輸入指令..."; input.focus(); } 
         else { input.placeholder = "請先登入..."; }
     },
+
     showLoginPanel: (show) => {
         loginPanel.style.display = show ? 'block' : 'none';
         if (show) emailInput.focus();
     },
+
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
     
+    // === 自動按鈕改為圖示點擊事件 ===
     onAutoToggle: (callbacks) => {
         btnAutoEat.addEventListener('click', () => {
-            const newState = callbacks.toggleEat();
-            btnAutoEat.textContent = `自動進食: ${newState ? '開' : '關'}`;
-            btnAutoEat.classList.toggle('active', newState);
+            const isActive = callbacks.toggleEat();
+            btnAutoEat.classList.toggle('active', isActive);
+            const icon = btnAutoEat.querySelector('i');
+            if(isActive) icon.classList.add('fa-beat-fade'); // FontAwesome 動畫
+            else icon.classList.remove('fa-beat-fade');
+            
+            UI.print(`[系統] 自動進食已${isActive ? '開啟' : '關閉'}。`, "system");
         });
+
         btnAutoDrink.addEventListener('click', () => {
-            const newState = callbacks.toggleDrink();
-            btnAutoDrink.textContent = `自動飲水: ${newState ? '開' : '關'}`;
-            btnAutoDrink.classList.toggle('active', newState);
+            const isActive = callbacks.toggleDrink();
+            btnAutoDrink.classList.toggle('active', isActive);
+            const icon = btnAutoDrink.querySelector('i');
+            if(isActive) icon.classList.add('fa-beat-fade');
+            else icon.classList.remove('fa-beat-fade');
+
+            UI.print(`[系統] 自動飲水已${isActive ? '開啟' : '關閉'}。`, "system");
         });
     },
 
@@ -184,62 +257,62 @@ export const UI = {
             if (val) {
                 UI.print(`> ${val}`);
                 callback(val);
-                input.select(); 
+                input.value = ''; // 清空
             }
         };
+
         sendBtn.addEventListener('click', sendHandler);
         input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendHandler(); });
-        document.querySelectorAll('.btn-move, .btn-action').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const cmd = btn.dataset.dir || btn.dataset.cmd;
-                if (cmd) {
-                    UI.print(`> ${cmd}`);
-                    callback(cmd);
-                    input.value = cmd;
-                    input.select();
+
+        // 綁定所有帶有 data-cmd 或 data-dir 的按鈕
+        document.body.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            
+            // 處理通用指令按鈕
+            const cmd = btn.dataset.cmd || btn.dataset.dir;
+            if (cmd) {
+                // 如果是按鈕觸發的，顯示在畫面上，但不清空輸入框
+                UI.print(`> ${cmd}`);
+                callback(cmd);
+                return;
+            }
+
+            // === 內力控制按鈕邏輯 ===
+            if (btn.classList.contains('btn-step') || btn.classList.contains('btn-step-set')) {
+                let newVal = currentEnforceValue;
+
+                if (btn.dataset.enforceSet !== undefined) {
+                    newVal = parseInt(btn.dataset.enforceSet);
+                } else if (btn.dataset.enforceMod !== undefined) {
+                    newVal += parseInt(btn.dataset.enforceMod);
                 }
-            });
+
+                // 限制範圍 0-10
+                newVal = Math.max(0, Math.min(10, newVal));
+
+                if (newVal !== currentEnforceValue) {
+                    currentEnforceValue = newVal;
+                    valEnforce.textContent = currentEnforceValue;
+                    valEnforce.style.color = currentEnforceValue > 0 ? "#ff9800" : "#444";
+                    
+                    const cmdStr = `enforce ${currentEnforceValue}`;
+                    UI.print(`> ${cmdStr}`);
+                    callback(cmdStr);
+                }
+            }
         });
+
+        // 處理動態生成的文字連結 (cmd-link)
         output.addEventListener('click', (e) => {
-            if (e.target && e.target.dataset.cmd) {
+            if (e.target && e.target.classList.contains('cmd-link')) {
                 const cmd = e.target.dataset.cmd;
                 UI.print(`> ${cmd}`);
                 callback(cmd);
-                input.value = cmd;
-                input.select();
             }
         });
-
-        // === [新增] 滑動條與按鈕的回顯邏輯 ===
-        if (sliderEnforce) {
-            sliderEnforce.addEventListener('input', (e) => {
-                const val = e.target.value;
-                valEnforce.textContent = `${val} 成`;
-                valEnforce.style.color = val > 0 ? "#ff9800" : "#aaa";
-            });
-
-            sliderEnforce.addEventListener('change', (e) => {
-                const val = e.target.value;
-                const cmd = `enforce ${val}`;
-                UI.print(`> ${cmd}`); // 回顯指令
-                callback(cmd);
-            });
-        }
-
-        btnsEnforce.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const val = btn.dataset.enforce;
-                if (sliderEnforce) {
-                    sliderEnforce.value = val;
-                    valEnforce.textContent = `${val} 成`;
-                    valEnforce.style.color = val > 0 ? "#ff9800" : "#aaa";
-                }
-                const cmd = `enforce ${val}`;
-                UI.print(`> ${cmd}`); // 回顯指令
-                callback(cmd);
-            });
-        });
     },
+
     onAuthAction: (callbacks) => {
         btnLogin.addEventListener('click', () => { callbacks.onLogin(emailInput.value, pwdInput.value); });
         btnRegister.addEventListener('click', () => { callbacks.onRegister(emailInput.value, pwdInput.value); });

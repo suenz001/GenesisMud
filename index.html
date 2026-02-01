@@ -4,182 +4,143 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>創世江湖行 - GenesisMud</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
-    <style>
-        .btn-tiny {
-            background: #333;
-            color: #ccc;
-            border: 1px solid #555;
-            border-radius: 3px;
-            font-size: 10px;
-            padding: 2px 5px;
-            cursor: pointer;
-        }
-        .btn-tiny:hover {
-            background: #444;
-            color: #fff;
-            border-color: #ff9800;
-        }
-    </style>
 </head>
 <body>
     <div id="game-wrapper">
-        <div id="header">【創世江湖行】GenesisMud - Ver 0.3.8 (師徒與數值優化)</div>
+        <div id="header">【創世江湖行】GenesisMud - Ver 0.4.0 (UI重製版)</div>
         
         <div id="game-body">
             <div id="main-display">
                 <div id="output"></div>
                 <div id="input-area">
                     <input type="text" id="cmd-input" placeholder="系統載入中..." disabled>
-                    <button id="send-btn" disabled>發送</button>
+                    <button id="send-btn" disabled><i class="fas fa-paper-plane"></i></button>
                 </div>
             </div>
 
             <div id="sidebar">
                 
-                <div class="panel-box" id="panel-map">
-                    <div id="current-room-name">-- 未知 --</div>
-                    <div id="mini-map-box">地圖區域</div>
+                <div class="dash-panel" id="panel-radar">
+                    <div id="location-header">
+                        <i class="fas fa-map-marker-alt"></i> <span id="current-room-name">-- 未知 --</span>
+                    </div>
+                    <div id="mini-map-box">
+                        </div>
                 </div>
 
-                <div class="panel-box" id="panel-status">
-                    <div class="status-group">
-                        <div class="status-row">
-                            <span class="label">精</span>
-                            <div class="bar-container">
-                                <div id="bar-sp" class="bar-fill sp" style="width: 100%;"></div>
-                                <span id="text-sp" class="bar-text">100/100</span>
-                            </div>
+                <div class="dash-panel" id="panel-vitals">
+                    <div class="vital-row main-vital">
+                        <div class="vital-icon hp"><i class="fas fa-heart"></i></div>
+                        <div class="bar-outer">
+                            <div id="bar-hp" class="bar-inner hp-fill" style="width: 100%;"></div>
+                            <span id="text-hp" class="bar-text">100/100</span>
                         </div>
-                        <div class="status-row sub-stat">
-                            <span class="label">靈力</span>
-                            <div class="bar-container">
-                                <div id="bar-spiritual" class="bar-fill spiritual" style="width: 0%;"></div>
-                                <span id="text-spiritual" class="bar-text">0/0</span>
-                            </div>
+                    </div>
+                    <div class="vital-row main-vital">
+                        <div class="vital-icon force"><i class="fas fa-fire"></i></div>
+                        <div class="bar-outer">
+                            <div id="bar-force" class="bar-inner force-fill" style="width: 0%;"></div>
+                            <span id="text-force" class="bar-text">0/0</span>
                         </div>
                     </div>
 
-                    <div class="status-group">
-                        <div class="status-row">
-                            <span class="label">氣</span>
-                            <div class="bar-container">
-                                <div id="bar-hp" class="bar-fill hp" style="width: 100%;"></div>
-                                <span id="text-hp" class="bar-text">100/100</span>
+                    <div class="sub-vitals-grid">
+                        <div class="vital-col">
+                            <span class="label">精 SP</span>
+                            <div class="bar-thin-outer">
+                                <div id="bar-sp" class="bar-thin-inner sp-fill" style="width: 100%;"></div>
                             </div>
+                            <span id="text-sp" class="val-text">100/100</span>
                         </div>
-                        <div class="status-row sub-stat">
-                            <span class="label">內力</span>
-                            <div class="bar-container">
-                                <div id="bar-force" class="bar-fill force" style="width: 0%;"></div>
-                                <span id="text-force" class="bar-text">0/0</span>
+                        <div class="vital-col">
+                            <span class="label">神 MP</span>
+                            <div class="bar-thin-outer">
+                                <div id="bar-mp" class="bar-thin-inner mp-fill" style="width: 100%;"></div>
                             </div>
+                            <span id="text-mp" class="val-text">100/100</span>
                         </div>
                     </div>
 
-                    <div class="status-group">
-                        <div class="status-row">
-                            <span class="label">神</span>
-                            <div class="bar-container">
-                                <div id="bar-mp" class="bar-fill mp" style="width: 100%;"></div>
-                                <span id="text-mp" class="bar-text">100/100</span>
+                    <div class="survival-grid">
+                        <div class="survival-item" id="btn-auto-eat" title="點擊切換自動進食">
+                            <i class="fas fa-bowl-rice survival-icon"></i>
+                            <div class="survival-bars">
+                                <div id="bar-food" class="s-bar" style="width: 100%;"></div>
                             </div>
+                            <span id="status-food">飽</span>
                         </div>
-                        <div class="status-row sub-stat">
-                            <span class="label">法力</span>
-                            <div class="bar-container">
-                                <div id="bar-mana" class="bar-fill mana" style="width: 0%;"></div>
-                                <span id="text-mana" class="bar-text">0/0</span>
+                        <div class="survival-item" id="btn-auto-drink" title="點擊切換自動飲水">
+                            <i class="fas fa-wine-bottle survival-icon"></i>
+                            <div class="survival-bars">
+                                <div id="bar-water" class="s-bar" style="width: 100%;"></div>
                             </div>
+                            <span id="status-water">渴</span>
                         </div>
                     </div>
-
-                    <div class="status-group">
-                        <div class="status-row">
-                            <span class="label">飽食</span>
-                            <div class="bar-container">
-                                <div id="bar-food" class="bar-fill food" style="width: 100%;"></div>
-                                <span id="text-food" class="bar-text">100/100</span>
-                            </div>
-                        </div>
-                        <div class="status-row">
-                            <span class="label">飲水</span>
-                            <div class="bar-container">
-                                <div id="bar-water" class="bar-fill water" style="width: 100%;"></div>
-                                <span id="text-water" class="bar-text">100/100</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="status-group" style="margin-top: 5px; background: rgba(255, 152, 0, 0.1); border: 1px solid #553300;">
-                        <div style="font-size: 12px; color: #ffb74d; margin-bottom: 2px; display: flex; justify-content: space-between;">
-                            <span>內力運用 (Enforce)</span>
-                            <span id="val-enforce" style="font-weight: bold;">0 成</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 5px;">
-                            <input type="range" id="slider-enforce" min="0" max="10" step="1" value="0" style="flex-grow: 1; cursor: pointer;">
-                        </div>
-                        <div style="display: flex; justify-content: space-between; margin-top: 4px;">
-                            <button class="btn-tiny" data-enforce="0">0成</button>
-                            <button class="btn-tiny" data-enforce="3">3成</button>
-                            <button class="btn-tiny" data-enforce="5">5成</button>
-                            <button class="btn-tiny" data-enforce="8">8成</button>
-                            <button class="btn-tiny" data-enforce="10">10成</button>
-                        </div>
-                    </div>
-
                 </div>
 
-                <div class="panel-box" style="display: flex; gap: 5px;">
-                    <button id="btn-auto-eat" class="btn-toggle" style="flex: 1; font-size: 12px;">自動進食: 關</button>
-                    <button id="btn-auto-drink" class="btn-toggle" style="flex: 1; font-size: 12px;">自動飲水: 關</button>
+                <div class="dash-panel" id="panel-enforce">
+                    <div class="panel-title-sm">內力運用 (Enforce)</div>
+                    <div class="enforce-control">
+                        <button class="btn-step" data-enforce-mod="-1"><i class="fas fa-minus"></i></button>
+                        <button class="btn-step-set" data-enforce-set="0">收</button>
+                        <div class="enforce-display">
+                            <span id="val-enforce">0</span>
+                            <span class="unit">成</span>
+                        </div>
+                        <button class="btn-step-set" data-enforce-set="10">滿</button>
+                        <button class="btn-step" data-enforce-mod="1"><i class="fas fa-plus"></i></button>
+                    </div>
                 </div>
 
-                <div class="panel-box" id="panel-move">
-                    <div class="d-pad">
-                        <button class="btn-move" data-dir="nw">↖</button>
-                        <button class="btn-move" data-dir="n">北</button>
-                        <button class="btn-move" data-dir="ne">↗</button>
+                <div class="dash-panel" id="panel-move">
+                    <div class="dpad-container">
+                        <button class="btn-dir nw" data-dir="nw">↖</button>
+                        <button class="btn-dir n" data-dir="n">北</button>
+                        <button class="btn-dir ne" data-dir="ne">↗</button>
                         
-                        <button class="btn-move" data-dir="w">西</button>
-                        <button class="btn-action" data-cmd="look">看</button>
-                        <button class="btn-move" data-dir="e">東</button>
+                        <button class="btn-dir w" data-dir="w">西</button>
+                        <button class="btn-action-center" data-cmd="look">看</button>
+                        <button class="btn-dir e" data-dir="e">東</button>
                         
-                        <button class="btn-move" data-dir="sw">↙</button>
-                        <button class="btn-move" data-dir="s">南</button>
-                        <button class="btn-move" data-dir="se">↘</button>
+                        <button class="btn-dir sw" data-dir="sw">↙</button>
+                        <button class="btn-dir s" data-dir="s">南</button>
+                        <button class="btn-dir se" data-dir="se">↘</button>
                     </div>
-                    <div style="margin-top: 5px; display: flex; gap: 5px; justify-content: center;">
-                        <button class="btn-move" data-dir="up" style="flex: 1;">往上</button>
-                        <button class="btn-move" data-dir="down" style="flex: 1;">往下</button>
+                    <div class="vertical-move">
+                        <button class="btn-v-move" data-dir="up"><i class="fas fa-arrow-up"></i> 上樓</button>
+                        <button class="btn-v-move" data-dir="down"><i class="fas fa-arrow-down"></i> 下樓</button>
                     </div>
                 </div>
 
-                <div class="panel-box">
-                    <div class="action-grid">
-                        <button class="btn-action" data-cmd="score">狀態</button>
-                        <button class="btn-action" data-cmd="skills">技能</button>
-                        <button class="btn-action" data-cmd="inventory">物品</button>
-                        <button class="btn-action" data-cmd="save">存檔</button>
-                        <button class="btn-action" data-cmd="recall">回城</button>
-                        <button class="btn-action" data-cmd="help">說明</button>
+                <div class="dash-panel" id="panel-utility">
+                    <div class="utility-grid">
+                        <button class="btn-util" data-cmd="score" title="狀態 (Score)"><i class="fas fa-user-ninja"></i></button>
+                        <button class="btn-util" data-cmd="inventory" title="背包 (Inventory)"><i class="fas fa-box-open"></i></button>
+                        <button class="btn-util" data-cmd="skills" title="武學 (Skills)"><i class="fas fa-book-dead"></i></button>
+                        <button class="btn-util" data-cmd="save" title="存檔 (Save)"><i class="fas fa-save"></i></button>
+                        <button class="btn-util" data-cmd="recall" title="回城 (Recall)"><i class="fas fa-dungeon"></i></button>
+                        <button class="btn-util" data-cmd="help" title="說明 (Help)"><i class="fas fa-question-circle"></i></button>
                     </div>
                 </div>
+
             </div>
         </div>
 
         <div id="login-panel">
-            <div style="color: #33ff33; margin-bottom: 10px;">請先登入</div>
+            <div style="color: #33ff33; margin-bottom: 10px; font-weight: bold; font-size: 1.2em;">江湖入口</div>
             <input type="email" id="email-input" placeholder="電子信箱">
             <input type="password" id="pwd-input" placeholder="密碼">
-            <div>
+            <div class="login-btns">
                 <button id="btn-login">登入</button>
                 <button id="btn-register">註冊</button>
             </div>
-            <div style="margin-top: 10px; border-top: 1px solid #444; padding-top: 10px;">
+            <div style="margin-top: 15px; border-top: 1px solid #444; padding-top: 15px;">
                 <button id="btn-guest">匿名試玩 (Guest)</button>
             </div>
-            <div id="login-msg" style="color: red; margin-top: 5px; font-size: 12px;"></div>
+            <div id="login-msg" style="color: #ff5555; margin-top: 10px; font-size: 12px; min-height: 1.5em;"></div>
         </div>
     </div>
 
