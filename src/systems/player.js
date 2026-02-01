@@ -29,6 +29,7 @@ export function getEffectiveSkillLevel(entity, baseType) {
         advancedLvl = skills[enabledId];
     }
 
+    // 進階武功等級不能超過基礎武功等級
     if (advancedLvl > baseLvl) {
         advancedLvl = baseLvl;
     }
@@ -101,7 +102,7 @@ export function getCombatStats(entity) {
     };
 }
 
-// === [新增] 智慧修練指令生成邏輯 ===
+// === 智慧修練指令生成邏輯 ===
 function getSmartTrainCmd(cmd, cur, max) {
     const limit = max * 2;
     // 1. 若未滿最大值，補到滿 (Cost = Gap)
@@ -115,17 +116,61 @@ function getSmartTrainCmd(cmd, cur, max) {
 
 export const PlayerSystem = {
     updatePlayer, 
+    
     save: async (p, a, u) => {
+        if (p.state === 'fighting') {
+             UI.print("戰鬥中不能存檔！", "error");
+             return;
+        }
         const room = MapSystem.getRoom(p.location);
         let updateData = { lastSaved: new Date().toISOString() };
         let msg = "遊戲進度已保存。";
+        
+        // 只有在允許存檔的地方才會更新重生點
         if (room && room.allowSave) {
             updateData.savePoint = p.location;
             msg += " (重生點已更新至此處)";
         }
+        
+        // 這裡我們也順便把其他重要狀態存入，確保萬無一失
+        updateData.attributes = p.attributes;
+        updateData.skills = p.skills;
+        updateData.inventory = p.inventory;
+        updateData.money = p.money;
+        updateData.equipment = p.equipment;
+        
         await updatePlayer(u, updateData);
         UI.print(msg, "system");
     },
+
+    // === [新增] 離開遊戲 ===
+    quit: async (p, a, u) => {
+        if (p.state === 'fighting') {
+            UI.print("戰鬥中不能離開遊戲！請先解決眼前的對手。", "error");
+            return;
+        }
+        
+        UI.print("你決定暫時離開這個江湖，改日再來。", "system");
+        UI.print("正在保存檔案...", "system");
+        
+        // 執行完整存檔 (確保最新狀態被保存)
+        await updatePlayer(u, {
+            location: p.location,
+            attributes: p.attributes,
+            skills: p.skills,
+            inventory: p.inventory,
+            money: p.money,
+            equipment: p.equipment,
+            combat: p.combat,
+            state: 'normal',
+            combatTarget: null,
+            lastSaved: new Date().toISOString()
+        });
+
+        // 登出 Firebase，這會觸發 main.js 的 onAuthStateChanged，自動回到登入畫面
+        await signOut(auth);
+    },
+
     score: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
@@ -158,7 +203,7 @@ export const PlayerSystem = {
         html += `<div>${UI.attrLine("食物", attr.food+"/"+attr.maxFood)}</div><div>${UI.attrLine("飲水", attr.water+"/"+attr.maxWater)}</div>`;
         html += `</div><br>`;
 
-        // === [修改] 智慧按鈕生成 ===
+        // === 智慧按鈕生成 ===
         const cmdSp = getSmartTrainCmd("respirate", attr.spiritual, attr.maxSpiritual);
         const cmdHp = getSmartTrainCmd("exercise", attr.force, attr.maxForce);
         const cmdMp = getSmartTrainCmd("meditate", attr.mana, attr.maxMana);
@@ -187,6 +232,7 @@ export const PlayerSystem = {
         
         UI.print(html, 'chat', true);
     },
+
     enforce: async (p, a, u) => {
         if (a.length === 0) {
             UI.print(`目前內力運用：${p.combat.enforce || 0} 成`, "system");
@@ -203,6 +249,7 @@ export const PlayerSystem = {
         else UI.print(`你將全身功力凝聚，使用了 ${lvl} 成內力加強攻擊！`, "system");
         await updatePlayer(u, { "combat.enforce": lvl });
     },
+
     suicide: async (p, a, u) => {
         if(a[0]==='confirm'){
             await deleteDoc(doc(db,"players",u));
@@ -211,8 +258,10 @@ export const PlayerSystem = {
             UI.print("請輸入 suicide confirm 以確認刪除角色。", "error");
         }
     },
+
     help: () => {
         let msg = UI.titleLine("江湖指南");
+        msg += UI.txt(" 系統指令：", "#fff") + "save, quit, suicide\n";
         msg += UI.txt(" 裝備指令：", "#ff5555") + "wield, unwield, wear, unwear\n";
         msg += UI.txt(" 基本指令：", "#00ffff") + "score, skills, inventory (i)\n";
         msg += UI.txt(" 武學指令：", "#ff5555") + "apprentice, learn, enable, unenable, practice\n";
