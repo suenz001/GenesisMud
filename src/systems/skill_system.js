@@ -154,7 +154,7 @@ export const SkillSystem = {
                 msg += `${UI.txt(type, "#00ffff")} : ${sInfo ? sInfo.name : skillId}\n`;
             }
             if (Object.keys(playerData.enabled_skills).length === 0) msg += "無\n";
-            UI.print(msg, 'system', true); // === 修正：這裡本來是 system，建議加 true ===
+            UI.print(msg, 'system', true); 
             return;
         }
 
@@ -164,7 +164,6 @@ export const SkillSystem = {
         if (!playerData.skills || !playerData.skills[skillId]) { UI.print("你不會這招。", "error"); return; }
         const skillInfo = SkillDB[skillId];
         
-        // === [修正] 激發檢查：是否有基礎武學 ===
         if (skillInfo.base) {
              const baseLvl = playerData.skills[skillInfo.base] || 0;
              if (baseLvl <= 0) {
@@ -200,23 +199,24 @@ export const SkillSystem = {
     },
 
     learn: async (p,a,u) => { 
-        if(a.length<3||a[1]!=='from'){UI.print("learn <skill> from <master>","error");return;} 
+        if(a.length<3||a[1]!=='from'){UI.print("指令格式：learn <技能ID> from <師父ID>","error");return;} 
         const sid=a[0], mid=a[2]; 
         const npc=findNPCInRoom(p.location,mid); 
-        if(!npc){UI.print("沒人","error");return;} 
-        if(!p.family||p.family.masterId!==npc.id){UI.print("需拜師","error");return;} 
-        if(!npc.skills[sid]){UI.print("他不會","chat");return;} 
+        if(!npc){UI.print("這裡沒有這個人。","error");return;} 
+        if(!p.family||p.family.masterId!==npc.id){UI.print("你必須先拜師才能向他請教。","error");return;} 
+        if(!npc.skills[sid]){UI.print("師父並不會這招。","chat");return;} 
         
         // 檢查 1: 不能超過師傅
         if((p.skills[sid]||0)>=npc.skills[sid]){UI.print("這招你已經學滿了，師父沒什麼好教你的了。","chat");return;} 
         
         const skillInfo = SkillDB[sid];
 
-        // === [修正] 檢查 2: 基礎武學檢查 ===
+        // 檢查 2: 基礎武學檢查
         if (skillInfo && skillInfo.base) {
             const baseLvl = p.skills[skillInfo.base] || 0;
+            const baseName = SkillDB[skillInfo.base] ? SkillDB[skillInfo.base].name : skillInfo.base;
+            
             if (baseLvl <= 0) {
-                const baseName = SkillDB[skillInfo.base] ? SkillDB[skillInfo.base].name : skillInfo.base;
                 UI.print(`你的${baseName}毫無根基，怎麼學得會這高深招式？`, "error");
                 return;
             }
@@ -228,12 +228,17 @@ export const SkillSystem = {
             }
         }
 
-        const spC=10+Math.floor((p.skills[sid]||0)/2), potC=5+Math.floor((p.skills[sid]||0)/5); 
-        if(p.attributes.sp<=spC){UI.print("精不足","error");return;} 
-        if((p.combat.potential||0)<potC){UI.print("潛能不足","error");return;} 
+        const spC=10+Math.floor((p.skills[sid]||0)/2);
+        const potC=5+Math.floor((p.skills[sid]||0)/5); 
+        
+        if(p.attributes.sp<=spC){UI.print("你現在精神不濟，無法專心聽講。(需要精: "+spC+")","error");return;} 
+        if((p.combat.potential||0)<potC){UI.print("你的潛能不足，無法領悟其中的奧妙。(需要潛能: "+potC+")","error");return;} 
         
         p.attributes.sp-=spC; p.combat.potential-=potC; p.skills[sid]=(p.skills[sid]||0)+1; 
-        UI.print(`學習了 ${SkillDB[sid].name} (${p.skills[sid]}級)`,"system"); 
+        
+        // === [修正] 顯示消耗數值 ===
+        UI.print(`你聽了${npc.name}的指導，消耗了 ${potC} 點潛能、${spC} 點精，${SkillDB[sid].name} 的修為提高了！(${p.skills[sid]}級)`, "system"); 
+        
         await updatePlayer(u,{"attributes.sp":p.attributes.sp,"combat.potential":p.combat.potential,"skills":p.skills}); 
     },
     
@@ -241,9 +246,8 @@ export const SkillSystem = {
         if(a.length===0){UI.print("practice <skill>","error");return;} 
         const sid=a[0]; 
         if(!SkillDB[sid]){UI.print("沒這招","error");return;} 
-        if(!(p.skills[sid])){UI.print("不會","error");return;} 
+        if(!(p.skills[sid])){UI.print("你不會這招，怎麼練習？","error");return;} 
         
-        // === [修正] 練習檢查：基礎武學 ===
         if (SkillDB[sid].base) {
             const baseLvl = p.skills[SkillDB[sid].base] || 0;
             if (p.skills[sid] >= baseLvl) {
@@ -254,9 +258,10 @@ export const SkillSystem = {
         }
 
         const cost=10+Math.floor(p.skills[sid]/2); 
-        if(p.attributes.hp<=cost){UI.print("氣不足","error");return;} 
+        if(p.attributes.hp<=cost){UI.print("你氣息不順，需要休息一下。(需要氣: "+cost+")","error");return;} 
+        
         p.attributes.hp-=cost; p.skills[sid]++; 
-        UI.print(`練習了 ${SkillDB[sid].name} (${p.skills[sid]}級)`,"system"); 
+        UI.print(`你找了個空地練習${SkillDB[sid].name}，消耗了 ${cost} 點氣，修為提高了！(${p.skills[sid]}級)`, "system"); 
         await updatePlayer(u,{"attributes.hp":p.attributes.hp,"skills":p.skills}); 
     }
 };
