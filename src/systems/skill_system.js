@@ -38,57 +38,106 @@ function findNPCInRoom(roomId, npcNameOrId) {
 }
 
 export const SkillSystem = {
+    // === [修改重點] 整合了內力瓶頸與氣血反哺邏輯 ===
     trainStat: async (playerData, userId, typeName, attrCur, attrMax, costAttr, costName) => {
         const attr = playerData.attributes;
-        if (attr[costAttr] < 20) { UI.print(`你的${costName}不足，無法修練。`, "error"); return; }
+        
+        // 1. 檢查燃料 (氣/HP) 是否足夠
+        if (attr[costAttr] < 20) { 
+            UI.print(`你的${costName}不足，無法修練。`, "error"); 
+            return; 
+        }
     
         const maxVal = attr[attrMax];
         const curVal = attr[attrCur];
         const limit = maxVal * 2; 
     
-        if (curVal >= limit) { UI.print(`你的${typeName}修為已達瓶頸，無法再累積了。`, "system"); return; }
+        // 2. 檢查當前內力是否已達修練上限 (current > max * 2)
+        if (curVal >= limit) { 
+            UI.print(`你的${typeName}充滿了丹田，必須先提升上限才能繼續累積。`, "system"); 
+            return; 
+        }
     
+        // === [新增邏輯] 3. 內力修練的特殊瓶頸檢查 (只針對內力 force) ===
+        if (typeName === "內力") {
+            const forceSkillLvl = playerData.skills.force || 0;
+            const conBonus = playerData.attributes.con || 20;
+            // 上限公式： (基本內功 + 根骨) * 10
+            const maxCap = (forceSkillLvl + conBonus) * 10;
+
+            if (maxVal >= maxCap) {
+                UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system");
+                UI.print(`(內力上限已達 ${maxVal}，需提升基本內功等級或根骨才能突破)`, "system");
+                return;
+            }
+        }
+
         const cost = 10;
+        // 效率：內功越高，轉化越快
         const gain = 5 + Math.floor((playerData.skills?.force || 0) / 10); 
         
         let improved = false;
         
+        // 4. 執行修練：如果當前內力已經滿出來 (>= limit - 1)，則觸發上限提升
         if (curVal >= limit - 1) {
             const pot = playerData.combat?.potential || 0;
             if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
+            
+            // 消耗與提升
             attr[costAttr] -= 1; 
             playerData.combat.potential -= 1;
-            attr[attrMax] += 1;
-            attr[attrCur] = attr[attrMax]; 
+            attr[attrMax] += 1; // 上限 +1
+            attr[attrCur] = attr[attrMax]; // 當前值重置為新的上限
             
             improved = true;
             let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
             UI.print(msg, "system", true);
+
+            // === [新增邏輯] 5. 易筋洗髓：內力上限提升時，同步提升氣血 (HP) ===
+            if (typeName === "內力") {
+                // 每提升 1 點內力上限，增加 1 點氣血上限 (1:1 回饋)
+                attr.maxHp = (attr.maxHp || 100) + 1;
+                // 順便補一點血
+                attr.hp += 1;
+                UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system");
+            }
+
         } else {
+            // 一般累積過程
             attr[costAttr] -= cost;
             attr[attrCur] = Math.min(limit, curVal + gain);
             
             let msg = `你運轉周天，將${costName}轉化為${typeName} ... `;
-            if (attr[attrCur] > maxVal) msg += `(${attr[attrCur]}/${maxVal} <span style="color:#00ff00">+${attr[attrCur] - maxVal}</span>)`;
-            else msg += `(${attr[attrCur]}/${maxVal})`;
-            UI.print(msg, "system", true);
+            if (attr[attrCur] > maxVal) {
+                // 顯示超出的部分 (例如：105/100)
+                msg += `(${attr[attrCur]}/${maxVal} <span style="color:#00ff00">+${attr[attrCur] - maxVal}</span>)`;
+                UI.print(msg + " 真氣在丹田內鼓盪，隨時可能突破。", "system", true);
+            } else {
+                msg += `(${attr[attrCur]}/${maxVal})`;
+                UI.print(msg, "system");
+            }
         }
     
         UI.updateHUD(playerData);
     
+        // 存檔資料準備
+        let updateData = { 
+            [`attributes.${costAttr}`]: attr[costAttr],
+            [`attributes.${attrCur}`]: attr[attrCur]
+        };
+
         if (improved) {
-            await updatePlayer(userId, { 
-                [`attributes.${costAttr}`]: attr[costAttr],
-                [`attributes.${attrCur}`]: attr[attrCur],
-                [`attributes.${attrMax}`]: attr[attrMax],
-                "combat.potential": playerData.combat.potential
-            });
-        } else {
-            await updatePlayer(userId, { 
-                [`attributes.${costAttr}`]: attr[costAttr],
-                [`attributes.${attrCur}`]: attr[attrCur]
-            });
+            updateData[`attributes.${attrMax}`] = attr[attrMax];
+            updateData["combat.potential"] = playerData.combat.potential;
+            
+            // 如果是內力，還要存 HP 的變動
+            if (typeName === "內力") {
+                updateData["attributes.maxHp"] = attr.maxHp;
+                updateData["attributes.hp"] = attr.hp;
+            }
         }
+
+        await updatePlayer(userId, updateData);
     },
 
     skills: (playerData) => {
