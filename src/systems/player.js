@@ -40,7 +40,7 @@ export function getEffectiveSkillLevel(entity, baseType) {
     }
 }
 
-// --- [修改] 計算戰鬥數值 (引入 Rating 係數) ---
+// --- 計算戰鬥數值 (引入 Rating 係數) ---
 export function getCombatStats(entity) {
     const attr = entity.attributes || {};
     const str = attr.str || 10;
@@ -60,7 +60,7 @@ export function getCombatStats(entity) {
     const effForce = getEffectiveSkillLevel(entity, 'force');    
     const effDodge = getEffectiveSkillLevel(entity, 'dodge');    
 
-    // === [新增] 取得武功強度係數 (Rating) ===
+    // 取得武功強度係數 (Rating)
     let atkRating = 1.0;
     let dodgeRating = 1.0;
     
@@ -69,7 +69,6 @@ export function getCombatStats(entity) {
         const sid = entity.enabled_skills[atkType];
         if (SkillDB[sid] && SkillDB[sid].rating) atkRating = SkillDB[sid].rating;
     } else {
-        // 如果沒激發特殊武功，基礎武功為 1.0
         if (SkillDB[atkType]) atkRating = SkillDB[atkType].rating || 1.0;
     }
 
@@ -83,17 +82,9 @@ export function getCombatStats(entity) {
     const weaponHit = weaponData ? (weaponData.hit || 0) : 0;
     const armorDef = armorData ? (armorData.defense || 0) : 0;
 
-    // === [修改公式] 將 Rating 乘入技能加成部分 ===
-    // 攻擊力：力量 + (技能等級 * 係數 * 5) + 內功
     const baseAp = (str * 2.5) + (effAtkSkill * 5 * atkRating) + (effForce * 2);
-    
-    // 防禦力：根骨 + 內功 + (閃避等級 * 係數 * 2)
     const baseDp = (con * 2.5) + (effForce * 5) + (effDodge * 2 * dodgeRating);
-    
-    // 命中：感知 + (技能等級 * 係數 * 3)
     const baseHit = (per * 2.5) + (effAtkSkill * 3 * atkRating);
-    
-    // 閃避：感知 + (閃避等級 * 係數 * 4) + 攻擊技能輔助
     const baseDodge = (per * 2.5) + (effDodge * 4 * dodgeRating) + (effAtkSkill * 1);
 
     const ap = baseAp + weaponDmg;
@@ -106,8 +97,20 @@ export function getCombatStats(entity) {
         baseAp, baseDp, baseHit, baseDodge,
         equipAp: weaponDmg, equipDp: armorDef, equipHit: weaponHit,
         atkType, weaponData, effAtkSkill,
-        atkRating // 回傳回去讓 combat.js 計算招式傷害用
+        atkRating 
     };
+}
+
+// === [新增] 智慧修練指令生成邏輯 ===
+function getSmartTrainCmd(cmd, cur, max) {
+    const limit = max * 2;
+    // 1. 若未滿最大值，補到滿 (Cost = Gap)
+    if (cur < max) return `${cmd} ${max - cur}`;
+    // 2. 若已滿但未達極限，執行一次大的 (或補到 limit)
+    // 這裡直接設定消耗為剩餘空間，讓 skill_system 去執行累積
+    if (cur < limit - 1) return `${cmd} ${limit - cur}`;
+    // 3. 若已達瓶頸，執行 1 來觸發突破
+    return `${cmd} 1`;
 }
 
 export const PlayerSystem = {
@@ -155,16 +158,21 @@ export const PlayerSystem = {
         html += `<div>${UI.attrLine("食物", attr.food+"/"+attr.maxFood)}</div><div>${UI.attrLine("飲水", attr.water+"/"+attr.maxWater)}</div>`;
         html += `</div><br>`;
 
+        // === [修改] 智慧按鈕生成 ===
+        const cmdSp = getSmartTrainCmd("respirate", attr.spiritual, attr.maxSpiritual);
+        const cmdHp = getSmartTrainCmd("exercise", attr.force, attr.maxForce);
+        const cmdMp = getSmartTrainCmd("meditate", attr.mana, attr.maxMana);
+
         html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
-        html += `<div>${UI.txt("【 精 與 靈 】", "#ff5555")}</div><div>${UI.makeCmd("[運精]", "respirate", "cmd-btn")}</div>`;
+        html += `<div>${UI.txt("【 精 與 靈 】", "#ff5555")}</div><div>${UI.makeCmd("[運精]", cmdSp, "cmd-btn")}</div>`;
         html += `<div>${UI.attrLine("精 (SP)", attr.sp+"/"+attr.maxSp)}</div>`;
         html += `<div>${UI.attrLine("靈力", attr.spiritual+"/"+attr.maxSpiritual)}</div>`;
         
-        html += `<div>${UI.txt("【 氣 與 內 】", "#5555ff")}</div><div>${UI.makeCmd("[運氣]", "exercise", "cmd-btn")}</div>`;
+        html += `<div>${UI.txt("【 氣 與 內 】", "#5555ff")}</div><div>${UI.makeCmd("[運氣]", cmdHp, "cmd-btn")}</div>`;
         html += `<div>${UI.attrLine("氣 (HP)", attr.hp+"/"+attr.maxHp)}</div>`;
         html += `<div>${UI.attrLine("內力", attr.force+"/"+attr.maxForce)}</div>`;
 
-        html += `<div>${UI.txt("【 神 與 法 】", "#ffff55")}</div><div>${UI.makeCmd("[運神]", "meditate", "cmd-btn")}</div>`;
+        html += `<div>${UI.txt("【 神 與 法 】", "#ffff55")}</div><div>${UI.makeCmd("[運神]", cmdMp, "cmd-btn")}</div>`;
         html += `<div>${UI.attrLine("神 (MP)", attr.mp+"/"+attr.maxMp)}</div>`;
         html += `<div>${UI.attrLine("法力", attr.mana+"/"+attr.maxMana)}</div>`;
         html += `</div><br>`;

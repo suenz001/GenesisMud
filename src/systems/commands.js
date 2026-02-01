@@ -51,9 +51,11 @@ const commandRegistry = {
     'apprentice': { description: '拜師', execute: SkillSystem.apprentice },
     'enable': { description: '激發', execute: SkillSystem.enable },
     'unenable': { description: '解除激發', execute: SkillSystem.unenable },
-    'exercise': { description: '運氣', execute: (p,a,u) => SkillSystem.trainStat(p,u,"內力","force","maxForce","hp","氣") },
-    'respirate': { description: '運精', execute: (p,a,u) => SkillSystem.trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精") },
-    'meditate': { description: '運神', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神") },
+    
+    // === [修改] 這裡將 args (a) 傳入，讓 SkillSystem 可以讀取數值 ===
+    'exercise': { description: '運氣', execute: (p,a,u) => SkillSystem.trainStat(p,u,"內力","force","maxForce","hp","氣",a) },
+    'respirate': { description: '運精', execute: (p,a,u) => SkillSystem.trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精",a) },
+    'meditate': { description: '運神', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神",a) },
     
     // === 內功加力指令 ===
     'enforce': { description: '加力', execute: PlayerSystem.enforce },
@@ -92,14 +94,9 @@ function handleLook(p, a) {
 commandRegistry['look'].execute = handleLook;
 commandRegistry['l'] = { description: 'look', execute: handleLook };
 
-// === [修正] 同時註冊縮寫 (u, d) 與全名 (up, down) ===
 Object.keys(dirMapping).forEach(shortDir => {
     const fullDir = dirMapping[shortDir];
-    
-    // 註冊縮寫 (例如 n, u)
     commandRegistry[shortDir] = { description: `往 ${fullDir} 移動`, execute: (p, a, u) => MapSystem.move(p, fullDir, u) };
-    
-    // 註冊全名 (例如 north, up)，避免按鈕或手打 fullDir 時無效
     commandRegistry[fullDir] = { description: `往 ${fullDir} 移動`, execute: (p, a, u) => MapSystem.move(p, fullDir, u) };
 });
 
