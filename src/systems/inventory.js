@@ -159,8 +159,12 @@ export const InventorySystem = {
 
         const success = await consumeItem(playerData, userId, invItem.id);
         if (success) {
-            const recover = Math.min(attr.maxFood - attr.food, itemData.value);
-            attr.food = Math.min(attr.maxFood, attr.food + itemData.value);
+            // [修改] 允許溢出：直接加上數值，不再取 Math.min
+            // 但保留吃之前的檢查 (attr.food >= attr.maxFood)
+            const oldVal = attr.food;
+            attr.food = attr.food + itemData.value;
+            const recover = attr.food - oldVal;
+
             UI.print(`你吃下了一份${invItem.name}，恢復了 ${recover} 點食物值。`, "system");
             MessageSystem.broadcast(playerData.location, `${playerData.name} 拿出 ${invItem.name} 吃幾口。`);
             await updatePlayer(userId, { "attributes.food": attr.food });
@@ -202,8 +206,11 @@ export const InventorySystem = {
 
         const success = await consumeItem(playerData, userId, invItem.id);
         if (success) {
-            const recover = Math.min(attr.maxWater - attr.water, itemData.value);
-            attr.water = Math.min(attr.maxWater, attr.water + itemData.value);
+            // [修改] 允許溢出
+            const oldVal = attr.water;
+            attr.water = attr.water + itemData.value;
+            const recover = attr.water - oldVal;
+
             UI.print(`你喝了一口${invItem.name}，恢復了 ${recover} 點飲水值。`, "system");
             MessageSystem.broadcast(playerData.location, `${playerData.name} 拿起 ${invItem.name} 喝了幾口。`);
             await updatePlayer(userId, { "attributes.water": attr.water });
@@ -224,7 +231,6 @@ export const InventorySystem = {
     get: async (p,a,u) => { 
         if(a.length===0) return UI.print("撿啥?","error"); 
         
-        // === [新增] get all 指令 ===
         if (a[0] === 'all') {
             const q = query(collection(db, "room_items"), where("roomId", "==", p.location));
             const snap = await getDocs(q);
@@ -233,12 +239,10 @@ export const InventorySystem = {
             let pickedNames = [];
             if (!p.inventory) p.inventory = [];
 
-            // 使用 Promise.all 並行刪除，提高效能
             const deletePromises = [];
 
             snap.forEach(d => {
                 const itemData = d.data();
-                // 檢查堆疊
                 const ex = p.inventory.find(x => x.id === itemData.itemId);
                 if (ex) ex.count++; 
                 else p.inventory.push({ id: itemData.itemId, name: itemData.name, count: 1 });
@@ -250,12 +254,10 @@ export const InventorySystem = {
             await Promise.all(deletePromises);
             await updatePlayer(u, { inventory: p.inventory });
             
-            // 整理顯示訊息，避免洗頻
             UI.print(`你撿起了：${pickedNames.join("、")}。`, "system");
             return;
         }
 
-        // 單一撿取邏輯
         const q=query(collection(db,"room_items"),where("roomId","==",p.location),where("itemId","==",a[0])); 
         const snap=await getDocs(q); 
         if(snap.empty)return UI.print("沒東西","error"); 

@@ -6,7 +6,7 @@ import { NPCDB } from "../data/npcs.js";
 import { ItemDB } from "../data/items.js";
 import { SkillDB } from "../data/skills.js";
 import { MapSystem } from "./map.js";
-import { MessageSystem } from "./messages.js"; // [修改] 引入 MessageSystem
+import { MessageSystem } from "./messages.js"; 
 import { PlayerSystem, updatePlayer, getCombatStats, getEffectiveSkillLevel } from "./player.js";
 
 let combatInterval = null;
@@ -119,7 +119,6 @@ async function findAliveNPC(roomId, targetId) {
 async function handlePlayerDeath(playerData, userId) {
     const deathMsg = UI.txt("你眼前一黑，感覺靈魂脫離了軀體...", "#ff0000", true);
     UI.print(deathMsg, "system", true);
-    // [修改] 廣播死亡訊息
     MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 慘叫一聲，倒在地上死了。`, "#ff0000", true));
 
     CombatSystem.stopCombat(userId);
@@ -230,7 +229,6 @@ export const CombatSystem = {
         const color = isLethal ? "#ff0000" : "#ff8800";
         const startMsg = UI.txt(`你對 ${npc.name} ${combatType}！戰鬥開始！`, color, true);
         UI.print(startMsg, "system", true);
-        // [修改] 廣播戰鬥開始
         MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 對 ${npc.name} ${combatType}，大戰一觸即發！`, color, true));
         
         currentCombatState = {
@@ -306,7 +304,6 @@ export const CombatSystem = {
                 
                 const finalMsg = UI.txt(msg, "#ffff00");
                 UI.print(finalMsg, "system", true); 
-                // [修改] 廣播攻擊訊息
                 MessageSystem.broadcast(playerData.location, finalMsg);
     
                 if (isHit) {
@@ -314,11 +311,13 @@ export const CombatSystem = {
                     damage += ((skillBaseDmg * (playerStats.atkRating || 1.0)) / 2); 
                     damage += forceBonus;
 
-                    damage = Math.floor(damage * (0.9 + Math.random() * 0.2));
-                    if (damage <= 0) damage = Math.floor(Math.random() * 5) + 1;
-                    if (isNaN(damage)) damage = 1; 
+                    damage = damage * (0.9 + Math.random() * 0.2);
+                    if (damage <= 0) damage = Math.random() * 5 + 1;
     
-                    if (!isLethal) damage = Math.floor(damage / 2) || 1;
+                    if (!isLethal) damage = damage / 2;
+                    
+                    // === [修改] 傷害取整 ===
+                    damage = Math.round(damage) || 1;
     
                     currentCombatState.npcHp -= damage;
                     
@@ -332,7 +331,6 @@ export const CombatSystem = {
                     const statusMsg = getStatusDesc(npc.name, currentCombatState.npcHp, currentCombatState.maxNpcHp);
                     if (statusMsg) {
                         UI.print(statusMsg, "chat", true);
-                        // [修改] 廣播狀態
                         MessageSystem.broadcast(playerData.location, statusMsg);
                     }
                     
@@ -427,10 +425,12 @@ export const CombatSystem = {
     
                 if (nIsHit) {
                     let dmg = npcStats.ap - playerStats.dp;
-                    if (dmg <= 0) dmg = Math.floor(Math.random() * 3) + 1;
-                    if (isNaN(dmg)) dmg = 1;
+                    if (dmg <= 0) dmg = Math.random() * 3 + 1;
                     
-                    if (!isLethal) dmg = Math.floor(dmg / 2) || 1;
+                    if (!isLethal) dmg = dmg / 2;
+
+                    // === [修改] 傷害取整 ===
+                    dmg = Math.round(dmg) || 1;
     
                     playerData.attributes.hp -= dmg;
                     UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
