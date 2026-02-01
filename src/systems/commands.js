@@ -55,14 +55,19 @@ const commandRegistry = {
     'respirate': { description: '運精', execute: (p,a,u) => SkillSystem.trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精") },
     'meditate': { description: '運神', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神") },
     
-    // === [新增] 內功加力指令 ===
+    // === 內功加力指令 ===
     'enforce': { description: '加力', execute: PlayerSystem.enforce },
 
     // === 地圖與社交指令 ===
     'look': { 
         description: '觀察', 
         execute: (p, a) => { 
-            import("./map.js").then(m => m.MapSystem.look(p));
+            // 修正：支援 look <target>
+            if (a.length > 0) {
+                import("./map.js").then(m => m.MapSystem.lookTarget(p, a[0]));
+            } else {
+                import("./map.js").then(m => m.MapSystem.look(p));
+            }
         } 
     },
     
@@ -79,7 +84,11 @@ const commandRegistry = {
 };
 
 function handleLook(p, a) {
-    MapSystem.look(p);
+    if (a.length > 0) {
+        import("./map.js").then(m => m.MapSystem.lookTarget(p, a[0]));
+    } else {
+        MapSystem.look(p);
+    }
 }
 commandRegistry['look'].execute = handleLook;
 commandRegistry['l'] = { description: 'look', execute: handleLook };

@@ -16,7 +16,7 @@ export async function updatePlayer(userId, data) {
     } catch (e) { console.error("更新失敗", e); return false; }
 }
 
-// --- [修改] 計算有效技能等級 (含等級限制邏輯) ---
+// --- 計算有效技能等級 (含等級限制邏輯) ---
 export function getEffectiveSkillLevel(entity, baseType) {
     const skills = entity.skills || {};
     const enabled = entity.enabled_skills || {};
@@ -33,7 +33,7 @@ export function getEffectiveSkillLevel(entity, baseType) {
         advancedLvl = skills[enabledId];
     }
 
-    // === [新增] 限制邏輯：進階武學等級不能超過基礎武學 ===
+    // 限制邏輯：進階武學等級不能超過基礎武學
     if (advancedLvl > baseLvl) {
         advancedLvl = baseLvl;
     }
@@ -45,7 +45,7 @@ export function getEffectiveSkillLevel(entity, baseType) {
     }
 }
 
-// --- 輔助：計算戰鬥數值 ---
+// --- [修改] 計算戰鬥數值 (回傳詳細分項) ---
 export function getCombatStats(entity) {
     const attr = entity.attributes || {};
     const str = attr.str || 10;
@@ -68,12 +68,24 @@ export function getCombatStats(entity) {
     const weaponHit = weaponData ? (weaponData.hit || 0) : 0;
     const armorDef = armorData ? (armorData.defense || 0) : 0;
 
-    const ap = (str * 2.5) + (effAtkSkill * 5) + (effForce * 2) + weaponDmg;
-    const dp = (con * 2.5) + (effForce * 5) + (effDodge * 2) + armorDef;
-    const hit = (per * 2.5) + (effAtkSkill * 3) + weaponHit;
-    const dodge = (per * 2.5) + (effDodge * 4) + (effAtkSkill * 1);
+    // 基礎值 (不含裝備)
+    const baseAp = (str * 2.5) + (effAtkSkill * 5) + (effForce * 2);
+    const baseDp = (con * 2.5) + (effForce * 5) + (effDodge * 2);
+    const baseHit = (per * 2.5) + (effAtkSkill * 3);
+    const baseDodge = (per * 2.5) + (effDodge * 4) + (effAtkSkill * 1);
 
-    return { ap, dp, hit, dodge, atkType, weaponData, effAtkSkill };
+    // 總值
+    const ap = baseAp + weaponDmg;
+    const dp = baseDp + armorDef;
+    const hit = baseHit + weaponHit;
+    const dodge = baseDodge; // 暫無裝備加成閃避，若有可在此加
+
+    return { 
+        ap, dp, hit, dodge, 
+        baseAp, baseDp, baseHit, baseDodge,
+        equipAp: weaponDmg, equipDp: armorDef, equipHit: weaponHit,
+        atkType, weaponData, effAtkSkill 
+    };
 }
 
 export const PlayerSystem = {
@@ -94,12 +106,18 @@ export const PlayerSystem = {
     score: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
-        const combatStats = getCombatStats(playerData); 
+        const s = getCombatStats(playerData); 
 
         const moneyStr = UI.formatMoney(playerData.money || 0);
         const potential = playerData.combat?.potential || 0;
         const kills = playerData.combat?.kills || 0;
-        const enforce = playerData.combat?.enforce || 0; // 顯示加力
+        const enforce = playerData.combat?.enforce || 0;
+
+        // 格式化顯示： 總值 (+裝備值)
+        const showStat = (total, equip) => {
+            if (equip > 0) return `${Math.floor(total)} <span style="color:#00ff00;">(+${equip})</span>`;
+            return Math.floor(total);
+        };
 
         let html = UI.titleLine(`${playerData.name} 的狀態`);
         html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
@@ -135,32 +153,34 @@ export const PlayerSystem = {
 
         html += UI.txt("【 戰鬥參數 】", "#00ff00") + "<br>";
         html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
-        html += `<div>${UI.attrLine("攻擊力", combatStats.ap)}</div><div>${UI.attrLine("防禦力", combatStats.dp)}</div>`;
-        html += `<div>${UI.attrLine("命中率", combatStats.hit)}</div><div>${UI.attrLine("閃避率", combatStats.dodge)}</div>`;
+        
+        // 使用新的顯示函式
+        html += `<div>${UI.attrLine("攻擊力", showStat(s.ap, s.equipAp))}</div><div>${UI.attrLine("防禦力", showStat(s.dp, s.equipDp))}</div>`;
+        html += `<div>${UI.attrLine("命中率", showStat(s.hit, s.equipHit))}</div><div>${UI.attrLine("閃避率", showStat(s.dodge, 0))}</div>`;
+        
         html += `<div>${UI.attrLine("殺氣", UI.txt(kills, "#ff0000"))}</div>`;
-        // 顯示當前加力狀態
-        html += `<div>${UI.attrLine("加力 (Enforce)", UI.txt(enforce+" 成", enforce > 0 ? "#ff9800" : "#aaa"))}</div>`;
+        html += `<div>${UI.attrLine("內力運用", UI.txt(enforce+" 成", enforce > 0 ? "#ff9800" : "#aaa"))}</div>`;
         html += `</div>` + UI.titleLine("End");
         
         UI.print(html, 'chat', true);
     },
 
-    // === [新增] 加力指令 ===
+    // === 加力指令 ===
     enforce: async (p, a, u) => {
         if (a.length === 0) {
-            UI.print(`目前加力：${p.combat.enforce || 0} 成`, "system");
+            UI.print(`目前內力運用：${p.combat.enforce || 0} 成`, "system");
             return;
         }
         let lvl = parseInt(a[0]);
         if (isNaN(lvl) || lvl < 0 || lvl > 10) {
-            UI.print("加力範圍必須是 0 到 10。", "error");
+            UI.print("內力運用範圍必須是 0 到 10。", "error");
             return;
         }
 
         if (!p.combat) p.combat = {};
         p.combat.enforce = lvl;
         
-        if (lvl === 0) UI.print("你將內力收回丹田，不再加力。", "system");
+        if (lvl === 0) UI.print("你將內力收回丹田，不再運用內力加強招式。", "system");
         else UI.print(`你將全身功力凝聚，使用了 ${lvl} 成內力加強攻擊！`, "system");
 
         await updatePlayer(u, { "combat.enforce": lvl });
@@ -180,7 +200,7 @@ export const PlayerSystem = {
         msg += UI.txt(" 裝備指令：", "#ff5555") + "wield, unwield, wear, unwear\n";
         msg += UI.txt(" 基本指令：", "#00ffff") + "score, skills, inventory (i)\n";
         msg += UI.txt(" 武學指令：", "#ff5555") + "apprentice, learn, enable, unenable, practice\n";
-        msg += UI.txt(" 修練指令：", "#ffff00") + "exercise, respirate, meditate, enforce (加力)\n";
+        msg += UI.txt(" 修練指令：", "#ffff00") + "exercise, respirate, meditate, enforce (內力運用)\n";
         msg += UI.txt(" 戰鬥指令：", "#ff0000") + "kill (殺), fight (切磋)\n";
         msg += UI.txt(" 生活指令：", "#00ff00") + "eat, drink, drop, get, look\n";
         msg += UI.txt(" 交易指令：", "#ffcc00") + "list, buy, sell\n";

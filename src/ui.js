@@ -19,7 +19,7 @@ const elRoomName = document.getElementById('current-room-name');
 const btnAutoEat = document.getElementById('btn-auto-eat');
 const btnAutoDrink = document.getElementById('btn-auto-drink');
 
-// === [新增] Enforce UI 參考 ===
+// Enforce UI 參考
 const sliderEnforce = document.getElementById('slider-enforce');
 const valEnforce = document.getElementById('val-enforce');
 const btnsEnforce = document.querySelectorAll('.btn-tiny[data-enforce]');
@@ -82,11 +82,8 @@ export const UI = {
         updateBar('bar-food', 'text-food', attr.food, attr.maxFood);
         updateBar('bar-water', 'text-water', attr.water, attr.maxWater);
 
-        // === [新增] 更新 Enforce UI ===
         if (sliderEnforce && valEnforce) {
             const currentEnforce = (playerData.combat && playerData.combat.enforce) ? playerData.combat.enforce : 0;
-            // 只有當使用者「沒有正在拖動」滑桿時，才從資料更新滑桿位置，避免操作打架
-            // 這裡簡單判定：如果數值不同就更新
             if (parseInt(sliderEnforce.value) !== currentEnforce) {
                 sliderEnforce.value = currentEnforce;
             }
@@ -156,8 +153,8 @@ export const UI = {
         input.disabled = !enabled;
         sendBtn.disabled = !enabled;
         document.querySelectorAll('.btn-move, .btn-action, .btn-toggle').forEach(btn => btn.disabled = !enabled);
-        if (sliderEnforce) sliderEnforce.disabled = !enabled; // 禁用/啟用滑桿
-        btnsEnforce.forEach(btn => btn.disabled = !enabled); // 禁用/啟用小按鈕
+        if (sliderEnforce) sliderEnforce.disabled = !enabled; 
+        btnsEnforce.forEach(btn => btn.disabled = !enabled); 
 
         if (enabled) { input.placeholder = "請輸入指令..."; input.focus(); } 
         else { input.placeholder = "請先登入..."; }
@@ -213,25 +210,22 @@ export const UI = {
             }
         });
 
-        // === [新增] Enforce Slider 事件監聽 ===
+        // === [新增] 滑動條與按鈕的回顯邏輯 ===
         if (sliderEnforce) {
-            // "input" 事件：拖動時即時更新數字顯示
             sliderEnforce.addEventListener('input', (e) => {
                 const val = e.target.value;
                 valEnforce.textContent = `${val} 成`;
                 valEnforce.style.color = val > 0 ? "#ff9800" : "#aaa";
             });
 
-            // "change" 事件：放開滑鼠時發送指令
             sliderEnforce.addEventListener('change', (e) => {
                 const val = e.target.value;
                 const cmd = `enforce ${val}`;
-                // UI.print(`> ${cmd}`); // 選擇性：是否要印出指令本身，避免洗版可不印
+                UI.print(`> ${cmd}`); // 回顯指令
                 callback(cmd);
             });
         }
 
-        // === [新增] Enforce Shortcut Buttons 事件監聽 ===
         btnsEnforce.forEach(btn => {
             btn.addEventListener('click', () => {
                 const val = btn.dataset.enforce;
@@ -241,6 +235,7 @@ export const UI = {
                     valEnforce.style.color = val > 0 ? "#ff9800" : "#aaa";
                 }
                 const cmd = `enforce ${val}`;
+                UI.print(`> ${cmd}`); // 回顯指令
                 callback(cmd);
             });
         });
