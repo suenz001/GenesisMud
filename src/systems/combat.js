@@ -11,14 +11,21 @@ import { PlayerSystem, updatePlayer, getCombatStats, getEffectiveSkillLevel } fr
 let combatInterval = null;
 let currentCombatState = null;
 
-// --- 內部輔助：取得 NPC 戰鬥數據 ---
+// --- 內部輔助：取得 NPC 戰鬥數據 (含 Rating 計算) ---
 function getNPCCombatStats(npc) {
     const atkType = 'unarmed'; 
     let maxSkill = 0;
+    // 預設 NPC 的武功係數為 1.0，若有設定特定技能可於此擴充
+    let rating = 1.0; 
+
     if (npc.skills) {
         for (const [sid, lvl] of Object.entries(npc.skills)) {
             const sInfo = SkillDB[sid];
-            if (lvl > maxSkill) maxSkill = lvl;
+            if (lvl > maxSkill) {
+                maxSkill = lvl;
+                // NPC 使用他最高等級的武功係數
+                if (sInfo && sInfo.rating) rating = sInfo.rating;
+            }
         }
     }
     const effAtkSkill = maxSkill;
@@ -27,12 +34,13 @@ function getNPCCombatStats(npc) {
     const con = npc.attributes?.con || 20;
     const per = npc.attributes?.per || 20;
     
-    const ap = (str * 2.5) + (effAtkSkill * 5) + (npc.combat.attack || 0);
+    // 將 rating 納入 NPC 計算
+    const ap = (str * 2.5) + (effAtkSkill * 5 * rating) + (npc.combat.attack || 0);
     const dp = (con * 2.5) + (effAtkSkill * 2) + (npc.combat.defense || 0);
-    const hit = (per * 2.5) + (effAtkSkill * 3);
+    const hit = (per * 2.5) + (effAtkSkill * 3 * rating);
     const dodge = (per * 2.5) + (effAtkSkill * 4);
 
-    return { ap, dp, hit, dodge, atkType, effAtkSkill };
+    return { ap, dp, hit, dodge, atkType, effAtkSkill, rating };
 }
 
 // === 計算戰力評分 ===
@@ -40,7 +48,6 @@ function calculateCombatPower(stats, hp) {
     return (stats.ap + stats.dp) * 2 + hp;
 }
 
-// === 判斷強弱顏色與描述 ===
 export function getDifficultyInfo(playerData, npcId) {
     const npc = NPCDB[npcId];
     if (!npc) return { color: "#fff", ratio: 1 };
@@ -55,11 +62,11 @@ export function getDifficultyInfo(playerData, npcId) {
 
     let color = "#ffffff"; 
     
-    if (ratio < 0.5) color = "#888888"; // 灰
-    else if (ratio < 0.8) color = "#00ff00"; // 淺綠
-    else if (ratio < 1.2) color = "#ffffff"; // 白
-    else if (ratio < 2.0) color = "#ffff00"; // 黃
-    else color = "#ff0000"; // 紅
+    if (ratio < 0.5) color = "#888888"; 
+    else if (ratio < 0.8) color = "#00ff00"; 
+    else if (ratio < 1.2) color = "#ffffff"; 
+    else if (ratio < 2.0) color = "#ffff00"; 
+    else color = "#ff0000"; 
 
     return { color, ratio };
 }
@@ -168,6 +175,28 @@ async function handlePlayerDeath(playerData, userId) {
     }, 180000);
 }
 
+// === [新增] 處理閃避訊息 ===
+function getDodgeMessage(entity, attackerName) {
+    let msg = `$N身形一晃，閃過了$P的攻擊！`; // 預設訊息
+
+    // 檢查是否有激發身法
+    let activeDodge = null;
+    if (entity.enabled_skills && entity.enabled_skills.dodge) {
+        activeDodge = entity.enabled_skills.dodge;
+    } else if (entity.skills && entity.skills.dodge && entity.skills.dodge > 20) {
+        // NPC 簡單判定：如果沒有 enabled_skills 但有 dodge 技能
+        // 這裡暫時只處理玩家，因為 NPC 結構不同
+    }
+
+    if (activeDodge && SkillDB[activeDodge] && SkillDB[activeDodge].dodge_actions) {
+        const actions = SkillDB[activeDodge].dodge_actions;
+        msg = actions[Math.floor(Math.random() * actions.length)];
+    }
+
+    return UI.txt(msg.replace(/\$N/g, entity.name || "你").replace(/\$P/g, attackerName), "#aaa");
+}
+
+
 export const CombatSystem = {
     getDifficultyInfo, 
 
@@ -236,38 +265,27 @@ export const CombatSystem = {
             if (!playerData.isUnconscious) {
                 const enforceLevel = playerData.combat.enforce || 0;
                 let forceBonus = 0;
-                let actualCost = 0; // 用來記錄實際消耗，方便顯示
+                let actualCost = 0; 
                 
-                // 1. 內力消耗與加成 (修正版)
                 if (enforceLevel > 0) {
                     const forceSkill = playerData.skills.force || 0;
                     const maxForce = playerData.attributes.maxForce || 10;
                     
-                    // === [修改邏輯 1] 比例制消耗 ===
-                    // 公式：最大內力 * (成數/10) * 係數 (0.3)
-                    // 係數 0.3 代表 Enforce 10 (十成) 時，一拳消耗 30% 最大內力
                     const consumptionRate = 0.3; 
                     let idealCost = Math.floor(maxForce * (enforceLevel / 10) * consumptionRate);
-                    if (idealCost < 1) idealCost = 1; // 只要有開加力，最少耗1點
+                    if (idealCost < 1) idealCost = 1; 
 
-                    // === [修改邏輯 2] 實報實銷 ===
-                    // 檢查當前內力夠不夠，不夠就全扣
                     actualCost = Math.min(playerData.attributes.force, idealCost);
                     
                     if (actualCost > 0) {
-                        playerData.attributes.force -= actualCost; // 扣除實際值
+                        playerData.attributes.force -= actualCost; 
                         
-                        // === [修改邏輯 3] 傷害轉換 ===
-                        // 轉換效率：基礎 1.0 + (內功等級 / 100)
-                        // 也就是說，內功 0 級時，1點內力換1點傷；內功100級時，1點內力換2點傷
                         const efficiency = 1.0 + (forceSkill / 100);
-                        
-                        let multiplier = 0.5; // 內力傷害係數 (平衡用)
-                        if (playerStats.atkType === 'unarmed') multiplier = 0.8; // 拳腳更能發揮內力
+                        let multiplier = 0.5; 
+                        if (playerStats.atkType === 'unarmed') multiplier = 0.8; 
                         
                         forceBonus = Math.floor(actualCost * efficiency * multiplier);
                     } else {
-                         // 內力已乾涸
                          if(Math.random() < 0.2) UI.print("你內力枯竭，無法運功加力！", "error");
                     }
                 }
@@ -295,7 +313,9 @@ export const CombatSystem = {
     
                 if (isHit) {
                     let damage = playerStats.ap - npcStats.dp;
-                    damage += (skillBaseDmg / 2); 
+                    // === [修改] 讓招式傷害也乘上武功係數 ===
+                    // playerStats.atkRating 是從 player.js 傳過來的係數
+                    damage += ((skillBaseDmg * (playerStats.atkRating || 1.0)) / 2); 
                     damage += forceBonus;
 
                     damage = Math.floor(damage * (0.9 + Math.random() * 0.2));
@@ -306,7 +326,6 @@ export const CombatSystem = {
     
                     currentCombatState.npcHp -= damage;
                     
-                    // === 顯示傷害與內力消耗 ===
                     let damageMsg = `(造成了 ${damage} 點傷害)`;
                     if (forceBonus > 0) {
                         damageMsg = `(運功消耗 ${actualCost} 內力，造成了 ${damage} 點傷害)`;
@@ -382,6 +401,8 @@ export const CombatSystem = {
                         }
                     }
                 } else {
+                    // === [修改] NPC 閃避敘述 ===
+                    // NPC 暫時使用通用閃避，如果 NPC 也有 enabled_skills，這裡也可以套用 getDodgeMessage
                     UI.print(UI.txt(`${npc.name} 身形一晃，閃過了你的攻擊！`, "#aaa"), "chat", true);
                 }
             } else {
@@ -404,7 +425,6 @@ export const CombatSystem = {
                     if (!isLethal) dmg = Math.floor(dmg / 2) || 1;
     
                     playerData.attributes.hp -= dmg;
-                    // 注意：這裡本來有 UI.updateHUD，但只在被打中時觸發
                     UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
     
                     const statusMsg = getStatusDesc("你", playerData.attributes.hp, playerData.attributes.maxHp);
@@ -431,13 +451,14 @@ export const CombatSystem = {
                         }
                     }
                 } else {
-                    UI.print(UI.txt(`你側身避開了 ${npc.name} 的攻擊。`, "#aaa"), "chat", true);
+                    // === [修改] 玩家閃避成功，呼叫特殊敘述 ===
+                    const dodgeMsg = getDodgeMessage(playerData, npc.name);
+                    UI.print(dodgeMsg, "chat", true);
                 }
             } else if (currentCombatState.npcIsUnconscious) {
                 UI.print(UI.txt(`${npc.name} 倒在地上，毫無反抗之力。`, "#888"), "chat", true);
             }
     
-            // === [修正] 在這裡呼叫 UI.updateHUD，確保每一回合結束都刷新內力與血量 ===
             UI.updateHUD(playerData);
 
             await updatePlayer(userId, { 
