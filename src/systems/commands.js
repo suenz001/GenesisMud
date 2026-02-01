@@ -36,7 +36,7 @@ const commandRegistry = {
     'eat': { description: '吃', execute: InventorySystem.eat },
     'drink': { description: '喝', execute: InventorySystem.drink },
     'buy': { description: '買', execute: InventorySystem.buy },
-    'sell': { description: '賣', execute: InventorySystem.sell }, // === [新增] 販賣指令 ===
+    'sell': { description: '賣', execute: InventorySystem.sell },
     'list': { description: '列表', execute: InventorySystem.list },
     'drop': { description: '丟', execute: InventorySystem.drop },
     'get': { description: '撿', execute: InventorySystem.get },
@@ -54,6 +54,9 @@ const commandRegistry = {
     'exercise': { description: '運氣', execute: (p,a,u) => SkillSystem.trainStat(p,u,"內力","force","maxForce","hp","氣") },
     'respirate': { description: '運精', execute: (p,a,u) => SkillSystem.trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精") },
     'meditate': { description: '運神', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神") },
+    
+    // === [新增] 內功加力指令 ===
+    'enforce': { description: '加力', execute: PlayerSystem.enforce },
 
     // === 地圖與社交指令 ===
     'look': { 

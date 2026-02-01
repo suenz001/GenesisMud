@@ -8,7 +8,7 @@
 </head>
 <body>
     <div id="game-wrapper">
-        <div id="header">【創世江湖行】GenesisMud - Ver 0.3.6 (便利優化版)</div>
+        <div id="header">【創世江湖行】GenesisMud - Ver 0.3.7 (武學優化版)</div>
         
         <div id="game-body">
             <div id="main-display">
@@ -94,6 +94,24 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="status-group" style="margin-top: 5px; background: rgba(255, 152, 0, 0.1); border: 1px solid #553300;">
+                        <div style="font-size: 12px; color: #ffb74d; margin-bottom: 2px; display: flex; justify-content: space-between;">
+                            <span>內功加力 (Enforce)</span>
+                            <span id="val-enforce" style="font-weight: bold;">0 成</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <input type="range" id="slider-enforce" min="0" max="10" step="1" value="0" style="flex-grow: 1; cursor: pointer;">
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 4px;">
+                            <button class="btn-tiny" data-enforce="0">0成</button>
+                            <button class="btn-tiny" data-enforce="3">3成</button>
+                            <button class="btn-tiny" data-enforce="5">5成</button>
+                            <button class="btn-tiny" data-enforce="8">8成</button>
+                            <button class="btn-tiny" data-enforce="10">10成</button>
+                        </div>
+                    </div>
+
                 </div>
 
                 <div class="panel-box" style="display: flex; gap: 5px;">
@@ -127,7 +145,6 @@
                         <button class="btn-action" data-cmd="skills">技能</button>
                         <button class="btn-action" data-cmd="inventory">物品</button>
                         <button class="btn-action" data-cmd="save">存檔</button>
-                        
                         <button class="btn-action" data-cmd="recall">回城</button>
                         <button class="btn-action" data-cmd="help">說明</button>
                     </div>
@@ -149,6 +166,23 @@
             <div id="login-msg" style="color: red; margin-top: 5px; font-size: 12px;"></div>
         </div>
     </div>
+    
+    <style>
+        .btn-tiny {
+            background: #333;
+            color: #ccc;
+            border: 1px solid #555;
+            border-radius: 3px;
+            font-size: 10px;
+            padding: 2px 5px;
+            cursor: pointer;
+        }
+        .btn-tiny:hover {
+            background: #444;
+            color: #fff;
+            border-color: #ff9800;
+        }
+    </style>
 
     <script type="module" src="src/main.js"></script>
 </body>

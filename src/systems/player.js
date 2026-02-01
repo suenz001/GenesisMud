@@ -16,7 +16,7 @@ export async function updatePlayer(userId, data) {
     } catch (e) { console.error("更新失敗", e); return false; }
 }
 
-// --- 輔助：計算有效技能等級 ---
+// --- [修改] 計算有效技能等級 (含等級限制邏輯) ---
 export function getEffectiveSkillLevel(entity, baseType) {
     const skills = entity.skills || {};
     const enabled = entity.enabled_skills || {};
@@ -31,6 +31,11 @@ export function getEffectiveSkillLevel(entity, baseType) {
     const enabledId = enabled[baseType];
     if (enabledId && skills[enabledId]) {
         advancedLvl = skills[enabledId];
+    }
+
+    // === [新增] 限制邏輯：進階武學等級不能超過基礎武學 ===
+    if (advancedLvl > baseLvl) {
+        advancedLvl = baseLvl;
     }
 
     if (advancedLvl > 0) {
@@ -55,8 +60,6 @@ export function getCombatStats(entity) {
     const armorId = equipment.armor || null;
     const armorData = armorId ? ItemDB[armorId] : null;
     
-    // 這裡需要針對 NPC 處理 (NPC 沒有 enabled_skills 屬性時的簡化邏輯在 combat.js 處理，這裡主要針對玩家)
-    // 但為了共用，若 entity 是 NPC，需要由調用者確保其結構類似或在此擴充
     const effAtkSkill = getEffectiveSkillLevel(entity, atkType); 
     const effForce = getEffectiveSkillLevel(entity, 'force');    
     const effDodge = getEffectiveSkillLevel(entity, 'dodge');    
@@ -74,7 +77,7 @@ export function getCombatStats(entity) {
 }
 
 export const PlayerSystem = {
-    updatePlayer, // 匯出給其他系統使用
+    updatePlayer, 
 
     save: async (p, a, u) => {
         const room = MapSystem.getRoom(p.location);
@@ -96,6 +99,7 @@ export const PlayerSystem = {
         const moneyStr = UI.formatMoney(playerData.money || 0);
         const potential = playerData.combat?.potential || 0;
         const kills = playerData.combat?.kills || 0;
+        const enforce = playerData.combat?.enforce || 0; // 顯示加力
 
         let html = UI.titleLine(`${playerData.name} 的狀態`);
         html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
@@ -134,9 +138,32 @@ export const PlayerSystem = {
         html += `<div>${UI.attrLine("攻擊力", combatStats.ap)}</div><div>${UI.attrLine("防禦力", combatStats.dp)}</div>`;
         html += `<div>${UI.attrLine("命中率", combatStats.hit)}</div><div>${UI.attrLine("閃避率", combatStats.dodge)}</div>`;
         html += `<div>${UI.attrLine("殺氣", UI.txt(kills, "#ff0000"))}</div>`;
+        // 顯示當前加力狀態
+        html += `<div>${UI.attrLine("加力 (Enforce)", UI.txt(enforce+" 成", enforce > 0 ? "#ff9800" : "#aaa"))}</div>`;
         html += `</div>` + UI.titleLine("End");
         
         UI.print(html, 'chat', true);
+    },
+
+    // === [新增] 加力指令 ===
+    enforce: async (p, a, u) => {
+        if (a.length === 0) {
+            UI.print(`目前加力：${p.combat.enforce || 0} 成`, "system");
+            return;
+        }
+        let lvl = parseInt(a[0]);
+        if (isNaN(lvl) || lvl < 0 || lvl > 10) {
+            UI.print("加力範圍必須是 0 到 10。", "error");
+            return;
+        }
+
+        if (!p.combat) p.combat = {};
+        p.combat.enforce = lvl;
+        
+        if (lvl === 0) UI.print("你將內力收回丹田，不再加力。", "system");
+        else UI.print(`你將全身功力凝聚，使用了 ${lvl} 成內力加強攻擊！`, "system");
+
+        await updatePlayer(u, { "combat.enforce": lvl });
     },
 
     suicide: async (p, a, u) => {
@@ -153,10 +180,10 @@ export const PlayerSystem = {
         msg += UI.txt(" 裝備指令：", "#ff5555") + "wield, unwield, wear, unwear\n";
         msg += UI.txt(" 基本指令：", "#00ffff") + "score, skills, inventory (i)\n";
         msg += UI.txt(" 武學指令：", "#ff5555") + "apprentice, learn, enable, unenable, practice\n";
-        msg += UI.txt(" 修練指令：", "#ffff00") + "exercise, respirate, meditate\n";
+        msg += UI.txt(" 修練指令：", "#ffff00") + "exercise, respirate, meditate, enforce (加力)\n";
         msg += UI.txt(" 戰鬥指令：", "#ff0000") + "kill (殺), fight (切磋)\n";
         msg += UI.txt(" 生活指令：", "#00ff00") + "eat, drink, drop, get, look\n";
-        msg += UI.txt(" 交易指令：", "#ffcc00") + "list, buy\n";
+        msg += UI.txt(" 交易指令：", "#ffcc00") + "list, buy, sell\n";
         msg += UI.txt(" 移動指令：", "#aaa") + "n, s, e, w, u, d\n";
         UI.print(msg, 'normal', true);
     }

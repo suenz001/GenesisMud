@@ -15,9 +15,14 @@ const btnGuest = document.getElementById('btn-guest');
 
 const elRoomName = document.getElementById('current-room-name');
 
-// 新增自動按鈕參考
+// 自動功能按鈕參考
 const btnAutoEat = document.getElementById('btn-auto-eat');
 const btnAutoDrink = document.getElementById('btn-auto-drink');
+
+// === [新增] Enforce UI 參考 ===
+const sliderEnforce = document.getElementById('slider-enforce');
+const valEnforce = document.getElementById('val-enforce');
+const btnsEnforce = document.querySelectorAll('.btn-tiny[data-enforce]');
 
 export const UI = {
     txt: (text, color = '#ccc', bold = false) => {
@@ -68,17 +73,26 @@ export const UI = {
             textEl.textContent = `${safeCurrent}/${safeMax}`;
         };
 
-        // HP, SP, MP, etc.
         updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp);
         updateBar('bar-sp', 'text-sp', attr.sp, attr.maxSp);
         updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp);
         updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual);
         updateBar('bar-force', 'text-force', attr.force, attr.maxForce);
         updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana);
-        
-        // === [新增] 食物與飲水條更新 ===
         updateBar('bar-food', 'text-food', attr.food, attr.maxFood);
         updateBar('bar-water', 'text-water', attr.water, attr.maxWater);
+
+        // === [新增] 更新 Enforce UI ===
+        if (sliderEnforce && valEnforce) {
+            const currentEnforce = (playerData.combat && playerData.combat.enforce) ? playerData.combat.enforce : 0;
+            // 只有當使用者「沒有正在拖動」滑桿時，才從資料更新滑桿位置，避免操作打架
+            // 這裡簡單判定：如果數值不同就更新
+            if (parseInt(sliderEnforce.value) !== currentEnforce) {
+                sliderEnforce.value = currentEnforce;
+            }
+            valEnforce.textContent = `${currentEnforce} 成`;
+            valEnforce.style.color = currentEnforce > 0 ? "#ff9800" : "#aaa";
+        }
 
         const currentRoom = WorldMap[playerData.location];
         if (currentRoom) {
@@ -142,6 +156,9 @@ export const UI = {
         input.disabled = !enabled;
         sendBtn.disabled = !enabled;
         document.querySelectorAll('.btn-move, .btn-action, .btn-toggle').forEach(btn => btn.disabled = !enabled);
+        if (sliderEnforce) sliderEnforce.disabled = !enabled; // 禁用/啟用滑桿
+        btnsEnforce.forEach(btn => btn.disabled = !enabled); // 禁用/啟用小按鈕
+
         if (enabled) { input.placeholder = "請輸入指令..."; input.focus(); } 
         else { input.placeholder = "請先登入..."; }
     },
@@ -151,7 +168,6 @@ export const UI = {
     },
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
     
-    // === [新增] 綁定自動功能按鈕的 callback ===
     onAutoToggle: (callbacks) => {
         btnAutoEat.addEventListener('click', () => {
             const newState = callbacks.toggleEat();
@@ -195,6 +211,38 @@ export const UI = {
                 input.value = cmd;
                 input.select();
             }
+        });
+
+        // === [新增] Enforce Slider 事件監聽 ===
+        if (sliderEnforce) {
+            // "input" 事件：拖動時即時更新數字顯示
+            sliderEnforce.addEventListener('input', (e) => {
+                const val = e.target.value;
+                valEnforce.textContent = `${val} 成`;
+                valEnforce.style.color = val > 0 ? "#ff9800" : "#aaa";
+            });
+
+            // "change" 事件：放開滑鼠時發送指令
+            sliderEnforce.addEventListener('change', (e) => {
+                const val = e.target.value;
+                const cmd = `enforce ${val}`;
+                // UI.print(`> ${cmd}`); // 選擇性：是否要印出指令本身，避免洗版可不印
+                callback(cmd);
+            });
+        }
+
+        // === [新增] Enforce Shortcut Buttons 事件監聽 ===
+        btnsEnforce.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const val = btn.dataset.enforce;
+                if (sliderEnforce) {
+                    sliderEnforce.value = val;
+                    valEnforce.textContent = `${val} 成`;
+                    valEnforce.style.color = val > 0 ? "#ff9800" : "#aaa";
+                }
+                const cmd = `enforce ${val}`;
+                callback(cmd);
+            });
         });
     },
     onAuthAction: (callbacks) => {
