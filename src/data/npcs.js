@@ -15,17 +15,48 @@ export const NPCDB = {
         description: "一位肌肉虯結的壯漢，正揮舞著大鐵鎚打造兵器。",
         attributes: { str: 40, con: 40, per: 20, kar: 20, int: 20, cor: 20 },
         combat: { hp: 500, maxHp: 500, attack: 50, defense: 30, xp: 0 },
-        shop: { "iron_sword": 500, "steel_blade": 1000, "cloth_armor": 200, "leather_armor": 500 }
+        shop: { 
+            "iron_sword": 500, 
+            "steel_blade": 600, 
+            "wooden_staff": 200, 
+            "iron_staff": 800,
+            "dagger": 300,
+            "leather_whip": 400,
+            "stone": 50,
+            "throwing_knife": 500,
+            "bamboo_spear": 300,
+            "iron_spear": 1000,
+            "cloth_armor": 200, 
+            "leather_armor": 500 
+        }
     },
     "gym_master": {
         id: "gym_master",
         name: "王教頭",
-        description: "飛龍武館的總教頭。",
+        description: "飛龍武館的總教頭，精通十八般武藝，但似乎都不算頂尖。",
+        title: "飛龍武館館主",
+        family: "common_gym",
         attributes: { str: 60, con: 60, per: 50, kar: 30, int: 40, cor: 30 },
         combat: { hp: 2000, maxHp: 2000, attack: 100, defense: 80, xp: 0 },
-        skills: { "unarmed": 100, "sword": 100, "force": 100, "dodge": 100, "iron-palm": 80, "swift-sword": 80, "turtle-force": 80, "leaf-steps": 80 },
-        family: "common_gym",
-        title: "飛龍武館館主"
+        skills: { 
+            // 基礎技能
+            "unarmed": 100, "sword": 100, "blade": 100, "stick": 100, 
+            "dagger": 100, "whip": 100, "throwing": 100, "lance": 100,
+            "force": 100, "dodge": 100, 
+            
+            // 進階技能 (博而不精，等級約在 60-80)
+            "iron-palm": 80, 
+            "swift-sword": 80, 
+            "eight-trigram-blade": 70, 
+            "arhat-stick": 75,
+            "shadow-dagger": 65,
+            "cloud-whip": 60,
+            "golden-dart": 70,
+            "yang-spear": 75,
+            
+            "turtle-force": 80, 
+            "leaf-steps": 80 
+        }
     },
     "rabbit": {
         id: "rabbit",

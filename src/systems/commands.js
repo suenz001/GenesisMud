@@ -77,10 +77,13 @@ function getCombatStats(entity) {
     
     const equipment = entity.equipment || {};
     
-    // 1. 判斷使用武器類型
+    // 1. 判斷使用武器類型 [修正邏輯：支援多種武器]
     const weaponId = equipment.weapon || null;
     const weaponData = weaponId ? ItemDB[weaponId] : null;
-    const atkType = weaponData ? 'sword' : 'unarmed';
+    
+    // 如果有武器，攻擊類型直接使用武器的 type (例如 'blade', 'stick', 'whip')
+    // 如果沒有武器，則預設為 'unarmed'
+    const atkType = weaponData ? weaponData.type : 'unarmed';
 
     // 2. 判斷防具
     const armorId = equipment.armor || null;
@@ -385,7 +388,14 @@ const commandRegistry = {
             if (!invItem) return UI.print("你身上沒有這個東西。", "error");
             
             const itemData = ItemDB[itemId];
-            if (!itemData || itemData.type !== 'weapon') return UI.print("這不是武器。", "error");
+            
+            // [修正] 支援所有新增的武器類型 (blade, stick, dagger, whip, throwing, lance)
+            // 只要它在 items.js 定義為這些類型，或者定義為 'weapon'，就可以裝備
+            const allowedTypes = ['weapon', 'sword', 'blade', 'stick', 'dagger', 'whip', 'throwing', 'lance'];
+            
+            if (!itemData || !allowedTypes.includes(itemData.type)) {
+                return UI.print("這不是武器。", "error");
+            }
 
             if (!playerData.equipment) playerData.equipment = {};
             if (playerData.equipment.weapon) {
@@ -931,7 +941,9 @@ const commandRegistry = {
                         status = UI.txt(" (已穿戴)", "#ff00ff");
                         act += UI.makeCmd("[脫下]", `unwear`, "cmd-btn");
                     } else {
-                        if (dat.type === 'weapon') act += UI.makeCmd("[裝備]", `wield ${i.id}`, "cmd-btn");
+                        // [修正] 泛用武器裝備邏輯
+                        const allowedTypes = ['weapon', 'sword', 'blade', 'stick', 'dagger', 'whip', 'throwing', 'lance'];
+                        if (allowedTypes.includes(dat.type)) act += UI.makeCmd("[裝備]", `wield ${i.id}`, "cmd-btn");
                         if (dat.type === 'armor') act += UI.makeCmd("[穿戴]", `wear ${i.id}`, "cmd-btn");
                         if (dat.type === 'food') act += UI.makeCmd("[吃]", `eat ${i.id}`, "cmd-btn"); 
                         if (dat.type === 'drink') act += UI.makeCmd("[喝]", `drink ${i.id}`, "cmd-btn"); 

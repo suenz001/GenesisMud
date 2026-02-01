@@ -1,4 +1,3 @@
-
 // src/data/items.js
 
 export const ItemDB = {
@@ -20,11 +19,25 @@ export const ItemDB = {
     "bear_paw": { name: "熊掌", type: "food", value: 100, desc: "極為珍貴的食材，大補！" },
     "bear_skin": { name: "黑熊皮", type: "misc", value: 0, desc: "厚實的黑熊皮，做成大衣一定很保暖。" },
 
-    // --- 新增：武器 ---
-    "iron_sword": { name: "鐵劍", type: "weapon", damage: 15, hit: 5, value: 500, desc: "一把普通的鐵劍，適合新手使用。" },
-    "steel_blade": { name: "鋼刀", type: "weapon", damage: 20, hit: 0, value: 1000, desc: "精鋼打造的鋼刀，鋒利無比。" },
+    // --- 武器 (Swords/Blades) ---
+    "iron_sword": { name: "鐵劍", type: "sword", damage: 15, hit: 5, value: 500, desc: "一把普通的鐵劍，適合新手使用。" },
+    "steel_blade": { name: "鋼刀", type: "blade", damage: 20, hit: 2, value: 600, desc: "精鋼打造的鋼刀，背厚刃薄，劈砍有力。" },
     
-    // --- 新增：防具 ---
+    // --- 新增武器 (Other Types) ---
+    "wooden_staff": { name: "木棍", type: "stick", damage: 10, hit: 10, value: 200, desc: "一根堅硬的橡木棍，雖然殺傷力不大但很順手。" },
+    "iron_staff": { name: "熟鐵棍", type: "stick", damage: 25, hit: 5, value: 800, desc: "沉重的鐵棍，一棒下去能敲碎石頭。" },
+    
+    "dagger": { name: "匕首", type: "dagger", damage: 12, hit: 15, value: 300, desc: "藏在袖中的短匕首，偷襲利器。" },
+    
+    "leather_whip": { name: "皮鞭", type: "whip", damage: 15, hit: 8, value: 400, desc: "牛皮編織的長鞭，揮舞起來啪啪作響。" },
+    
+    "stone": { name: "飛蝗石", type: "throwing", damage: 10, hit: 5, value: 50, desc: "隨處可見的鵝卵石，適合當作暗器練習。" },
+    "throwing_knife": { name: "柳葉飛刀", type: "throwing", damage: 20, hit: 20, value: 500, desc: "薄如柳葉的飛刀，例無虛發。" },
+    
+    "bamboo_spear": { name: "竹槍", type: "lance", damage: 18, hit: 0, value: 300, desc: "削尖的竹子製成的長槍。" },
+    "iron_spear": { name: "點鋼槍", type: "lance", damage: 30, hit: -5, value: 1000, desc: "軍中常用的長槍，威力巨大但較為笨重。" },
+
+    // --- 防具 ---
     "cloth_armor": { name: "布衣", type: "armor", defense: 5, value: 200, desc: "普通的粗布衣服，防禦力有限。" },
     "leather_armor": { name: "皮甲", type: "armor", defense: 10, value: 500, desc: "用硬皮製成的盔甲，能提供不錯的防護。" }
 };
