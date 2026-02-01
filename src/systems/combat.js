@@ -6,16 +6,15 @@ import { NPCDB } from "../data/npcs.js";
 import { ItemDB } from "../data/items.js";
 import { SkillDB } from "../data/skills.js";
 import { MapSystem } from "./map.js";
+import { MessageSystem } from "./messages.js"; // [修改] 引入 MessageSystem
 import { PlayerSystem, updatePlayer, getCombatStats, getEffectiveSkillLevel } from "./player.js";
 
 let combatInterval = null;
 let currentCombatState = null;
 
-// --- 內部輔助：取得 NPC 戰鬥數據 (含 Rating 計算) ---
 function getNPCCombatStats(npc) {
     const atkType = 'unarmed'; 
     let maxSkill = 0;
-    // 預設 NPC 的武功係數為 1.0，若有設定特定技能可於此擴充
     let rating = 1.0; 
 
     if (npc.skills) {
@@ -23,7 +22,6 @@ function getNPCCombatStats(npc) {
             const sInfo = SkillDB[sid];
             if (lvl > maxSkill) {
                 maxSkill = lvl;
-                // NPC 使用他最高等級的武功係數
                 if (sInfo && sInfo.rating) rating = sInfo.rating;
             }
         }
@@ -34,7 +32,6 @@ function getNPCCombatStats(npc) {
     const con = npc.attributes?.con || 20;
     const per = npc.attributes?.per || 20;
     
-    // 將 rating 納入 NPC 計算
     const ap = (str * 2.5) + (effAtkSkill * 5 * rating) + (npc.combat.attack || 0);
     const dp = (con * 2.5) + (effAtkSkill * 2) + (npc.combat.defense || 0);
     const hit = (per * 2.5) + (effAtkSkill * 3 * rating);
@@ -43,7 +40,6 @@ function getNPCCombatStats(npc) {
     return { ap, dp, hit, dodge, atkType, effAtkSkill, rating };
 }
 
-// === 計算戰力評分 ===
 function calculateCombatPower(stats, hp) {
     return (stats.ap + stats.dp) * 2 + hp;
 }
@@ -121,7 +117,11 @@ async function findAliveNPC(roomId, targetId) {
 }
 
 async function handlePlayerDeath(playerData, userId) {
-    UI.print(UI.txt("你眼前一黑，感覺靈魂脫離了軀體...", "#ff0000", true), "system", true);
+    const deathMsg = UI.txt("你眼前一黑，感覺靈魂脫離了軀體...", "#ff0000", true);
+    UI.print(deathMsg, "system", true);
+    // [修改] 廣播死亡訊息
+    MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 慘叫一聲，倒在地上死了。`, "#ff0000", true));
+
     CombatSystem.stopCombat(userId);
 
     if (playerData.skills) {
@@ -175,17 +175,12 @@ async function handlePlayerDeath(playerData, userId) {
     }, 180000);
 }
 
-// === [新增] 處理閃避訊息 ===
 function getDodgeMessage(entity, attackerName) {
-    let msg = `$N身形一晃，閃過了$P的攻擊！`; // 預設訊息
-
-    // 檢查是否有激發身法
+    let msg = `$N身形一晃，閃過了$P的攻擊！`; 
     let activeDodge = null;
     if (entity.enabled_skills && entity.enabled_skills.dodge) {
         activeDodge = entity.enabled_skills.dodge;
     } else if (entity.skills && entity.skills.dodge && entity.skills.dodge > 20) {
-        // NPC 簡單判定：如果沒有 enabled_skills 但有 dodge 技能
-        // 這裡暫時只處理玩家，因為 NPC 結構不同
     }
 
     if (activeDodge && SkillDB[activeDodge] && SkillDB[activeDodge].dodge_actions) {
@@ -233,7 +228,10 @@ export const CombatSystem = {
     
         const combatType = isLethal ? "下殺手" : "切磋";
         const color = isLethal ? "#ff0000" : "#ff8800";
-        UI.print(UI.txt(`你對 ${npc.name} ${combatType}！戰鬥開始！`, color, true), "system", true);
+        const startMsg = UI.txt(`你對 ${npc.name} ${combatType}！戰鬥開始！`, color, true);
+        UI.print(startMsg, "system", true);
+        // [修改] 廣播戰鬥開始
+        MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 對 ${npc.name} ${combatType}，大戰一觸即發！`, color, true));
         
         currentCombatState = {
             targetId: npc.id,
@@ -270,7 +268,6 @@ export const CombatSystem = {
                 if (enforceLevel > 0) {
                     const forceSkill = playerData.skills.force || 0;
                     const maxForce = playerData.attributes.maxForce || 10;
-                    
                     const consumptionRate = 0.3; 
                     let idealCost = Math.floor(maxForce * (enforceLevel / 10) * consumptionRate);
                     if (idealCost < 1) idealCost = 1; 
@@ -279,11 +276,9 @@ export const CombatSystem = {
                     
                     if (actualCost > 0) {
                         playerData.attributes.force -= actualCost; 
-                        
                         const efficiency = 1.0 + (forceSkill / 100);
                         let multiplier = 0.5; 
                         if (playerStats.atkType === 'unarmed') multiplier = 0.8; 
-                        
                         forceBonus = Math.floor(actualCost * efficiency * multiplier);
                     } else {
                          if(Math.random() < 0.2) UI.print("你內力枯竭，無法運功加力！", "error");
@@ -308,13 +303,14 @@ export const CombatSystem = {
     
                 const pHitChance = Math.random() * (playerStats.hit + npcStats.dodge);
                 const isHit = currentCombatState.npcIsUnconscious ? true : (pHitChance < playerStats.hit);
-    
-                UI.print(UI.txt(msg, "#ffff00"), "system", true); 
+                
+                const finalMsg = UI.txt(msg, "#ffff00");
+                UI.print(finalMsg, "system", true); 
+                // [修改] 廣播攻擊訊息
+                MessageSystem.broadcast(playerData.location, finalMsg);
     
                 if (isHit) {
                     let damage = playerStats.ap - npcStats.dp;
-                    // === [修改] 讓招式傷害也乘上武功係數 ===
-                    // playerStats.atkRating 是從 player.js 傳過來的係數
                     damage += ((skillBaseDmg * (playerStats.atkRating || 1.0)) / 2); 
                     damage += forceBonus;
 
@@ -334,12 +330,19 @@ export const CombatSystem = {
                     UI.print(damageMsg, "chat");
     
                     const statusMsg = getStatusDesc(npc.name, currentCombatState.npcHp, currentCombatState.maxNpcHp);
-                    if (statusMsg) UI.print(statusMsg, "chat", true);
+                    if (statusMsg) {
+                        UI.print(statusMsg, "chat", true);
+                        // [修改] 廣播狀態
+                        MessageSystem.broadcast(playerData.location, statusMsg);
+                    }
                     
                     if (currentCombatState.npcHp <= 0) {
                         currentCombatState.npcHp = 0;
                         if (!isLethal) {
-                            UI.print(UI.txt(`${npc.name} 拱手說道：「佩服佩服，是在下輸了。」`, "#00ff00", true), "chat", true);
+                            const winMsg = UI.txt(`${npc.name} 拱手說道：「佩服佩服，是在下輸了。」`, "#00ff00", true);
+                            UI.print(winMsg, "chat", true);
+                            MessageSystem.broadcast(playerData.location, winMsg);
+
                             playerData.combat.potential = (playerData.combat.potential || 0) + 10;
                             CombatSystem.stopCombat(userId);
                             await updatePlayer(userId, { "combat.potential": playerData.combat.potential });
@@ -347,9 +350,13 @@ export const CombatSystem = {
                         } else {
                             if (!currentCombatState.npcIsUnconscious) {
                                 currentCombatState.npcIsUnconscious = true;
-                                UI.print(UI.txt(`${npc.name} 搖頭晃腦，腳步踉蹌，咚的一聲倒在地上，動彈不得！`, "#888"), "system", true);
+                                const uncMsg = UI.txt(`${npc.name} 搖頭晃腦，腳步踉蹌，咚的一聲倒在地上，動彈不得！`, "#888");
+                                UI.print(uncMsg, "system", true);
+                                MessageSystem.broadcast(playerData.location, uncMsg);
                             } else {
-                                UI.print(UI.txt(`${npc.name} 慘叫一聲，被你結果了性命。`, "#ff0000", true), "system", true);
+                                const deadMsg = UI.txt(`${npc.name} 慘叫一聲，被你結果了性命。`, "#ff0000", true);
+                                UI.print(deadMsg, "system", true);
+                                MessageSystem.broadcast(playerData.location, UI.txt(`${npc.name} 被 ${playerData.name} 殺死了。`, "#ff0000", true));
                                 
                                 const playerLvl = getLevel(playerData);
                                 const npcLvl = getLevel(npc); 
@@ -401,9 +408,9 @@ export const CombatSystem = {
                         }
                     }
                 } else {
-                    // === [修改] NPC 閃避敘述 ===
-                    // NPC 暫時使用通用閃避，如果 NPC 也有 enabled_skills，這裡也可以套用 getDodgeMessage
-                    UI.print(UI.txt(`${npc.name} 身形一晃，閃過了你的攻擊！`, "#aaa"), "chat", true);
+                    const dodgeMsg = UI.txt(`${npc.name} 身形一晃，閃過了你的攻擊！`, "#aaa");
+                    UI.print(dodgeMsg, "chat", true);
+                    MessageSystem.broadcast(playerData.location, dodgeMsg);
                 }
             } else {
                 UI.print("你現在暈頭轉向，根本無法攻擊！", "error");
@@ -411,11 +418,12 @@ export const CombatSystem = {
     
             // --- NPC 反擊 玩家 ---
             if (!currentCombatState.npcIsUnconscious && playerData.location === currentCombatState.roomId) {
-                let npcMsg = `${npc.name} 往 ${playerData.name} 撲了過來！`;
+                let npcMsg = UI.txt(`${npc.name} 往 ${playerData.name} 撲了過來！`, "#ff5555");
                 const nHitChance = Math.random() * (npcStats.hit + playerStats.dodge);
                 const nIsHit = playerData.isUnconscious ? true : (nHitChance < npcStats.hit);
                 
-                UI.print(UI.txt(npcMsg, "#ff5555"), "system", true);
+                UI.print(npcMsg, "system", true);
+                MessageSystem.broadcast(playerData.location, npcMsg);
     
                 if (nIsHit) {
                     let dmg = npcStats.ap - playerStats.dp;
@@ -428,12 +436,18 @@ export const CombatSystem = {
                     UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
     
                     const statusMsg = getStatusDesc("你", playerData.attributes.hp, playerData.attributes.maxHp);
-                    if (statusMsg) UI.print(statusMsg, "chat", true);
+                    if (statusMsg) {
+                        UI.print(statusMsg, "chat", true);
+                        MessageSystem.broadcast(playerData.location, getStatusDesc(playerData.name, playerData.attributes.hp, playerData.attributes.maxHp));
+                    }
     
                     if (playerData.attributes.hp <= 0) {
                         playerData.attributes.hp = 0;
                         if (!isLethal) {
-                            UI.print(UI.txt("你眼前一黑，知道自己輸了，連忙跳出戰圈。", "#ffaa00", true), "system", true);
+                            const loseMsg = UI.txt("你眼前一黑，知道自己輸了，連忙跳出戰圈。", "#ffaa00", true);
+                            UI.print(loseMsg, "system", true);
+                            MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 敗下陣來，跳出了戰圈。`, "#ffaa00", true));
+
                             playerData.isUnconscious = true; 
                             CombatSystem.stopCombat(userId);
                             await updatePlayer(userId, { "attributes.hp": 0, isUnconscious: true });
@@ -441,7 +455,9 @@ export const CombatSystem = {
                         } else {
                             if (!playerData.isUnconscious) {
                                 playerData.isUnconscious = true;
-                                UI.print(UI.txt("你只覺天旋地轉，站立不穩，咚的一聲倒在地上...", "#ff8800", true), "system", true);
+                                const uncMsg = UI.txt("你只覺天旋地轉，站立不穩，咚的一聲倒在地上...", "#ff8800", true);
+                                UI.print(uncMsg, "system", true);
+                                MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 晃了晃，一頭栽倒在地上。`, "#ff8800", true));
                                 await updatePlayer(userId, { "attributes.hp": 0, isUnconscious: true });
                             } else {
                                 UI.print(UI.txt("這致命的一擊奪走了你最後的生機！", "#ff0000", true), "system", true);
@@ -451,9 +467,9 @@ export const CombatSystem = {
                         }
                     }
                 } else {
-                    // === [修改] 玩家閃避成功，呼叫特殊敘述 ===
                     const dodgeMsg = getDodgeMessage(playerData, npc.name);
                     UI.print(dodgeMsg, "chat", true);
+                    MessageSystem.broadcast(playerData.location, dodgeMsg);
                 }
             } else if (currentCombatState.npcIsUnconscious) {
                 UI.print(UI.txt(`${npc.name} 倒在地上，毫無反抗之力。`, "#888"), "chat", true);

@@ -223,7 +223,7 @@ export const InventorySystem = {
         await updatePlayer(u,{inventory:p.inventory}); 
         await addDoc(collection(db,"room_items"),{roomId:p.location,itemId:it.id,name:it.name,droppedBy:p.name,timestamp:serverTimestamp()}); 
         UI.print("丟了 "+it.name,"system"); 
-        MapSystem.look(p); 
+        // [修改] 移除了 MapSystem.look(p);
     },
 
     get: async (p,a,u) => { 
