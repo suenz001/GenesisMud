@@ -22,6 +22,7 @@ const commandRegistry = {
     'help': { description: '查看指令列表', execute: PlayerSystem.help },
     'score': { description: '查看屬性', execute: PlayerSystem.score },
     'save': { description: '存檔', execute: PlayerSystem.save },
+    'quit': { description: '離開遊戲', execute: PlayerSystem.quit }, // [修正] 補上 quit 指令
     'suicide': { description: '自殺刪檔', execute: PlayerSystem.suicide },
     
     // === 戰鬥指令 ===
@@ -52,7 +53,7 @@ const commandRegistry = {
     'enable': { description: '激發', execute: SkillSystem.enable },
     'unenable': { description: '解除激發', execute: SkillSystem.unenable },
     
-    // === [修改] 這裡將 args (a) 傳入，讓 SkillSystem 可以讀取數值 ===
+    // === 屬性修練指令 ===
     'exercise': { description: '運氣', execute: (p,a,u) => SkillSystem.trainStat(p,u,"內力","force","maxForce","hp","氣",a) },
     'respirate': { description: '運精', execute: (p,a,u) => SkillSystem.trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精",a) },
     'meditate': { description: '運神', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神",a) },
