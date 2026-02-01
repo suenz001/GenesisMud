@@ -4,9 +4,10 @@ export const WorldMap = {
     // === 悅來客棧 ===
     "inn_start": {
         title: "悅來客棧",
-        description: "這是一間名震江湖的老字號客棧。牆上掛著『賓至如歸』的牌匾。",
+        description: "這是一間名震江湖的老字號客棧。牆上掛著『賓至如歸』的牌匾。角落裡有一口古老的水井，井水清澈見底。",
         allowSave: true,
         safe: true, 
+        hasWell: true, // === [新增] 水井屬性，允許 drink water ===
         x: 0, y: 0, z: 0,
         npcs: ["waiter"],
         region: ["world", "inn"] 

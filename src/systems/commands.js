@@ -62,7 +62,6 @@ const commandRegistry = {
     'look': { 
         description: '觀察', 
         execute: (p, a) => { 
-            // 修正：支援 look <target>
             if (a.length > 0) {
                 import("./map.js").then(m => m.MapSystem.lookTarget(p, a[0]));
             } else {
@@ -93,9 +92,15 @@ function handleLook(p, a) {
 commandRegistry['look'].execute = handleLook;
 commandRegistry['l'] = { description: 'look', execute: handleLook };
 
+// === [修正] 同時註冊縮寫 (u, d) 與全名 (up, down) ===
 Object.keys(dirMapping).forEach(shortDir => {
     const fullDir = dirMapping[shortDir];
+    
+    // 註冊縮寫 (例如 n, u)
     commandRegistry[shortDir] = { description: `往 ${fullDir} 移動`, execute: (p, a, u) => MapSystem.move(p, fullDir, u) };
+    
+    // 註冊全名 (例如 north, up)，避免按鈕或手打 fullDir 時無效
+    commandRegistry[fullDir] = { description: `往 ${fullDir} 移動`, execute: (p, a, u) => MapSystem.move(p, fullDir, u) };
 });
 
 export const CommandSystem = {

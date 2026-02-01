@@ -43,7 +43,7 @@ function findShopkeeperInRoom(roomId) {
     for (const nid of room.npcs) {
         const npc = NPCDB[nid];
         if (npc && npc.shop) {
-            return npc; // 找到第一個有商店屬性的 NPC
+            return npc; 
         }
     }
     return null;
@@ -53,7 +53,6 @@ export const InventorySystem = {
     inventory: (p) => { 
         let h = UI.titleLine("背包") + `<div>${UI.attrLine("財產", UI.formatMoney(p.money))}</div><br>`; 
         
-        // 檢查房間內是否有商人，決定是否顯示賣出按鈕
         const shopkeeper = findShopkeeperInRoom(p.location);
         const canSell = !!shopkeeper;
 
@@ -81,7 +80,6 @@ export const InventorySystem = {
                     if (dat.type === 'food') act += UI.makeCmd("[吃]", `eat ${i.id}`, "cmd-btn"); 
                     if (dat.type === 'drink') act += UI.makeCmd("[喝]", `drink ${i.id}`, "cmd-btn"); 
                     
-                    // 賣出按鈕
                     if (canSell) {
                         act += UI.makeCmd("[賣]", `sell ${i.id}`, "cmd-btn cmd-btn-buy");
                     }
@@ -173,6 +171,30 @@ export const InventorySystem = {
     drink: async (playerData, args, userId) => {
         if (args.length === 0) return UI.print("想喝什麼？", "system");
         const targetName = args[0];
+
+        // === [新增] 喝井水邏輯 ===
+        if (targetName === 'water') {
+            const room = MapSystem.getRoom(playerData.location);
+            if (room && room.hasWell) {
+                const attr = playerData.attributes;
+                if (attr.water >= attr.maxWater) {
+                    UI.print("你一點也不渴。", "system");
+                    return;
+                }
+                // 補滿水
+                attr.water = attr.maxWater;
+                UI.print("你走到井邊，大口喝著甘甜的井水，頓時覺得清涼解渴。", "system");
+                MessageSystem.broadcast(playerData.location, `${playerData.name} 走到井邊喝了幾口水。`);
+                
+                UI.updateHUD(playerData);
+                await updatePlayer(userId, { "attributes.water": attr.water });
+                return;
+            } else {
+                UI.print("這裡沒有水可以喝。", "error");
+                return;
+            }
+        }
+
         const invItem = playerData.inventory.find(i => i.id === targetName || i.name === targetName);
         if (!invItem) return UI.print("你身上沒有這樣東西。", "error");
         
@@ -239,22 +261,18 @@ export const InventorySystem = {
         await updatePlayer(u,{money:p.money,inventory:p.inventory}); 
     },
 
-    // === 販賣指令 ===
     sell: async (p, a, u) => {
-        // 1. 檢查參數
         if (a.length < 1) return UI.print("賣啥？ (sell <item_id> [amount])", "error");
         const itemId = a[0];
         let amount = 1;
         if (a.length >= 2 && !isNaN(a[1])) amount = parseInt(a[1]);
 
-        // 2. 檢查地點是否有商人
         const shopkeeper = findShopkeeperInRoom(p.location);
         if (!shopkeeper) {
             UI.print("這裡沒有人收東西。", "error");
             return;
         }
 
-        // 3. 檢查玩家是否持有該物品
         const invIndex = p.inventory ? p.inventory.findIndex(i => i.id === itemId) : -1;
         if (invIndex === -1) {
             UI.print("你身上沒有這樣東西。", "error");
@@ -266,13 +284,11 @@ export const InventorySystem = {
             return;
         }
 
-        // 4. 檢查是否裝備中
         if ((p.equipment && p.equipment.weapon === itemId) || (p.equipment && p.equipment.armor === itemId)) {
             UI.print(`你必須先卸下 ${item.name} 才能販賣。`, "error");
             return;
         }
 
-        // 5. 計算價格
         const itemInfo = ItemDB[itemId];
         if (!itemInfo) return; 
         
@@ -285,7 +301,6 @@ export const InventorySystem = {
         const sellPrice = Math.floor(baseValue * 0.7);
         const totalGet = sellPrice * amount;
 
-        // 6. 執行交易
         if (item.count > amount) {
             item.count -= amount;
         } else {
@@ -294,7 +309,6 @@ export const InventorySystem = {
 
         p.money = (p.money || 0) + totalGet;
 
-        // === [修正] 加上 true 參數，因為 UI.formatMoney 回傳的是 HTML ===
         UI.print(`你賣掉了 ${amount} ${item.name}，獲得了 ${UI.formatMoney(totalGet)}。`, "system", true);
         UI.print(`${shopkeeper.name} 笑嘻嘻地把 ${item.name} 收了起來。`, "chat");
 

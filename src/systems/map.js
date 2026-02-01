@@ -7,7 +7,6 @@ import { NPCDB } from "../data/npcs.js";
 import { MessageSystem } from "./messages.js";
 import { CommandSystem } from "./commands.js"; 
 import { SkillDB } from "../data/skills.js"; 
-// 引入 CombatSystem 用來判斷強弱
 import { CombatSystem } from "./combat.js";
 
 const DIR_OFFSET = {
@@ -101,7 +100,6 @@ export const MapSystem = {
                             statusTag = UI.txt(" 【戰鬥中】", "#ff0000", true);
                         }
 
-                        // === [新增] 獲取強弱顏色 ===
                         const diff = CombatSystem.getDifficultyInfo(playerData, npcId);
                         const coloredName = UI.txt(npc.name, diff.color);
 
@@ -159,6 +157,11 @@ export const MapSystem = {
             if (itemHtml) UI.print(itemHtml, "chat", true);
         } catch (e) { console.error(e); }
 
+        // === [新增] 如果房間有水井，顯示喝水選項 ===
+        if (room.hasWell) {
+            UI.print(`這裡有一口清澈的${UI.txt("水井", "#00ffff")}。 ${UI.makeCmd("[喝水]", "drink water", "cmd-btn")}`, "chat", true);
+        }
+
         const validExits = MapSystem.getAvailableExits(playerData.location);
         const exitKeys = Object.keys(validExits);
         
@@ -174,7 +177,6 @@ export const MapSystem = {
         if (room.npcs && room.npcs.includes(targetId)) {
             const npc = NPCDB[targetId];
             if (npc) {
-                // === [修正] 加入 true 參數 ===
                 UI.print(UI.titleLine(npc.name), "chat", true); 
                 UI.print(npc.description);
                 UI.print(UI.attrLine("體力", `${npc.combat.hp}/${npc.combat.maxHp}`), "chat", true); 
@@ -195,7 +197,6 @@ export const MapSystem = {
                     UI.print(skillHtml, "chat", true);
                 }
                 
-                // === [修正] 加入 true 參數 ===
                 UI.print(UI.titleLine("End"), "chat", true);
                 return;
             }
