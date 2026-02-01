@@ -11,6 +11,7 @@ import { PlayerSystem, updatePlayer, getCombatStats, getEffectiveSkillLevel } fr
 let combatInterval = null;
 let currentCombatState = null;
 
+// --- 內部輔助：取得 NPC 戰鬥數據 ---
 function getNPCCombatStats(npc) {
     const atkType = 'unarmed'; 
     let maxSkill = 0;
@@ -21,6 +22,7 @@ function getNPCCombatStats(npc) {
         }
     }
     const effAtkSkill = maxSkill;
+
     const str = npc.attributes?.str || 20;
     const con = npc.attributes?.con || 20;
     const per = npc.attributes?.per || 20;
@@ -33,6 +35,7 @@ function getNPCCombatStats(npc) {
     return { ap, dp, hit, dodge, atkType, effAtkSkill };
 }
 
+// --- 狀態描述 ---
 function getStatusDesc(name, current, max) {
     if (max <= 0) return null;
     const pct = current / max;
@@ -41,6 +44,7 @@ function getStatusDesc(name, current, max) {
     return null;
 }
 
+// --- 計算等級總和 (用於經驗值/潛能計算) ---
 function getLevel(character) {
     const skills = character.skills || {};
     let maxMartial = 0, maxForce = 0;
@@ -54,6 +58,7 @@ function getLevel(character) {
     return maxMartial + maxForce;
 }
 
+// --- 尋找活著的 NPC (過濾屍體) ---
 async function findAliveNPC(roomId, targetId) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
@@ -82,23 +87,34 @@ async function findAliveNPC(roomId, targetId) {
     return null;
 }
 
+// --- 處理玩家死亡 ---
 async function handlePlayerDeath(playerData, userId) {
     UI.print(UI.txt("你眼前一黑，感覺靈魂脫離了軀體...", "#ff0000", true), "system", true);
     CombatSystem.stopCombat(userId);
 
+    // 1. 技能懲罰
     if (playerData.skills) {
         for (let skillId in playerData.skills) {
             if (playerData.skills[skillId] > 0) playerData.skills[skillId] -= 1;
         }
     }
 
+    // 2. 設定鬼門關位置與狀態
     const deathLocation = "ghost_gate";
+    
+    // 補滿狀態 (變成鬼是滿血狀態)
     playerData.attributes.hp = playerData.attributes.maxHp;
     playerData.attributes.sp = playerData.attributes.maxSp;
     playerData.attributes.mp = playerData.attributes.maxMp;
+    
+    // 清除暈倒狀態
     delete playerData.isUnconscious;
     playerData.isUnconscious = false;
 
+    // === [修正] 立即更新本地端的座標，讓畫面正確跳轉 ===
+    playerData.location = deathLocation; 
+
+    // 3. 更新到資料庫 (包含死亡時間 deathTime)
     await updatePlayer(userId, {
         location: deathLocation,
         skills: playerData.skills,
@@ -106,24 +122,29 @@ async function handlePlayerDeath(playerData, userId) {
         state: 'normal',
         combatTarget: null,
         isUnconscious: false,
-        deathTime: Date.now() // === [新增] 紀錄死亡時間 ===
+        deathTime: Date.now() 
     });
 
     UI.updateHUD(playerData);
+
     UI.print("你悠悠醒來，發現自己身處【鬼門關】。", "system");
     UI.print("你的武功修為受到了一些損耗。", "system");
     UI.print(UI.txt("黑白無常說道：「陽壽未盡？在這反省 3 分鐘再回去吧！」", "#aaa"), "chat", true);
     
+    // 執行 look，這時會正確看到鬼門關
     MapSystem.look(playerData);
 
-    // 這裡還是保留前端計時器，但萬一斷線，Login時的邏輯會接手
+    // 4. 設定 3 分鐘後重生 (前端計時，作為即時反饋，主要依賴 main.js 的斷線重連檢查)
     setTimeout(async () => {
         const pRef = doc(db, "players", userId);
         const pSnap = await getDoc(pRef);
         if (pSnap.exists()) {
             const currentP = pSnap.data();
+            // 只有當玩家還在鬼門關時才傳送
             if (currentP.location === "ghost_gate") {
                 const respawnPoint = currentP.savePoint || "inn_start";
+                
+                // 更新本地與資料庫
                 playerData.location = respawnPoint;
                 await updatePlayer(userId, { location: respawnPoint });
                 
@@ -133,7 +154,7 @@ async function handlePlayerDeath(playerData, userId) {
                 }
             }
         }
-    }, 180000);
+    }, 180000); // 3分鐘
 }
 
 export const CombatSystem = {
@@ -195,6 +216,7 @@ export const CombatSystem = {
             const playerStats = getCombatStats(playerData);
             const npcStats = getNPCCombatStats(npc); 
     
+            // === 玩家 攻擊 NPC ===
             if (!playerData.isUnconscious) {
                 let enabledType = playerData.enabled_skills && playerData.enabled_skills[playerStats.atkType];
                 let activeSkillId = enabledType || playerStats.atkType;
@@ -232,6 +254,7 @@ export const CombatSystem = {
                     const statusMsg = getStatusDesc(npc.name, currentCombatState.npcHp, currentCombatState.maxNpcHp);
                     if (statusMsg) UI.print(statusMsg, "chat", true);
                     
+                    // --- NPC 死亡判定 ---
                     if (currentCombatState.npcHp <= 0) {
                         currentCombatState.npcHp = 0;
                         if (!isLethal) {
@@ -291,6 +314,7 @@ export const CombatSystem = {
                 UI.print("你現在暈頭轉向，根本無法攻擊！", "error");
             }
     
+            // --- NPC 反擊 玩家 ---
             if (!currentCombatState.npcIsUnconscious && playerData.location === currentCombatState.roomId) {
                 let npcMsg = `${npc.name} 往 ${playerData.name} 撲了過來！`;
                 const nHitChance = Math.random() * (npcStats.hit + playerStats.dodge);
@@ -312,6 +336,7 @@ export const CombatSystem = {
                     const statusMsg = getStatusDesc("你", playerData.attributes.hp, playerData.attributes.maxHp);
                     if (statusMsg) UI.print(statusMsg, "chat", true);
     
+                    // --- 玩家 死亡/昏迷判定 ---
                     if (playerData.attributes.hp <= 0) {
                         playerData.attributes.hp = 0;
                         if (!isLethal) {
