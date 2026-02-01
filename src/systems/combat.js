@@ -236,25 +236,39 @@ export const CombatSystem = {
             if (!playerData.isUnconscious) {
                 const enforceLevel = playerData.combat.enforce || 0;
                 let forceBonus = 0;
+                let actualCost = 0; // 用來記錄實際消耗，方便顯示
                 
-                // 1. 內力消耗與加成
+                // 1. 內力消耗與加成 (修正版)
                 if (enforceLevel > 0) {
                     const forceSkill = playerData.skills.force || 0;
-                    // 公式：成數*3 + 內功等級*0.1
-                    const forceCost = Math.floor(enforceLevel * 3 + (forceSkill * 0.1));
+                    const maxForce = playerData.attributes.maxForce || 10;
                     
-                    if (playerData.attributes.force >= forceCost) {
-                        playerData.attributes.force -= forceCost; // 這裡扣除了內力
+                    // === [修改邏輯 1] 比例制消耗 ===
+                    // 公式：最大內力 * (成數/10) * 係數 (0.3)
+                    // 係數 0.3 代表 Enforce 10 (十成) 時，一拳消耗 30% 最大內力
+                    const consumptionRate = 0.3; 
+                    let idealCost = Math.floor(maxForce * (enforceLevel / 10) * consumptionRate);
+                    if (idealCost < 1) idealCost = 1; // 只要有開加力，最少耗1點
+
+                    // === [修改邏輯 2] 實報實銷 ===
+                    // 檢查當前內力夠不夠，不夠就全扣
+                    actualCost = Math.min(playerData.attributes.force, idealCost);
+                    
+                    if (actualCost > 0) {
+                        playerData.attributes.force -= actualCost; // 扣除實際值
                         
-                        const baseForceDmg = forceSkill / 2;
-                        let multiplier = 0.3; 
-                        if (playerStats.atkType === 'unarmed') multiplier = 1.0; 
-                        else if (playerStats.weaponData && playerStats.weaponData.type === 'throwing') multiplier = 0.8; 
+                        // === [修改邏輯 3] 傷害轉換 ===
+                        // 轉換效率：基礎 1.0 + (內功等級 / 100)
+                        // 也就是說，內功 0 級時，1點內力換1點傷；內功100級時，1點內力換2點傷
+                        const efficiency = 1.0 + (forceSkill / 100);
                         
-                        forceBonus = Math.floor(baseForceDmg * (enforceLevel / 10) * multiplier);
+                        let multiplier = 0.5; // 內力傷害係數 (平衡用)
+                        if (playerStats.atkType === 'unarmed') multiplier = 0.8; // 拳腳更能發揮內力
+                        
+                        forceBonus = Math.floor(actualCost * efficiency * multiplier);
                     } else {
-                        // 內力不足提示
-                        if(Math.random() < 0.2) UI.print("你內力不繼，無法運功加力！", "error");
+                         // 內力已乾涸
+                         if(Math.random() < 0.2) UI.print("你內力枯竭，無法運功加力！", "error");
                     }
                 }
 
@@ -292,8 +306,11 @@ export const CombatSystem = {
     
                     currentCombatState.npcHp -= damage;
                     
+                    // === 顯示傷害與內力消耗 ===
                     let damageMsg = `(造成了 ${damage} 點傷害)`;
-                    if (forceBonus > 0) damageMsg = `(運功造成了 ${damage} 點傷害)`;
+                    if (forceBonus > 0) {
+                        damageMsg = `(運功消耗 ${actualCost} 內力，造成了 ${damage} 點傷害)`;
+                    }
                     
                     UI.print(damageMsg, "chat");
     
