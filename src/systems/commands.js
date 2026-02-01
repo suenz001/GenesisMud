@@ -36,6 +36,7 @@ const commandRegistry = {
     'eat': { description: '吃', execute: InventorySystem.eat },
     'drink': { description: '喝', execute: InventorySystem.drink },
     'buy': { description: '買', execute: InventorySystem.buy },
+    'sell': { description: '賣', execute: InventorySystem.sell }, // === [新增] 販賣指令 ===
     'list': { description: '列表', execute: InventorySystem.list },
     'drop': { description: '丟', execute: InventorySystem.drop },
     'get': { description: '撿', execute: InventorySystem.get },
@@ -54,27 +55,13 @@ const commandRegistry = {
     'respirate': { description: '運精', execute: (p,a,u) => SkillSystem.trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精") },
     'meditate': { description: '運神', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神") },
 
-    // === 地圖與社交指令 (保留在 commands.js 或 map.js 處理比較方便) ===
+    // === 地圖與社交指令 ===
     'look': { 
         description: '觀察', 
         execute: (p, a) => { 
-            if(a.length>0) { 
-                // 這裡的邏輯比較混合，為了保持拆分乾淨，暫時保留在此，
-                // 也可以移到 MapSystem.lookObject 處理
-                const npc = InventorySystem.findNPCInRoom ? InventorySystem.findNPCInRoom(p.location, a[0]) : null; 
-                // ... (簡化，沿用原邏輯) ...
-                // 為了避免重複代碼，我們直接呼叫 MapSystem.look，
-                // 但原代碼的 look <NPC> 邏輯在 commands.js 裡面。
-                // 建議：將來可以把 look <NPC/Item> 的邏輯移入 MapSystem
-            } 
-            // 由於依賴問題，這裡我們先維持原狀，但呼叫 MapSystem
             import("./map.js").then(m => m.MapSystem.look(p));
         } 
     },
-    
-    // 為了相容舊代碼的 look <arg> 邏輯，我們重新實作一個簡單版本
-    // 實際上建議把 commands.js 舊有的 look 詳細邏輯移到 MapSystem.lookTarget(p, target)
-    // 這裡先簡單導向 MapSystem.look
     
     'say': { description: '說', execute: (p,a)=>{const m=a.join(" ");UI.print(`你: ${m}`,"chat");MessageSystem.broadcast(p.location,`${p.name} 說: ${m}`);} },
     'emote': { description: '演', execute: (p,a)=>{const m=a.join(" ");UI.print(`${p.name} ${m}`,"system");MessageSystem.broadcast(p.location,`${p.name} ${m}`);} },
@@ -88,24 +75,12 @@ const commandRegistry = {
     }
 };
 
-// 處理 look <target> 的特例 (因為涉及 ItemDB/NPCDB，沒放進 map.js)
-// 為了完整性，把舊的 look 邏輯補回來，但使用新的系統呼叫
 function handleLook(p, a) {
-    if(a.length > 0) {
-        // 找 NPC (需要一個查找函式，這裡簡單實作或從 InventorySystem 借用)
-        // 由於 ES6 模組循環依賴較麻煩，建議這段邏輯未來移入 map.js
-        // 暫時：如果打 look <something>，只執行 MapSystem.look (忽視參數) 
-        // 或請您保留舊的 look 代碼在這裡。
-        // 這裡為了不讓程式出錯，先只執行看房間：
-        MapSystem.look(p);
-        return;
-    }
     MapSystem.look(p);
 }
 commandRegistry['look'].execute = handleLook;
 commandRegistry['l'] = { description: 'look', execute: handleLook };
 
-// 移動指令註冊
 Object.keys(dirMapping).forEach(shortDir => {
     const fullDir = dirMapping[shortDir];
     commandRegistry[shortDir] = { description: `往 ${fullDir} 移動`, execute: (p, a, u) => MapSystem.move(p, fullDir, u) };
@@ -150,5 +125,5 @@ export const CommandSystem = {
         if (command) command.execute(playerData, args, userId);
         else UI.print("你胡亂比劃了一通。(輸入 help 查看指令)", "error");
     },
-    stopCombat: CombatSystem.stopCombat // 導出給 main.js 使用
+    stopCombat: CombatSystem.stopCombat
 };

@@ -35,9 +35,28 @@ function findNPCInRoom(roomId, npcNameOrId) {
     return null;
 }
 
+// 輔助：尋找房間內的任意一位商人
+function findShopkeeperInRoom(roomId) {
+    const room = MapSystem.getRoom(roomId);
+    if (!room || !room.npcs) return null;
+    
+    for (const nid of room.npcs) {
+        const npc = NPCDB[nid];
+        if (npc && npc.shop) {
+            return npc; // 找到第一個有商店屬性的 NPC
+        }
+    }
+    return null;
+}
+
 export const InventorySystem = {
     inventory: (p) => { 
         let h = UI.titleLine("背包") + `<div>${UI.attrLine("財產", UI.formatMoney(p.money))}</div><br>`; 
+        
+        // === [新增] 檢查房間內是否有商人，決定是否顯示賣出按鈕 ===
+        const shopkeeper = findShopkeeperInRoom(p.location);
+        const canSell = !!shopkeeper;
+
         if (!p.inventory || p.inventory.length === 0) h += UI.txt("空空如也。<br>", "#888"); 
         else {
             p.inventory.forEach(i => { 
@@ -61,6 +80,13 @@ export const InventorySystem = {
                     if (dat.type === 'armor') act += UI.makeCmd("[穿戴]", `wear ${i.id}`, "cmd-btn");
                     if (dat.type === 'food') act += UI.makeCmd("[吃]", `eat ${i.id}`, "cmd-btn"); 
                     if (dat.type === 'drink') act += UI.makeCmd("[喝]", `drink ${i.id}`, "cmd-btn"); 
+                    
+                    // === [新增] 賣出按鈕 ===
+                    if (canSell) {
+                        // 使用 cmd-btn-buy 樣式讓它看起來像交易相關
+                        act += UI.makeCmd("[賣]", `sell ${i.id}`, "cmd-btn cmd-btn-buy");
+                    }
+                    
                     act += UI.makeCmd("[丟]", `drop ${i.id}`, "cmd-btn");
                 }
                 
@@ -212,6 +238,67 @@ export const InventorySystem = {
         if(ex)ex.count+=amt; else p.inventory.push({id:tid,name:ItemDB[tid].name,count:amt}); 
         UI.print(`買了 ${amt} ${ItemDB[tid].name}`,"system"); 
         await updatePlayer(u,{money:p.money,inventory:p.inventory}); 
+    },
+
+    // === [新增] 賣出指令 ===
+    sell: async (p, a, u) => {
+        // 1. 檢查參數
+        if (a.length < 1) return UI.print("賣啥？ (sell <item_id> [amount])", "error");
+        const itemId = a[0];
+        let amount = 1;
+        if (a.length >= 2 && !isNaN(a[1])) amount = parseInt(a[1]);
+
+        // 2. 檢查地點是否有商人
+        const shopkeeper = findShopkeeperInRoom(p.location);
+        if (!shopkeeper) {
+            UI.print("這裡沒有人收東西。", "error");
+            return;
+        }
+
+        // 3. 檢查玩家是否持有該物品
+        const invIndex = p.inventory ? p.inventory.findIndex(i => i.id === itemId) : -1;
+        if (invIndex === -1) {
+            UI.print("你身上沒有這樣東西。", "error");
+            return;
+        }
+        const item = p.inventory[invIndex];
+        if (item.count < amount) {
+            UI.print("你身上的數量不夠。", "error");
+            return;
+        }
+
+        // 4. 檢查是否裝備中
+        if ((p.equipment && p.equipment.weapon === itemId) || (p.equipment && p.equipment.armor === itemId)) {
+            UI.print(`你必須先卸下 ${item.name} 才能販賣。`, "error");
+            return;
+        }
+
+        // 5. 計算價格
+        const itemInfo = ItemDB[itemId];
+        if (!itemInfo) return; // 理論上不該發生
+        
+        const baseValue = itemInfo.value || 0;
+        if (baseValue <= 0) {
+            UI.print(`${shopkeeper.name} 搖搖頭道：「這東西不值錢，我不能收。」`, "chat");
+            return;
+        }
+
+        const sellPrice = Math.floor(baseValue * 0.7);
+        const totalGet = sellPrice * amount;
+
+        // 6. 執行交易
+        if (item.count > amount) {
+            item.count -= amount;
+        } else {
+            p.inventory.splice(invIndex, 1);
+        }
+
+        p.money = (p.money || 0) + totalGet;
+
+        UI.print(`你賣掉了 ${amount} ${item.name}，獲得了 ${UI.formatMoney(totalGet)}。`, "system");
+        UI.print(`${shopkeeper.name} 笑嘻嘻地把 ${item.name} 收了起來。`, "chat");
+
+        await updatePlayer(u, { money: p.money, inventory: p.inventory });
     },
 
     list: (p,a) => { 
