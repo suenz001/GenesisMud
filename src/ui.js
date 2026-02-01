@@ -14,7 +14,10 @@ const btnRegister = document.getElementById('btn-register');
 const btnGuest = document.getElementById('btn-guest');
 
 const elRoomName = document.getElementById('current-room-name');
-const miniMapBox = document.getElementById('mini-map-box');
+
+// 新增自動按鈕參考
+const btnAutoEat = document.getElementById('btn-auto-eat');
+const btnAutoDrink = document.getElementById('btn-auto-drink');
 
 export const UI = {
     txt: (text, color = '#ccc', bold = false) => {
@@ -65,19 +68,17 @@ export const UI = {
             textEl.textContent = `${safeCurrent}/${safeMax}`;
         };
 
-        // === 修正：完全依照直覺對應 ===
-        // hp -> bar-hp (氣)
+        // HP, SP, MP, etc.
         updateBar('bar-hp', 'text-hp', attr.hp, attr.maxHp);
-        
-        // sp -> bar-sp (精)
         updateBar('bar-sp', 'text-sp', attr.sp, attr.maxSp);
-        
-        // mp -> bar-mp (神)
         updateBar('bar-mp', 'text-mp', attr.mp, attr.maxMp);
-        
         updateBar('bar-spiritual', 'text-spiritual', attr.spiritual, attr.maxSpiritual);
         updateBar('bar-force', 'text-force', attr.force, attr.maxForce);
         updateBar('bar-mana', 'text-mana', attr.mana, attr.maxMana);
+        
+        // === [新增] 食物與飲水條更新 ===
+        updateBar('bar-food', 'text-food', attr.food, attr.maxFood);
+        updateBar('bar-water', 'text-water', attr.water, attr.maxWater);
 
         const currentRoom = WorldMap[playerData.location];
         if (currentRoom) {
@@ -140,7 +141,7 @@ export const UI = {
     enableGameInput: (enabled) => {
         input.disabled = !enabled;
         sendBtn.disabled = !enabled;
-        document.querySelectorAll('.btn-move, .btn-action').forEach(btn => btn.disabled = !enabled);
+        document.querySelectorAll('.btn-move, .btn-action, .btn-toggle').forEach(btn => btn.disabled = !enabled);
         if (enabled) { input.placeholder = "請輸入指令..."; input.focus(); } 
         else { input.placeholder = "請先登入..."; }
     },
@@ -149,6 +150,21 @@ export const UI = {
         if (show) emailInput.focus();
     },
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
+    
+    // === [新增] 綁定自動功能按鈕的 callback ===
+    onAutoToggle: (callbacks) => {
+        btnAutoEat.addEventListener('click', () => {
+            const newState = callbacks.toggleEat();
+            btnAutoEat.textContent = `自動進食: ${newState ? '開' : '關'}`;
+            btnAutoEat.classList.toggle('active', newState);
+        });
+        btnAutoDrink.addEventListener('click', () => {
+            const newState = callbacks.toggleDrink();
+            btnAutoDrink.textContent = `自動飲水: ${newState ? '開' : '關'}`;
+            btnAutoDrink.classList.toggle('active', newState);
+        });
+    },
+
     onInput: (callback) => {
         const sendHandler = () => {
             const val = input.value.trim();

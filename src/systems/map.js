@@ -5,7 +5,7 @@ import { UI } from "../ui.js";
 import { db, auth } from "../firebase.js"; 
 import { NPCDB } from "../data/npcs.js";
 import { MessageSystem } from "./messages.js";
-import { CommandSystem } from "./commands.js"; // 引入 CommandSystem 以呼叫 stopCombat
+import { CommandSystem } from "./commands.js"; 
 
 const DIR_OFFSET = {
     'north': { x: 0, y: 1, z: 0 }, 'south': { x: 0, y: -1, z: 0 },
@@ -53,11 +53,9 @@ export const MapSystem = {
         if (room.safe) UI.print(UI.txt("【 安全區 】", "#00ff00"), "system", true);
         UI.print(room.description);
 
-        // --- NPC 顯示 (過濾死亡) ---
         if (room.npcs && room.npcs.length > 0) {
             let deadNPCs = [];
             try {
-                // 讀取該房間的屍體列表
                 const deadRef = collection(db, "dead_npcs");
                 const q = query(deadRef, where("roomId", "==", playerData.location));
                 const snapshot = await getDocs(q);
@@ -65,9 +63,8 @@ export const MapSystem = {
                 
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    // 檢查重生時間 (5分鐘 = 300000ms)
                     if (now >= data.respawnTime) {
-                        deleteDoc(doc.ref); // 重生：刪除屍體紀錄
+                        deleteDoc(doc.ref); 
                     } else {
                         deadNPCs.push({ npcId: data.npcId, index: data.index });
                     }
@@ -76,13 +73,11 @@ export const MapSystem = {
 
             let npcListHtml = "";
             room.npcs.forEach((npcId, index) => {
-                // 精確比對 ID 和 Index，解決同名怪物問題
                 const isDead = deadNPCs.some(d => d.npcId === npcId && d.index === index);
                 
                 if (!isDead) {
                     const npc = NPCDB[npcId];
                     if (npc) {
-                        // 檢查是否為當前玩家的戰鬥目標
                         let statusTag = "";
                         if (playerData.state === 'fighting' && 
                             playerData.combatTarget && 
@@ -101,14 +96,10 @@ export const MapSystem = {
                         
                         if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id}`, "cmd-btn");
                         
-                        // 戰鬥指令
                         if (playerData.state !== 'fighting') {
                             links += UI.makeCmd("[戰鬥]", `fight ${npc.id}`, "cmd-btn");
-                            // === [修改] 按鈕文字由 "下殺手" 改為 "殺" ===
                             links += UI.makeCmd("[殺]", `kill ${npc.id}`, "cmd-btn cmd-btn-buy");
-                        } else if (statusTag) {
-                            // 戰鬥中顯示停止或逃跑提示，或不顯示
-                        }
+                        } 
 
                         npcListHtml += `<div style="margin-top:4px;">${links}</div>`;
                     }
@@ -117,7 +108,6 @@ export const MapSystem = {
             if (npcListHtml) UI.print(npcListHtml, "chat", true);
         }
 
-        // --- 玩家顯示 ---
         try {
             const playersRef = collection(db, "players");
             const q = query(playersRef, where("location", "==", playerData.location));
@@ -125,22 +115,19 @@ export const MapSystem = {
             let playerHtml = "";
             querySnapshot.forEach((doc) => {
                 const p = doc.data();
-                // 顯示所有玩家 (包含自己)
+                
+                // === [新增] 過濾自己，不顯示在列表 ===
+                if (auth.currentUser && doc.id === auth.currentUser.uid) return;
+
                 let status = "";
                 if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
                 if (p.isUnconscious) status += UI.txt(" (昏迷)", "#888");
 
-                if (auth.currentUser && doc.id === auth.currentUser.uid) {
-                    // 自己
-                    playerHtml += `<div style="margin-top:2px;">[ 你 ] ${p.name}${status}</div>`;
-                } else {
-                    playerHtml += `<div style="margin-top:2px;">[ 玩家 ] ${p.name} <span style="color:#aaa">(${p.id || 'unknown'})</span>${status}</div>`;
-                }
+                playerHtml += `<div style="margin-top:2px;">[ 玩家 ] ${p.name} <span style="color:#aaa">(${p.id || 'unknown'})</span>${status}</div>`;
             });
             if (playerHtml) UI.print(playerHtml, "chat", true);
         } catch (e) { console.error(e); }
 
-        // --- 掉落物顯示 ---
         try {
             const itemsRef = collection(db, "room_items");
             const qItems = query(itemsRef, where("roomId", "==", playerData.location));
@@ -155,7 +142,6 @@ export const MapSystem = {
             if (itemHtml) UI.print(itemHtml, "chat", true);
         } catch (e) { console.error(e); }
 
-        // --- 出口顯示 ---
         const validExits = MapSystem.getAvailableExits(playerData.location);
         const exitKeys = Object.keys(validExits);
         
@@ -169,15 +155,12 @@ export const MapSystem = {
     move: async (playerData, direction, userId) => {
         if (!playerData) return;
         
-        // 戰鬥中移動限制
         if (playerData.state === 'fighting') {
-            // 逃跑機制：50% 機率成功
             if (Math.random() < 0.5) {
                  UI.print("你被敵人纏住了，無法脫身！", "error");
                  return;
             } else {
                  UI.print("你狼狽地逃出了戰圈...", "system");
-                 // 呼叫 commands.js 的 stopCombat
                  if(CommandSystem.stopCombat) CommandSystem.stopCombat(userId);
             }
         }
@@ -199,7 +182,6 @@ export const MapSystem = {
         const nextRoomId = validExits[direction];
         playerData.location = nextRoomId;
         
-        // 移動後清除戰鬥狀態 (保險起見)
         playerData.state = 'normal'; 
         playerData.combatTarget = null;
 

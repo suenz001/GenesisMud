@@ -1,7 +1,7 @@
 /* css/style.css */
 body {
     background-color: #000;
-    color: #c0c0c0; /* 經典淺灰字 */
+    color: #c0c0c0;
     font-family: 'Courier New', Courier, monospace, "微軟正黑體";
     margin: 0;
     padding: 0;
@@ -9,12 +9,12 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    overflow: hidden; /* 防止整個頁面捲動 */
+    overflow: hidden;
 }
 
 #game-wrapper {
     width: 100%;
-    max-width: 1100px; /* 加寬版面 */
+    max-width: 1100px;
     height: 95vh;
     display: flex;
     flex-direction: column;
@@ -52,7 +52,7 @@ body {
 #output {
     flex-grow: 1;
     padding: 15px;
-    overflow-y: auto; /* 文字區自己捲動 */
+    overflow-y: auto;
     white-space: pre-wrap;
     line-height: 1.6;
     font-size: 15px;
@@ -86,18 +86,9 @@ body {
     border-radius: 4px;
 }
 
-.panel-title {
-    color: #33ff33;
-    font-size: 14px;
-    border-bottom: 1px solid #444;
-    padding-bottom: 5px;
-    margin-bottom: 8px;
-    text-align: center;
-}
-
 /* --- 5x5 地圖樣式 --- */
 #mini-map-box {
-    height: 220px; /* 足夠的高度 */
+    height: 220px;
     background: #0d0d0d;
     border: 1px solid #555;
     display: flex;
@@ -109,8 +100,8 @@ body {
 
 .range-map-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr); /* 5列 */
-    grid-template-rows: repeat(5, 1fr);    /* 5行 */
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, 1fr);
     gap: 4px;
     width: 100%;
     height: 100%;
@@ -125,20 +116,18 @@ body {
     color: #666;
     background: #111;
     border: 1px solid #222;
-    box-sizing: border-box; /* 確保紅線邊框不會撐破格子 */
+    box-sizing: border-box;
 }
 
-/* 當格子有房間時 */
 .map-cell-range.room-exists {
     border: 1px solid #666;
     background-color: #333;
-    color: #fff; /* 亮字 */
+    color: #fff;
     font-weight: bold;
     box-shadow: 0 0 2px rgba(255, 255, 255, 0.1);
     cursor: default;
 }
 
-/* 當前玩家位置 */
 .map-cell-range.current-pos {
     border: 1px solid #33ff33;
     background-color: rgba(51, 255, 51, 0.3);
@@ -147,19 +136,17 @@ body {
     font-size: 10px;
 }
 
-/* 空地 */
 .map-cell-range.empty {
     border: none;
     background: transparent;
 }
 
-/* --- 牆壁紅線阻擋 (重要！) --- */
 .wall-north { border-top: 2px solid #ff3333 !important; }
 .wall-south { border-bottom: 2px solid #ff3333 !important; }
 .wall-east  { border-right: 2px solid #ff3333 !important; }
 .wall-west  { border-left: 2px solid #ff3333 !important; }
 
-/* --- 狀態條 (6條版) --- */
+/* --- 狀態條 --- */
 #panel-status {
     display: flex;
     flex-direction: column;
@@ -189,7 +176,7 @@ body {
 }
 
 .status-row .label {
-    width: 35px; /* 標籤寬度 */
+    width: 35px;
     color: #ccc;
     font-weight: bold;
     text-align: right;
@@ -208,18 +195,22 @@ body {
 
 .bar-fill {
     height: 100%;
-    width: 100%; /* JS 控制 */
+    width: 100%;
     transition: width 0.3s ease;
 }
 
 /* 狀態條顏色定義 */
-.bar-fill.hp { background: #d32f2f; } /* 紅 (精) */
-.bar-fill.mp { background: #1976d2; } /* 藍 (氣) */
-.bar-fill.sp { background: #fbc02d; } /* 黃 (神) */
+.bar-fill.hp { background: #d32f2f; }
+.bar-fill.mp { background: #1976d2; }
+.bar-fill.sp { background: #fbc02d; }
 
-.bar-fill.force { background: #ff9800; }     /* 橘 (內力) */
-.bar-fill.mana { background: #9c27b0; }      /* 紫 (法力) */
-.bar-fill.spiritual { background: #00bcd4; } /* 青 (靈力) */
+.bar-fill.force { background: #ff9800; }
+.bar-fill.mana { background: #9c27b0; }
+.bar-fill.spiritual { background: #00bcd4; }
+
+/* 新增：食物與飲水顏色 */
+.bar-fill.food { background: #4caf50; } /* 綠色 */
+.bar-fill.water { background: #00bcd4; } /* 青色 (與靈力類似，但分開顯示) */
 
 .bar-text {
     position: absolute;
@@ -248,7 +239,7 @@ body {
     gap: 4px;
 }
 
-.btn-move, .btn-action {
+.btn-move, .btn-action, .btn-toggle {
     background: #333;
     color: #ddd;
     border: 1px solid #555;
@@ -258,10 +249,17 @@ body {
     border-radius: 3px;
 }
 
-.btn-move:hover, .btn-action:hover {
+.btn-move:hover, .btn-action:hover, .btn-toggle:hover {
     background: #555;
     border-color: #33ff33;
     color: #fff;
+}
+
+/* 開啟狀態的按鈕 */
+.btn-toggle.active {
+    background: #006600;
+    color: #fff;
+    border-color: #00ff00;
 }
 
 .action-grid {
@@ -270,7 +268,6 @@ body {
     gap: 5px;
 }
 
-/* 輸入框與登入相關 */
 #cmd-input {
     flex-grow: 1;
     background: #000;
@@ -318,9 +315,8 @@ body {
 .msg-error { color: #ff5555; }
 .msg-chat { color: #00ffff; }
 
-/* --- 互動文字連結樣式 --- */
 .cmd-link {
-    color: #00ff00; /* 亮綠色 */
+    color: #00ff00;
     text-decoration: underline;
     cursor: pointer;
     margin: 0 2px;
@@ -331,7 +327,6 @@ body {
     text-decoration: none;
 }
 
-/* 動作按鈕 (例如 [吃], [買]) */
 .cmd-btn {
     display: inline-block;
     background: #333;
@@ -349,7 +344,6 @@ body {
     background: #444;
 }
 
-/* 購買按鈕專用色 */
 .cmd-btn-buy {
     border-color: #ff9800;
     color: #ff9800;

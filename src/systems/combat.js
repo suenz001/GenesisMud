@@ -11,22 +11,16 @@ import { PlayerSystem, updatePlayer, getCombatStats, getEffectiveSkillLevel } fr
 let combatInterval = null;
 let currentCombatState = null;
 
-// --- 內部輔助：取得 NPC 戰鬥數據 ---
-// (因為 NPC 結構與 Player 不同，需特殊處理技能)
 function getNPCCombatStats(npc) {
-    const atkType = 'unarmed'; // NPC 預設空手，除非有特定邏輯
-    
-    // 計算 NPC 的有效技能 (尋找該系別最高的技能)
+    const atkType = 'unarmed'; 
     let maxSkill = 0;
     if (npc.skills) {
         for (const [sid, lvl] of Object.entries(npc.skills)) {
             const sInfo = SkillDB[sid];
-            // 簡化邏輯：如果有相關技能，取最高者
             if (lvl > maxSkill) maxSkill = lvl;
         }
     }
     const effAtkSkill = maxSkill;
-
     const str = npc.attributes?.str || 20;
     const con = npc.attributes?.con || 20;
     const per = npc.attributes?.per || 20;
@@ -60,7 +54,6 @@ function getLevel(character) {
     return maxMartial + maxForce;
 }
 
-// --- 尋找活著的 NPC ---
 async function findAliveNPC(roomId, targetId) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
@@ -112,7 +105,8 @@ async function handlePlayerDeath(playerData, userId) {
         attributes: playerData.attributes,
         state: 'normal',
         combatTarget: null,
-        isUnconscious: false
+        isUnconscious: false,
+        deathTime: Date.now() // === [新增] 紀錄死亡時間 ===
     });
 
     UI.updateHUD(playerData);
@@ -122,6 +116,7 @@ async function handlePlayerDeath(playerData, userId) {
     
     MapSystem.look(playerData);
 
+    // 這裡還是保留前端計時器，但萬一斷線，Login時的邏輯會接手
     setTimeout(async () => {
         const pRef = doc(db, "players", userId);
         const pSnap = await getDoc(pRef);
@@ -200,7 +195,6 @@ export const CombatSystem = {
             const playerStats = getCombatStats(playerData);
             const npcStats = getNPCCombatStats(npc); 
     
-            // === 玩家 攻擊 NPC ===
             if (!playerData.isUnconscious) {
                 let enabledType = playerData.enabled_skills && playerData.enabled_skills[playerStats.atkType];
                 let activeSkillId = enabledType || playerStats.atkType;
@@ -254,7 +248,7 @@ export const CombatSystem = {
                                 UI.print(UI.txt(`${npc.name} 慘叫一聲，被你結果了性命。`, "#ff0000", true), "system", true);
                                 
                                 const playerLvl = getLevel(playerData);
-                                const npcLvl = getLevel(npc); // 簡易計算
+                                const npcLvl = getLevel(npc); 
                                 let potGain = 100 + ((npcLvl - playerLvl) * 10);
                                 if (potGain < 10) potGain = 10;
                                 
@@ -297,7 +291,6 @@ export const CombatSystem = {
                 UI.print("你現在暈頭轉向，根本無法攻擊！", "error");
             }
     
-            // --- NPC 反擊 玩家 ---
             if (!currentCombatState.npcIsUnconscious && playerData.location === currentCombatState.roomId) {
                 let npcMsg = `${npc.name} 往 ${playerData.name} 撲了過來！`;
                 const nHitChance = Math.random() * (npcStats.hit + playerStats.dodge);
