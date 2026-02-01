@@ -154,7 +154,7 @@ export const SkillSystem = {
                 msg += `${UI.txt(type, "#00ffff")} : ${sInfo ? sInfo.name : skillId}\n`;
             }
             if (Object.keys(playerData.enabled_skills).length === 0) msg += "無\n";
-            UI.print(msg, 'system');
+            UI.print(msg, 'system', true); // === 修正：這裡本來是 system，建議加 true ===
             return;
         }
 
@@ -163,6 +163,17 @@ export const SkillSystem = {
 
         if (!playerData.skills || !playerData.skills[skillId]) { UI.print("你不會這招。", "error"); return; }
         const skillInfo = SkillDB[skillId];
+        
+        // === [修正] 激發檢查：是否有基礎武學 ===
+        if (skillInfo.base) {
+             const baseLvl = playerData.skills[skillInfo.base] || 0;
+             if (baseLvl <= 0) {
+                 const baseName = SkillDB[skillInfo.base] ? SkillDB[skillInfo.base].name : skillInfo.base;
+                 UI.print(`你的${baseName}火候不足，無法激發${skillInfo.name}。`, "error");
+                 return;
+             }
+        }
+
         if (skillInfo.base !== type) { UI.print("類型不符。", "error"); return; }
 
         if (playerData.enabled_skills[type] === skillId) {
@@ -195,10 +206,32 @@ export const SkillSystem = {
         if(!npc){UI.print("沒人","error");return;} 
         if(!p.family||p.family.masterId!==npc.id){UI.print("需拜師","error");return;} 
         if(!npc.skills[sid]){UI.print("他不會","chat");return;} 
-        if((p.skills[sid]||0)>=npc.skills[sid]){UI.print("學滿了","chat");return;} 
+        
+        // 檢查 1: 不能超過師傅
+        if((p.skills[sid]||0)>=npc.skills[sid]){UI.print("這招你已經學滿了，師父沒什麼好教你的了。","chat");return;} 
+        
+        const skillInfo = SkillDB[sid];
+
+        // === [修正] 檢查 2: 基礎武學檢查 ===
+        if (skillInfo && skillInfo.base) {
+            const baseLvl = p.skills[skillInfo.base] || 0;
+            if (baseLvl <= 0) {
+                const baseName = SkillDB[skillInfo.base] ? SkillDB[skillInfo.base].name : skillInfo.base;
+                UI.print(`你的${baseName}毫無根基，怎麼學得會這高深招式？`, "error");
+                return;
+            }
+            // 檢查 3: 進階不能超過基礎
+            const currentLvl = p.skills[sid] || 0;
+            if (currentLvl >= baseLvl) {
+                UI.print(`你的${baseName}火候不足，無法領悟更高深的${skillInfo.name}。`, "error");
+                return;
+            }
+        }
+
         const spC=10+Math.floor((p.skills[sid]||0)/2), potC=5+Math.floor((p.skills[sid]||0)/5); 
         if(p.attributes.sp<=spC){UI.print("精不足","error");return;} 
         if((p.combat.potential||0)<potC){UI.print("潛能不足","error");return;} 
+        
         p.attributes.sp-=spC; p.combat.potential-=potC; p.skills[sid]=(p.skills[sid]||0)+1; 
         UI.print(`學習了 ${SkillDB[sid].name} (${p.skills[sid]}級)`,"system"); 
         await updatePlayer(u,{"attributes.sp":p.attributes.sp,"combat.potential":p.combat.potential,"skills":p.skills}); 
@@ -209,7 +242,17 @@ export const SkillSystem = {
         const sid=a[0]; 
         if(!SkillDB[sid]){UI.print("沒這招","error");return;} 
         if(!(p.skills[sid])){UI.print("不會","error");return;} 
-        if(SkillDB[sid].base && p.skills[sid]>=p.skills[SkillDB[sid].base]){UI.print("基礎不足","error");return;} 
+        
+        // === [修正] 練習檢查：基礎武學 ===
+        if (SkillDB[sid].base) {
+            const baseLvl = p.skills[SkillDB[sid].base] || 0;
+            if (p.skills[sid] >= baseLvl) {
+                const baseName = SkillDB[SkillDB[sid].base] ? SkillDB[SkillDB[sid].base].name : SkillDB[sid].base;
+                UI.print(`你的${baseName}火候不足，無法繼續提升${SkillDB[sid].name}。`, "error");
+                return;
+            }
+        }
+
         const cost=10+Math.floor(p.skills[sid]/2); 
         if(p.attributes.hp<=cost){UI.print("氣不足","error");return;} 
         p.attributes.hp-=cost; p.skills[sid]++; 

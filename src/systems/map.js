@@ -6,7 +6,9 @@ import { db, auth } from "../firebase.js";
 import { NPCDB } from "../data/npcs.js";
 import { MessageSystem } from "./messages.js";
 import { CommandSystem } from "./commands.js"; 
-import { SkillDB } from "../data/skills.js"; // 引入技能資料
+import { SkillDB } from "../data/skills.js"; 
+// 引入 CombatSystem 用來判斷強弱
+import { CombatSystem } from "./combat.js";
 
 const DIR_OFFSET = {
     'north': { x: 0, y: 1, z: 0 }, 'south': { x: 0, y: -1, z: 0 },
@@ -16,7 +18,6 @@ const DIR_OFFSET = {
     'southeast': { x: 1, y: -1, z: 0 }, 'southwest': { x: -1, y: -1, z: 0 }
 };
 
-// 複製一份描述函式以免依賴循環
 function getSkillDesc(level) {
     if (level >= 500) return UI.txt("深不可測", "#ff00ff");
     if (level >= 400) return UI.txt("返璞歸真", "#ff0000");
@@ -58,8 +59,6 @@ export const MapSystem = {
     look: async (playerData) => {
         if (!playerData || !playerData.location) return;
         
-        // 為了相容 commands.js 直接呼叫 look 但沒傳參數的情況
-        // 我們這裡暫時只處理看房間，如果需要看人，邏輯在下面或需要前端傳入
         const room = WorldMap[playerData.location];
         if (!room) { UI.print("你陷入虛空...", "error"); return; }
 
@@ -70,7 +69,6 @@ export const MapSystem = {
         if (room.safe) UI.print(UI.txt("【 安全區 】", "#00ff00"), "system", true);
         UI.print(room.description);
 
-        // 處理 NPC
         if (room.npcs && room.npcs.length > 0) {
             let deadNPCs = [];
             try {
@@ -103,11 +101,11 @@ export const MapSystem = {
                             statusTag = UI.txt(" 【戰鬥中】", "#ff0000", true);
                         }
 
-                        let links = `${UI.txt(npc.name, "#fff")} <span style="color:#aaa">(${npc.id})</span>${statusTag} `;
-                        
-                        // 這裡使用 look <npc_id>，但我們還沒有拆分 look target
-                        // 為了讓玩家可以點擊看師傅，我們擴充命令處理
-                        // 這裡按鈕改成觸發一個擴充的顯示
+                        // === [新增] 獲取強弱顏色 ===
+                        const diff = CombatSystem.getDifficultyInfo(playerData, npcId);
+                        const coloredName = UI.txt(npc.name, diff.color);
+
+                        let links = `${coloredName} <span style="color:#aaa">(${npc.id})</span>${statusTag} `;
                         links += UI.makeCmd("[看]", `look ${npc.id}`, "cmd-btn");
                         
                         const isMyMaster = (playerData.family && playerData.family.masterId === npc.id);
@@ -129,7 +127,6 @@ export const MapSystem = {
             if (npcListHtml) UI.print(npcListHtml, "chat", true);
         }
 
-        // 處理玩家
         try {
             const playersRef = collection(db, "players");
             const q = query(playersRef, where("location", "==", playerData.location));
@@ -148,7 +145,6 @@ export const MapSystem = {
             if (playerHtml) UI.print(playerHtml, "chat", true);
         } catch (e) { console.error(e); }
 
-        // 處理地上物品
         try {
             const itemsRef = collection(db, "room_items");
             const qItems = query(itemsRef, where("roomId", "==", playerData.location));
@@ -173,18 +169,16 @@ export const MapSystem = {
         }
     },
 
-    // 處理看特定目標 (整合進 commands.js 的 look 指令)
     lookTarget: (playerData, targetId) => {
-        // 先看是不是 NPC
         const room = WorldMap[playerData.location];
         if (room.npcs && room.npcs.includes(targetId)) {
             const npc = NPCDB[targetId];
             if (npc) {
-                UI.print(UI.titleLine(npc.name));
+                // === [修正] 加入 true 參數 ===
+                UI.print(UI.titleLine(npc.name), "chat", true); 
                 UI.print(npc.description);
-                UI.print(UI.attrLine("體力", `${npc.combat.hp}/${npc.combat.maxHp}`));
+                UI.print(UI.attrLine("體力", `${npc.combat.hp}/${npc.combat.maxHp}`), "chat", true); 
 
-                // === [新增] 如果是我的師傅，顯示詳細技能 ===
                 if (playerData.family && playerData.family.masterId === npc.id && npc.skills) {
                     let skillHtml = `<br>${UI.txt("【 師傳武學 】", "#ffff00")}<br>`;
                     skillHtml += `<div style="display:grid; grid-template-columns: 1fr auto auto; gap:5px;">`;
@@ -201,12 +195,12 @@ export const MapSystem = {
                     UI.print(skillHtml, "chat", true);
                 }
                 
-                UI.print(UI.titleLine("End"));
+                // === [修正] 加入 true 參數 ===
+                UI.print(UI.titleLine("End"), "chat", true);
                 return;
             }
         }
         
-        // 看背包或地上 (簡化，只處理 NPC 需求)
         UI.print("你看不到 " + targetId + "。", "error");
     },
 
