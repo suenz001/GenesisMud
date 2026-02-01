@@ -35,13 +35,12 @@ function getNPCCombatStats(npc) {
     return { ap, dp, hit, dodge, atkType, effAtkSkill };
 }
 
-// === [新增] 計算戰力評分 ===
+// === 計算戰力評分 ===
 function calculateCombatPower(stats, hp) {
-    // 簡易評分公式：(攻+防)*2 + 血量
     return (stats.ap + stats.dp) * 2 + hp;
 }
 
-// === [新增] 判斷強弱顏色與描述 ===
+// === 判斷強弱顏色與描述 ===
 export function getDifficultyInfo(playerData, npcId) {
     const npc = NPCDB[npcId];
     if (!npc) return { color: "#fff", ratio: 1 };
@@ -54,13 +53,13 @@ export function getDifficultyInfo(playerData, npcId) {
 
     const ratio = nPower / (pPower || 1); 
 
-    let color = "#ffffff"; // 白 (相當)
+    let color = "#ffffff"; 
     
-    if (ratio < 0.5) color = "#888888"; // 灰 (極弱)
-    else if (ratio < 0.8) color = "#00ff00"; // 淺綠 (稍弱)
-    else if (ratio < 1.2) color = "#ffffff"; // 白 (相當)
-    else if (ratio < 2.0) color = "#ffff00"; // 黃 (強)
-    else color = "#ff0000"; // 紅 (極強)
+    if (ratio < 0.5) color = "#888888"; // 灰
+    else if (ratio < 0.8) color = "#00ff00"; // 淺綠
+    else if (ratio < 1.2) color = "#ffffff"; // 白
+    else if (ratio < 2.0) color = "#ffff00"; // 黃
+    else color = "#ff0000"; // 紅
 
     return { color, ratio };
 }
@@ -170,7 +169,6 @@ async function handlePlayerDeath(playerData, userId) {
 }
 
 export const CombatSystem = {
-    // 匯出給 map.js 使用
     getDifficultyInfo, 
 
     stopCombat: (userId) => {
@@ -202,7 +200,6 @@ export const CombatSystem = {
     
         if (!npc) { UI.print("這裡沒有這個人，或者他已經倒下了。", "error"); return; }
 
-        // === [新增] 計算強弱以備用 (獲得潛能時使用) ===
         const diffInfo = getDifficultyInfo(playerData, npc.id);
     
         const combatType = isLethal ? "下殺手" : "切磋";
@@ -218,7 +215,7 @@ export const CombatSystem = {
             roomId: playerData.location, 
             npcIsUnconscious: false,
             isLethal: isLethal,
-            diffRatio: diffInfo.ratio // 存起來
+            diffRatio: diffInfo.ratio
         };
     
         await updatePlayer(userId, { 
@@ -235,22 +232,28 @@ export const CombatSystem = {
             const playerStats = getCombatStats(playerData);
             const npcStats = getNPCCombatStats(npc); 
     
+            // === 玩家 攻擊 NPC ===
             if (!playerData.isUnconscious) {
                 const enforceLevel = playerData.combat.enforce || 0;
                 let forceBonus = 0;
                 
+                // 1. 內力消耗與加成
                 if (enforceLevel > 0) {
                     const forceSkill = playerData.skills.force || 0;
+                    // 公式：成數*3 + 內功等級*0.1
                     const forceCost = Math.floor(enforceLevel * 3 + (forceSkill * 0.1));
                     
                     if (playerData.attributes.force >= forceCost) {
-                        playerData.attributes.force -= forceCost;
+                        playerData.attributes.force -= forceCost; // 這裡扣除了內力
+                        
                         const baseForceDmg = forceSkill / 2;
                         let multiplier = 0.3; 
                         if (playerStats.atkType === 'unarmed') multiplier = 1.0; 
                         else if (playerStats.weaponData && playerStats.weaponData.type === 'throwing') multiplier = 0.8; 
+                        
                         forceBonus = Math.floor(baseForceDmg * (enforceLevel / 10) * multiplier);
                     } else {
+                        // 內力不足提示
                         if(Math.random() < 0.2) UI.print("你內力不繼，無法運功加力！", "error");
                     }
                 }
@@ -317,7 +320,6 @@ export const CombatSystem = {
                                 let potGain = 100 + ((npcLvl - playerLvl) * 10);
                                 if (potGain < 10) potGain = 10;
 
-                                // === [新增] 依據強弱調整潛能 ===
                                 const ratio = currentCombatState.diffRatio;
                                 if (ratio < 0.5) {
                                     potGain = 0; 
@@ -369,6 +371,7 @@ export const CombatSystem = {
                 UI.print("你現在暈頭轉向，根本無法攻擊！", "error");
             }
     
+            // --- NPC 反擊 玩家 ---
             if (!currentCombatState.npcIsUnconscious && playerData.location === currentCombatState.roomId) {
                 let npcMsg = `${npc.name} 往 ${playerData.name} 撲了過來！`;
                 const nHitChance = Math.random() * (npcStats.hit + playerStats.dodge);
@@ -384,7 +387,7 @@ export const CombatSystem = {
                     if (!isLethal) dmg = Math.floor(dmg / 2) || 1;
     
                     playerData.attributes.hp -= dmg;
-                    UI.updateHUD(playerData);
+                    // 注意：這裡本來有 UI.updateHUD，但只在被打中時觸發
                     UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
     
                     const statusMsg = getStatusDesc("你", playerData.attributes.hp, playerData.attributes.maxHp);
@@ -417,6 +420,9 @@ export const CombatSystem = {
                 UI.print(UI.txt(`${npc.name} 倒在地上，毫無反抗之力。`, "#888"), "chat", true);
             }
     
+            // === [修正] 在這裡呼叫 UI.updateHUD，確保每一回合結束都刷新內力與血量 ===
+            UI.updateHUD(playerData);
+
             await updatePlayer(userId, { 
                 "attributes.hp": playerData.attributes.hp,
                 "attributes.force": playerData.attributes.force 
