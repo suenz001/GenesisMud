@@ -37,8 +37,7 @@ const btnAutoDrink = document.getElementById('btn-auto-drink');
 
 // 儀表板元素 - 內力控制
 const valEnforce = document.getElementById('val-enforce');
-const btnsEnforceStep = document.querySelectorAll('.btn-step');
-const btnsEnforceSet = document.querySelectorAll('.btn-step-set');
+// 注意：在現代 UI 中，步進按鈕是透過 document.body 的委派事件處理的，這裡不需要直接選取 .btn-step
 
 // 暫存目前的內力值 (因為 UI 沒有 slider 了，需要變數暫存)
 let currentEnforceValue = 0;
@@ -84,7 +83,7 @@ export const UI = {
         const attr = playerData.attributes;
         
         // Helper: 更新進度條寬度與文字
-        const updateBar = (barEl, textEl, current, max, isThin = false) => {
+        const updateBar = (barEl, textEl, current, max) => {
             if (!barEl) return;
             const safeMax = max || 1;
             const safeCurrent = Math.max(0, current || 0);
@@ -111,9 +110,7 @@ export const UI = {
         updateBar(barHp, textHp, attr.hp, attr.maxHp);
         updateBar(barForce, textForce, attr.force, attr.maxForce);
 
-        // 2. 精神條 (使用 SP/MP)
-        // 這裡將 精神(SP) 與 精(Spiritual) 的概念做一些視覺整合
-        // 介面上顯示 SP(精) 與 MP(神) 為主
+        // 2. 精神條
         updateBar(barSp, textSp, attr.sp, attr.maxSp);
         updateBar(barMp, textMp, attr.mp, attr.maxMp);
 
@@ -121,7 +118,7 @@ export const UI = {
         updateBar(barFood, statusFood, attr.food, attr.maxFood);
         updateBar(barWater, statusWater, attr.water, attr.maxWater);
 
-        // 4. 更新內力顯示 (Server 同步)
+        // 4. 更新內力顯示
         const serverEnforce = (playerData.combat && playerData.combat.enforce) ? playerData.combat.enforce : 0;
         currentEnforceValue = serverEnforce; // 同步本地變數
         if(valEnforce) {
@@ -145,7 +142,7 @@ export const UI = {
         grid.className = 'range-map-grid';
         const radius = 2; // 5x5 的半徑是 2
         
-        // 取得當前房間的區域，用於地圖過濾 (只顯示同區域)
+        // 取得當前房間的區域，用於地圖過濾
         const currentRoomData = WorldMap[currentId];
         const currentRegions = currentRoomData ? (currentRoomData.region || ["world"]) : ["world"];
 
@@ -174,7 +171,6 @@ export const UI = {
                     // 我
                     if (x === px && y === py) {
                         div.classList.add('current-pos');
-                        // 使用 FontAwesome 圖示代表玩家
                         div.innerHTML = '<i class="fas fa-user"></i>';
                     } else {
                         // 其他房間，依據出口畫牆壁
@@ -234,7 +230,7 @@ export const UI = {
             const isActive = callbacks.toggleEat();
             btnAutoEat.classList.toggle('active', isActive);
             const icon = btnAutoEat.querySelector('i');
-            if(isActive) icon.classList.add('fa-beat-fade'); // FontAwesome 動畫
+            if(isActive) icon.classList.add('fa-beat-fade'); 
             else icon.classList.remove('fa-beat-fade');
             
             UI.print(`[系統] 自動進食已${isActive ? '開啟' : '關閉'}。`, "system");
@@ -264,7 +260,7 @@ export const UI = {
         sendBtn.addEventListener('click', sendHandler);
         input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendHandler(); });
 
-        // 綁定所有帶有 data-cmd 或 data-dir 的按鈕
+        // 綁定所有帶有 data-cmd 或 data-dir 的實體 BUTTON 按鈕 (右側面板)
         document.body.addEventListener('click', (e) => {
             const btn = e.target.closest('button');
             if (!btn) return;
@@ -272,7 +268,6 @@ export const UI = {
             // 處理通用指令按鈕
             const cmd = btn.dataset.cmd || btn.dataset.dir;
             if (cmd) {
-                // 如果是按鈕觸發的，顯示在畫面上，但不清空輸入框
                 UI.print(`> ${cmd}`);
                 callback(cmd);
                 return;
@@ -303,12 +298,18 @@ export const UI = {
             }
         });
 
-        // 處理動態生成的文字連結 (cmd-link)
+        // === [修正關鍵] 處理主畫面 (output) 內動態生成的按鈕與連結 ===
+        // 使用 closest 查找最近的帶有 data-cmd 的元素，確保點擊內部圖示或 span 時也能觸發
         output.addEventListener('click', (e) => {
-            if (e.target && e.target.classList.contains('cmd-link')) {
-                const cmd = e.target.dataset.cmd;
-                UI.print(`> ${cmd}`);
-                callback(cmd);
+            const target = e.target.closest('[data-cmd]');
+            
+            // 確保找到的元素確實在 output 內 (安全性檢查)
+            if (target && output.contains(target)) {
+                const cmd = target.dataset.cmd;
+                if (cmd) {
+                    UI.print(`> ${cmd}`);
+                    callback(cmd);
+                }
             }
         });
     },
