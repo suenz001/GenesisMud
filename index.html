@@ -22,88 +22,97 @@
 
             <div id="sidebar">
                 
-                <div class="dash-panel" id="panel-inspection" style="display: none;">
-                    <div class="inspection-title">觀察對象</div>
-                    <div id="inspect-img-box">
-                        <img id="inspect-img" src="" alt="觀察圖片">
-                    </div>
-                    <div id="inspect-name">--</div>
-                </div>
-
                 <div class="dash-panel" id="panel-radar">
                     <div id="location-header">
                         <i class="fas fa-map-marker-alt"></i> <span id="current-room-name">-- 未知 --</span>
                     </div>
                     <div id="mini-map-box">
-                        </div>
-                </div>
-
-                <div class="dash-panel" id="panel-vitals">
-                    <div class="vital-row main-vital">
-                        <div class="vital-icon hp"><i class="fas fa-heart"></i></div>
-                        <div class="bar-outer">
-                            <div id="bar-hp" class="bar-inner hp-fill" style="width: 100%;"></div>
-                            <span id="text-hp" class="bar-text">100/100</span>
-                        </div>
-                    </div>
-                    <div class="vital-row main-vital">
-                        <div class="vital-icon force"><i class="fas fa-fire"></i></div>
-                        <div class="bar-outer">
-                            <div id="bar-force" class="bar-inner force-fill" style="width: 0%;"></div>
-                            <span id="text-force" class="bar-text">0/0</span>
-                        </div>
-                    </div>
-
-                    <div class="sub-vitals-grid">
-                        <div class="vital-col">
-                            <span class="label">精 SP</span>
-                            <div class="bar-thin-outer">
-                                <div id="bar-sp" class="bar-thin-inner sp-fill" style="width: 100%;"></div>
-                            </div>
-                            <span id="text-sp" class="val-text">100/100</span>
-                        </div>
-                        <div class="vital-col">
-                            <span class="label">神 MP</span>
-                            <div class="bar-thin-outer">
-                                <div id="bar-mp" class="bar-thin-inner mp-fill" style="width: 100%;"></div>
-                            </div>
-                            <span id="text-mp" class="val-text">100/100</span>
-                        </div>
-                    </div>
-
-                    <div class="survival-grid">
-                        <div class="survival-item" id="btn-auto-eat" title="點擊切換自動進食">
-                            <i class="fas fa-bowl-rice survival-icon"></i>
-                            <div class="survival-bars">
-                                <div id="bar-food" class="s-bar" style="width: 100%;"></div>
-                            </div>
-                            <span id="status-food">飽</span>
-                        </div>
-                        <div class="survival-item" id="btn-auto-drink" title="點擊切換自動飲水">
-                            <i class="fas fa-wine-bottle survival-icon"></i>
-                            <div class="survival-bars">
-                                <div id="bar-water" class="s-bar" style="width: 100%;"></div>
-                            </div>
-                            <span id="status-water">渴</span>
-                        </div>
                     </div>
                 </div>
 
-                <div class="dash-panel" id="panel-enforce">
-                    <div class="panel-title-sm">內力運用 (Enforce)</div>
-                    <div class="enforce-control">
-                        <button class="btn-step" data-enforce-mod="-1"><i class="fas fa-minus"></i></button>
-                        <button class="btn-step-set" data-enforce-set="0">收</button>
-                        <div class="enforce-display">
-                            <span id="val-enforce">0</span>
-                            <span class="unit">成</span>
+                <div id="mid-panel-container">
+                    
+                    <div class="dash-panel" id="panel-inspection" style="display: none;" onclick="document.getElementById('btn-close-inspect').click()">
+                        <div class="inspection-header">
+                            <span class="inspection-title">觀察模式</span>
+                            <button id="btn-close-inspect" title="關閉"><i class="fas fa-times"></i></button>
                         </div>
-                        <button class="btn-step-set" data-enforce-set="10">滿</button>
-                        <button class="btn-step" data-enforce-mod="1"><i class="fas fa-plus"></i></button>
+                        
+                        <div id="inspect-img-box">
+                            <img id="inspect-img" src="" alt="觀察圖片">
+                        </div>
+                        <div id="inspect-name">--</div>
+                        <div class="inspect-hint">(點擊關閉)</div>
                     </div>
-                </div>
 
-                <div class="dash-panel" id="panel-move">
+                    <div id="panel-stats-group">
+                        
+                        <div class="dash-panel" id="panel-vitals">
+                            <div class="vital-row main-vital">
+                                <div class="vital-icon hp"><i class="fas fa-heart"></i></div>
+                                <div class="bar-outer">
+                                    <div id="bar-hp" class="bar-inner hp-fill" style="width: 100%;"></div>
+                                    <span id="text-hp" class="bar-text">100/100</span>
+                                </div>
+                            </div>
+                            <div class="vital-row main-vital">
+                                <div class="vital-icon force"><i class="fas fa-fire"></i></div>
+                                <div class="bar-outer">
+                                    <div id="bar-force" class="bar-inner force-fill" style="width: 0%;"></div>
+                                    <span id="text-force" class="bar-text">0/0</span>
+                                </div>
+                            </div>
+
+                            <div class="sub-vitals-grid">
+                                <div class="vital-col">
+                                    <span class="label">精 SP</span>
+                                    <div class="bar-thin-outer">
+                                        <div id="bar-sp" class="bar-thin-inner sp-fill" style="width: 100%;"></div>
+                                    </div>
+                                    <span id="text-sp" class="val-text">100/100</span>
+                                </div>
+                                <div class="vital-col">
+                                    <span class="label">神 MP</span>
+                                    <div class="bar-thin-outer">
+                                        <div id="bar-mp" class="bar-thin-inner mp-fill" style="width: 100%;"></div>
+                                    </div>
+                                    <span id="text-mp" class="val-text">100/100</span>
+                                </div>
+                            </div>
+
+                            <div class="survival-grid">
+                                <div class="survival-item" id="btn-auto-eat" title="點擊切換自動進食">
+                                    <i class="fas fa-bowl-rice survival-icon"></i>
+                                    <div class="survival-bars">
+                                        <div id="bar-food" class="s-bar" style="width: 100%;"></div>
+                                    </div>
+                                    <span id="status-food">飽</span>
+                                </div>
+                                <div class="survival-item" id="btn-auto-drink" title="點擊切換自動飲水">
+                                    <i class="fas fa-wine-bottle survival-icon"></i>
+                                    <div class="survival-bars">
+                                        <div id="bar-water" class="s-bar" style="width: 100%;"></div>
+                                    </div>
+                                    <span id="status-water">渴</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dash-panel" id="panel-enforce">
+                            <div class="panel-title-sm">內力運用 (Enforce)</div>
+                            <div class="enforce-control">
+                                <button class="btn-step" data-enforce-mod="-1"><i class="fas fa-minus"></i></button>
+                                <button class="btn-step-set" data-enforce-set="0">收</button>
+                                <div class="enforce-display">
+                                    <span id="val-enforce">0</span>
+                                    <span class="unit">成</span>
+                                </div>
+                                <button class="btn-step-set" data-enforce-set="10">滿</button>
+                                <button class="btn-step" data-enforce-mod="1"><i class="fas fa-plus"></i></button>
+                            </div>
+                        </div>
+
+                    </div> </div> <div class="dash-panel" id="panel-move">
                     <div class="dpad-container">
                         <button class="btn-dir nw" data-dir="nw">↖</button>
                         <button class="btn-dir n" data-dir="n">北</button>

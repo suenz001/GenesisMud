@@ -38,6 +38,11 @@ const btnAutoDrink = document.getElementById('btn-auto-drink');
 // 儀表板元素 - 內力控制
 const valEnforce = document.getElementById('val-enforce');
 
+// 新增：面板切換元素
+const panelInspection = document.getElementById('panel-inspection');
+const panelStatsGroup = document.getElementById('panel-stats-group');
+const btnCloseInspect = document.getElementById('btn-close-inspect');
+
 // 暫存目前的內力值
 let currentEnforceValue = 0;
 
@@ -207,26 +212,27 @@ export const UI = {
 
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
     
-    // === 新增圖片顯示功能 ===
+    // === 修改：圖片顯示功能 ===
+    // 顯示觀察面板，隱藏屬性與內力群組
     showInspection: (id, name, type) => {
-        const panel = document.getElementById('panel-inspection');
         const img = document.getElementById('inspect-img');
         const nameLabel = document.getElementById('inspect-name');
         
-        if (!panel || !img) return;
+        if (!panelInspection || !img || !panelStatsGroup) return;
 
-        // 1. 設定面板可見
-        panel.style.display = 'block';
+        // 切換面板顯示
+        panelStatsGroup.style.display = 'none';
+        panelInspection.style.display = 'flex'; // 使用 flex 確保內容居中
+        
         if (nameLabel) nameLabel.textContent = name;
         
-        // 2. 重置圖片狀態
+        // 重置圖片狀態
         img.classList.remove('loaded');
         
-        // 3. 組合路徑 (type 應該傳入 "items" 或 "npcs")
+        // 組合路徑 (type 應該傳入 "items" 或 "npcs")
         const folder = type === 'npc' ? 'npcs' : 'items'; 
         const targetSrc = `assets/images/${folder}/${id}.webp`;
         
-        // 4. 設定載入成功與失敗的邏輯
         img.onload = () => {
             img.classList.add('loaded'); // 載入成功後淡入
         };
@@ -237,17 +243,14 @@ export const UI = {
             img.src = 'assets/images/ui/placeholder.webp';
         };
 
-        // 5. 開始載入
+        // 開始載入
         img.src = targetSrc;
-        
-        // 自動捲動側邊欄到最上方
-        const sidebar = document.getElementById('sidebar');
-        if(sidebar) sidebar.scrollTop = 0;
     },
 
+    // 關閉觀察面板，恢復屬性與內力群組
     hideInspection: () => {
-        const panel = document.getElementById('panel-inspection');
-        if (panel) panel.style.display = 'none';
+        if (panelInspection) panelInspection.style.display = 'none';
+        if (panelStatsGroup) panelStatsGroup.style.display = 'flex'; // 恢復 flex 排版
     },
 
     onAutoToggle: (callbacks) => {
@@ -352,3 +355,11 @@ export const UI = {
         btnGuest.addEventListener('click', () => { callbacks.onGuest(); });
     }
 };
+
+// 綁定關閉按鈕事件 (放在最後，確保 DOM 載入後執行)
+if (btnCloseInspect) {
+    btnCloseInspect.addEventListener('click', (e) => {
+        e.stopPropagation(); // 避免冒泡
+        UI.hideInspection();
+    });
+}
