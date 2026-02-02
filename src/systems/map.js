@@ -59,6 +59,9 @@ export const MapSystem = {
     look: async (playerData) => {
         if (!playerData || !playerData.location) return;
         
+        // [新增] 看房間時，隱藏單一物品/NPC 的觀察面板
+        UI.hideInspection();
+        
         const room = WorldMap[playerData.location];
         if (!room) { UI.print("你陷入虛空...", "error"); return; }
 
@@ -77,12 +80,10 @@ export const MapSystem = {
             const querySnapshot = await getDocs(q);
             querySnapshot.forEach(doc => {
                 const p = doc.data();
-                // 順便排除自己，但在判斷 NPC 狀態時自己也要算進去，所以這裡先存原始資料
                 playersInRoom.push(p); 
             });
         } catch (e) { console.error(e); }
 
-        // 建立一個 "正在被戰鬥的 NPC" 集合 (格式: npcId_index)
         const fightingNpcKeys = new Set();
         playersInRoom.forEach(p => {
             if (p.state === 'fighting' && p.combatTarget) {
@@ -116,8 +117,6 @@ export const MapSystem = {
                     const npc = NPCDB[npcId];
                     if (npc) {
                         let statusTag = "";
-                        
-                        // [修改] 檢查這個 NPC 是否在戰鬥名單中 (不論是被我打，還是被別人打)
                         if (fightingNpcKeys.has(`${npcId}_${index}`)) {
                             statusTag = UI.txt(" 【戰鬥中】", "#ff0000", true);
                         }
@@ -147,15 +146,13 @@ export const MapSystem = {
             if (npcListHtml) UI.print(npcListHtml, "chat", true);
         }
 
-        // === 顯示玩家列表 (使用剛才預先讀取的 playersInRoom) ===
+        // === 顯示玩家列表 ===
         if (playersInRoom.length > 0) {
             let playerHtml = "";
             playersInRoom.forEach((p) => {
-                // 排除自己
                 if (auth.currentUser && p.id === playerData.id) return; 
 
                 let status = "";
-                // [修改] 只要狀態是 fighting，就加上紅字
                 if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
                 if (p.isUnconscious) status += UI.txt(" (昏迷)", "#888");
 
@@ -193,12 +190,18 @@ export const MapSystem = {
     },
 
     lookTarget: (playerData, targetId) => {
+        // [新增] 先隱藏舊的圖片，以防找不到新圖時殘留
+        UI.hideInspection();
+
         // 1. 優先檢查玩家身上的背包
         if (playerData.inventory) {
             const item = playerData.inventory.find(i => i.id === targetId || i.name === targetId);
             if (item) {
                 const info = ItemDB[item.id];
                 if (info) {
+                    // [新增] 呼叫 UI 顯示圖片 (type = item)
+                    UI.showInspection(info.id || targetId, info.name, 'item');
+
                     UI.print(UI.titleLine(info.name), "chat", true);
                     UI.print(info.desc || "看起來平平無奇。");
                     UI.print(UI.attrLine("價值", UI.formatMoney(info.value)), "chat", true);
@@ -217,6 +220,9 @@ export const MapSystem = {
         if (room.npcs && room.npcs.includes(targetId)) {
             const npc = NPCDB[targetId];
             if (npc) {
+                // [新增] 呼叫 UI 顯示圖片 (type = npc)
+                UI.showInspection(npc.id || targetId, npc.name, 'npc');
+
                 UI.print(UI.titleLine(npc.name), "chat", true); 
                 UI.print(npc.description);
                 UI.print(UI.attrLine("體力", `${npc.combat.hp}/${npc.combat.maxHp}`), "chat", true); 

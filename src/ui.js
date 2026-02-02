@@ -207,6 +207,49 @@ export const UI = {
 
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
     
+    // === 新增圖片顯示功能 ===
+    showInspection: (id, name, type) => {
+        const panel = document.getElementById('panel-inspection');
+        const img = document.getElementById('inspect-img');
+        const nameLabel = document.getElementById('inspect-name');
+        
+        if (!panel || !img) return;
+
+        // 1. 設定面板可見
+        panel.style.display = 'block';
+        if (nameLabel) nameLabel.textContent = name;
+        
+        // 2. 重置圖片狀態
+        img.classList.remove('loaded');
+        
+        // 3. 組合路徑 (type 應該傳入 "items" 或 "npcs")
+        const folder = type === 'npc' ? 'npcs' : 'items'; 
+        const targetSrc = `assets/images/${folder}/${id}.webp`;
+        
+        // 4. 設定載入成功與失敗的邏輯
+        img.onload = () => {
+            img.classList.add('loaded'); // 載入成功後淡入
+        };
+
+        img.onerror = () => {
+            // 如果找不到圖片，載入預設圖
+            if (img.src.includes('placeholder.webp')) return; // 避免無窮迴圈
+            img.src = 'assets/images/ui/placeholder.webp';
+        };
+
+        // 5. 開始載入
+        img.src = targetSrc;
+        
+        // 自動捲動側邊欄到最上方
+        const sidebar = document.getElementById('sidebar');
+        if(sidebar) sidebar.scrollTop = 0;
+    },
+
+    hideInspection: () => {
+        const panel = document.getElementById('panel-inspection');
+        if (panel) panel.style.display = 'none';
+    },
+
     onAutoToggle: (callbacks) => {
         btnAutoEat.addEventListener('click', () => {
             const isActive = callbacks.toggleEat();
