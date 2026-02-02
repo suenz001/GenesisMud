@@ -16,7 +16,7 @@
 body {
     background-color: #000;
     color: var(--text-main);
-    font-family: 'Noto Sans TC', 'Courier New', monospace; /* 混用字體，兼顧閱讀與代碼感 */
+    font-family: 'Noto Sans TC', 'Courier New', monospace;
     margin: 0;
     padding: 0;
     height: 100vh;
@@ -29,8 +29,8 @@ body {
 
 #game-wrapper {
     width: 100%;
-    max-width: 1200px; /* 稍微加寬 */
-    height: 98vh; /* 佔滿畫面 */
+    max-width: 1200px;
+    height: 98vh;
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border-color);
@@ -82,7 +82,6 @@ body {
     scrollbar-color: #444 #111;
 }
 
-/* 美化捲軸 */
 #output::-webkit-scrollbar { width: 8px; }
 #output::-webkit-scrollbar-track { background: #111; }
 #output::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
@@ -125,7 +124,7 @@ body {
 /* 右側：Dashboard (30%) */
 #sidebar {
     flex: 3;
-    min-width: 300px; /* 確保最小寬度 */
+    min-width: 300px;
     background: #121212;
     padding: 10px;
     overflow-y: auto;
@@ -134,7 +133,6 @@ body {
     gap: 10px;
 }
 
-/* 通用面板樣式 */
 .dash-panel {
     background: #1a1a1a;
     border: 1px solid #333;
@@ -146,7 +144,7 @@ body {
 
 /* --- 1. 雷達地圖 --- */
 #panel-radar {
-    padding: 0; /* 讓地圖貼邊 */
+    padding: 0;
     overflow: hidden;
     background: #000;
     border: 1px solid #444;
@@ -163,12 +161,11 @@ body {
 }
 
 #mini-map-box {
-    height: 180px; /* 稍微縮減高度 */
+    height: 180px;
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 10px;
-    /* 網格背景紋理 */
     background-image: 
         linear-gradient(#1a1a1a 1px, transparent 1px),
         linear-gradient(90deg, #1a1a1a 1px, transparent 1px);
@@ -182,7 +179,7 @@ body {
     gap: 2px;
     width: 100%;
     height: 100%;
-    max-width: 180px; /* 限制地圖總寬度 */
+    max-width: 180px;
     aspect-ratio: 1;
 }
 
@@ -217,7 +214,6 @@ body {
     100% { box-shadow: 0 0 0 0 rgba(51, 255, 51, 0); }
 }
 
-/* 地圖牆壁指示 */
 .wall-north { border-top: 2px solid var(--accent-red) !important; }
 .wall-south { border-bottom: 2px solid var(--accent-red) !important; }
 .wall-east  { border-right: 2px solid var(--accent-red) !important; }
@@ -231,7 +227,9 @@ body {
 #panel-stats-group {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 10px; /* Vitals 和 Enforce 中間的縫隙 */
+    /* [關鍵] 設定最小高度，確保切換時側邊欄不會跳動 */
+    min-height: 240px; 
 }
 
 /* --- 2. 觀察面板 (取代屬性面板) --- */
@@ -239,15 +237,17 @@ body {
     text-align: center;
     background: #0f0f0f;
     border: 1px solid var(--accent-green);
-    transition: all 0.3s ease;
-    padding: 10px;
-    cursor: pointer; /* 讓整個面板看起來可點擊 (關閉用) */
     
-    /* [關鍵] 設定最小高度，近似於 Vitals + Enforce 的總高度 */
-    min-height: 240px; 
+    /* [關鍵] 強制鎖定高度，等於 Vitals + Enforce + Gap 的總和 */
+    height: 240px; 
+    box-sizing: border-box;
+    
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: space-between;
+    padding: 10px;
+    cursor: pointer;
+    overflow: hidden;
 }
 
 #panel-inspection:hover {
@@ -256,12 +256,13 @@ body {
 }
 
 .inspection-header {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    height: 24px;
     border-bottom: 1px solid #333;
-    padding-bottom: 5px;
+    margin-bottom: 5px;
 }
 
 .inspection-title {
@@ -276,34 +277,46 @@ body {
     color: #888;
     cursor: pointer;
     font-size: 14px;
+    padding: 0 5px;
 }
 #btn-close-inspect:hover { color: #fff; }
 
 #inspect-img-box {
+    /* [關鍵] 讓圖片容器自動填滿剩餘空間 */
+    flex-grow: 1; 
     width: 100%;
-    max-width: 220px; 
-    aspect-ratio: 1 / 1; 
-    margin: 0 auto 10px auto;
-    background-color: #000;
+    
+    background: radial-gradient(circle, #1a1a1a 0%, #000 100%);
     border: 1px solid #333;
     border-radius: 4px;
-    overflow: hidden;
+    margin: 5px 0;
+    
     display: flex;
     justify-content: center;
     align-items: center;
-    position: relative;
+    overflow: hidden;
 }
 
 #inspect-img {
+    /* 使用 contain 確保圖片完整顯示 */
     width: 100%;
     height: 100%;
     object-fit: contain;
     opacity: 0;
-    transition: opacity 0.5s;
+    transition: opacity 0.3s;
 }
 
 #inspect-img.loaded {
     opacity: 1;
+}
+
+/* 底部資訊區塊 */
+.inspection-info-foot {
+    flex-shrink: 0;
+    height: 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 #inspect-name {
@@ -311,12 +324,13 @@ body {
     font-weight: bold;
     font-size: 16px;
     text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
-    margin-bottom: 5px;
+    line-height: 1.2;
 }
 
 .inspect-hint {
     font-size: 10px;
     color: #666;
+    margin-top: 2px;
 }
 
 /* --- 3. 精氣神 (Vitals) --- */
@@ -400,7 +414,6 @@ body {
     text-align: right;
 }
 
-/* 生存狀態 */
 .survival-grid {
     display: flex;
     gap: 10px;
@@ -458,7 +471,7 @@ body {
     justify-content: space-between;
     background: #111;
     padding: 5px;
-    border-radius: 20px; /* 圓角膠囊狀 */
+    border-radius: 20px;
     border: 1px solid #333;
 }
 
@@ -529,15 +542,13 @@ body {
     justify-content: center;
 }
 
-/* 讓角落按鈕隱形或變小，如果是 8 方向可保留，4 方向可隱藏 */
 .nw, .ne, .sw, .se { font-size: 10px; background: #222; }
-
 .n, .s, .e, .w { background: #333; color: #ccc; font-weight: bold; }
 
 .btn-action-center {
     background: #444;
     color: #fff;
-    border-radius: 50%; /* 中心圓形 */
+    border-radius: 50%;
     font-weight: bold;
     box-shadow: 0 0 5px rgba(0,0,0,0.5);
     z-index: 10;
@@ -671,7 +682,6 @@ body {
 .cmd-btn-buy { border-color: var(--accent-orange); color: var(--accent-orange); }
 .cmd-btn-buy:hover { background: var(--accent-orange); color: #000; }
 
-/* RWD: 手機調整 */
 @media (max-width: 768px) {
     #game-wrapper { flex-direction: column; height: 100vh; border: none; }
     #main-display { flex: 6; border-right: none; border-bottom: 1px solid #333; }
@@ -679,7 +689,5 @@ body {
     
     .dash-panel { margin-bottom: 5px; padding: 5px; }
     #mini-map-box { height: 120px; }
-    
-    /* 手機上將地圖和移動併排，或隱藏部分 */
     .dpad-container { grid-template-columns: repeat(3, 35px); grid-template-rows: repeat(3, 35px); }
 }
