@@ -409,11 +409,15 @@ export const CombatSystem = {
                             UI.print(winMsg, "chat", true);
                             MessageSystem.broadcast(playerData.location, winMsg);
 
-                            // 切磋勝利後，刪除 active_npcs 紀錄 (視為回滿/結束) 或保留殘血看設計
-                            // 這裡選擇：刪除紀錄 (讓 NPC 下次滿血，符合比武點到為止)
-                            try {
-                                await deleteDoc(doc(db, "active_npcs", currentCombatState.uniqueId));
-                            } catch(e) {}
+                            // === [修正] 切磋勝利後，不要刪除紀錄，而是記錄它已經被打敗 (0血) ===
+                            // 這樣它就會保持 (瀕死) 狀態，直到 3 分鐘脫戰回血機制觸發
+                            syncNpcState(
+                                currentCombatState.uniqueId, 
+                                0, 
+                                currentCombatState.maxNpcHp, 
+                                currentCombatState.roomId,
+                                currentCombatState.npcName
+                            );
 
                             playerData.combat.potential = (playerData.combat.potential || 0) + 10;
                             CombatSystem.stopCombat(userId);
