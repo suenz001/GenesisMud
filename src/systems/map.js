@@ -30,11 +30,9 @@ function getSkillDesc(level) {
     return UI.txt("略有小成", "#ffffff");
 }
 
-// === [修改] 狀態描述邏輯：血量 <= 0 顯示昏迷 ===
 function getNpcStatusText(currentHp, maxHp) {
     if (currentHp >= maxHp) return "";
     const pct = currentHp / maxHp;
-    // 這裡修改：<= 0 視為昏迷
     if (pct <= 0) return UI.txt(" (昏迷不醒)", "#888888");
     if (pct < 0.2) return UI.txt(" (重傷)", "#ff5555");
     if (pct < 0.5) return UI.txt(" (受傷)", "#ffaa00");
@@ -101,7 +99,6 @@ export const MapSystem = {
             }
         });
 
-        // 讀取該房間所有受傷的 NPC 資料
         const activeNpcMap = new Map();
         try {
             const activeRef = collection(db, "active_npcs");
@@ -117,7 +114,6 @@ export const MapSystem = {
             });
         } catch(e) { console.error("讀取受傷 NPC 失敗", e); }
 
-        // === 顯示 NPC 列表 ===
         if (room.npcs && room.npcs.length > 0) {
             let deadNPCs = [];
             try {
@@ -146,12 +142,10 @@ export const MapSystem = {
                         
                         let statusTag = "";
                         
-                        // 1. 檢查戰鬥狀態
                         if (fightingNpcKeys.has(`${npcId}_${index}`)) {
                             statusTag += UI.txt(" 【戰鬥中】", "#ff0000", true);
                         }
 
-                        // 2. 檢查受傷狀態
                         if (activeNpcMap.has(uniqueId)) {
                             const activeData = activeNpcMap.get(uniqueId);
                             statusTag += getNpcStatusText(activeData.currentHp, activeData.maxHp);
@@ -182,7 +176,6 @@ export const MapSystem = {
             if (npcListHtml) UI.print(npcListHtml, "chat", true);
         }
 
-        // === 顯示玩家列表 ===
         if (playersInRoom.length > 0) {
             let playerHtml = "";
             playersInRoom.forEach((p) => {
@@ -225,7 +218,6 @@ export const MapSystem = {
         }
     },
 
-    // === [重點修改] lookTarget 現在會去撈取即時血量 ===
     lookTarget: async (playerData, targetId) => {
         UI.hideInspection();
 
@@ -252,11 +244,42 @@ export const MapSystem = {
         if (room.npcs && room.npcs.includes(targetId)) {
             const npc = NPCDB[targetId];
             if (npc) {
-                // 找出該 NPC 在房間的索引 (預設找第一個符合的)
-                const index = room.npcs.indexOf(targetId);
-                const uniqueId = `${playerData.location}_${targetId}_${index}`;
+                // === [修正] 找出該 NPC 在房間的「活體」索引 ===
+                // 我們必須避開已經死亡的 index，否則會抓到屍體或錯誤的 index
+                let realIndex = -1;
+                let deadIndices = [];
+
+                // 先撈取該房間所有的屍體索引
+                try {
+                    const deadRef = collection(db, "dead_npcs");
+                    const q = query(deadRef, where("roomId", "==", playerData.location));
+                    const snapshot = await getDocs(q);
+                    const now = Date.now();
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        if (now < data.respawnTime && data.npcId === targetId) {
+                            deadIndices.push(data.index);
+                        }
+                    });
+                } catch(e) { console.error(e); }
+
+                // 遍歷房間 NPC，找到第一個與 ID 吻合且不在 deadIndices 的索引
+                for(let i=0; i<room.npcs.length; i++) {
+                    if (room.npcs[i] === targetId) {
+                        if (!deadIndices.includes(i)) {
+                            realIndex = i;
+                            break; // 找到第一個活著的就停止
+                        }
+                    }
+                }
+
+                if (realIndex === -1) {
+                    UI.print("你看不到 " + targetId + " (可能已經死了)。", "error");
+                    return;
+                }
+
+                const uniqueId = `${playerData.location}_${targetId}_${realIndex}`;
                 
-                // === [新增] 嘗試從 active_npcs 取得即時血量 ===
                 let displayHp = npc.combat.hp;
                 let isUnconscious = false;
                 
@@ -266,7 +289,6 @@ export const MapSystem = {
                     if (activeSnap.exists()) {
                         const activeData = activeSnap.data();
                         displayHp = activeData.currentHp;
-                        // 如果血量 <= 0，標記為昏迷
                         if (displayHp <= 0) isUnconscious = true;
                     }
                 } catch (e) {
@@ -277,7 +299,6 @@ export const MapSystem = {
                 UI.print(UI.titleLine(npc.name), "chat", true); 
                 UI.print(npc.description);
                 
-                // === [新增] 狀態顯示優化 ===
                 if (isUnconscious) {
                     UI.print(UI.txt("【 狀態：昏迷不醒 】", "#888888", true), "chat", true);
                     UI.print(UI.attrLine("體力", `${displayHp}/${npc.combat.maxHp}`), "chat", true);
