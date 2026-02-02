@@ -30,10 +30,10 @@ function getSkillDesc(level) {
     return UI.txt("略有小成", "#ffffff");
 }
 
-function getNpcStatusText(currentHp, maxHp) {
+function getNpcStatusText(currentHp, maxHp, isUnconscious) {
+    if (isUnconscious || currentHp <= 0) return UI.txt(" (昏迷不醒)", "#888888");
     if (currentHp >= maxHp) return "";
     const pct = currentHp / maxHp;
-    if (pct <= 0) return UI.txt(" (昏迷不醒)", "#888888");
     if (pct < 0.2) return UI.txt(" (重傷)", "#ff5555");
     if (pct < 0.5) return UI.txt(" (受傷)", "#ffaa00");
     if (pct < 0.8) return UI.txt(" (輕傷)", "#ffff00");
@@ -99,6 +99,7 @@ export const MapSystem = {
             }
         });
 
+        // 讀取該房間所有受傷的 NPC 資料
         const activeNpcMap = new Map();
         try {
             const activeRef = collection(db, "active_npcs");
@@ -141,14 +142,16 @@ export const MapSystem = {
                         const uniqueId = `${playerData.location}_${npcId}_${index}`;
                         
                         let statusTag = "";
+                        let isUnconscious = false;
                         
-                        if (fightingNpcKeys.has(`${npcId}_${index}`)) {
-                            statusTag += UI.txt(" 【戰鬥中】", "#ff0000", true);
-                        }
-
                         if (activeNpcMap.has(uniqueId)) {
                             const activeData = activeNpcMap.get(uniqueId);
-                            statusTag += getNpcStatusText(activeData.currentHp, activeData.maxHp);
+                            isUnconscious = activeData.isUnconscious || activeData.currentHp <= 0;
+                            statusTag += getNpcStatusText(activeData.currentHp, activeData.maxHp, isUnconscious);
+                        }
+
+                        if (fightingNpcKeys.has(`${npcId}_${index}`) && !isUnconscious) {
+                            statusTag += UI.txt(" 【戰鬥中】", "#ff0000", true);
                         }
 
                         const diff = CombatSystem.getDifficultyInfo(playerData, npcId);
@@ -157,17 +160,22 @@ export const MapSystem = {
                         let links = `${coloredName} <span style="color:#aaa">(${npc.id})</span>${statusTag} `;
                         links += UI.makeCmd("[看]", `look ${npc.id}`, "cmd-btn");
                         
-                        const isMyMaster = (playerData.family && playerData.family.masterId === npc.id);
-                        if (!isMyMaster && npc.family) {
-                            links += UI.makeCmd("[拜師]", `apprentice ${npc.id}`, "cmd-btn");
-                        }
-                        
-                        if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id}`, "cmd-btn");
-                        
-                        if (playerData.state !== 'fighting') {
-                            links += UI.makeCmd("[戰鬥]", `fight ${npc.id}`, "cmd-btn");
+                        // 如果昏迷，只顯示殺，不顯示戰鬥/拜師/交易
+                        if (isUnconscious) {
                             links += UI.makeCmd("[殺]", `kill ${npc.id}`, "cmd-btn cmd-btn-buy");
-                        } 
+                        } else {
+                            const isMyMaster = (playerData.family && playerData.family.masterId === npc.id);
+                            if (!isMyMaster && npc.family) {
+                                links += UI.makeCmd("[拜師]", `apprentice ${npc.id}`, "cmd-btn");
+                            }
+                            
+                            if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id}`, "cmd-btn");
+                            
+                            if (playerData.state !== 'fighting') {
+                                links += UI.makeCmd("[戰鬥]", `fight ${npc.id}`, "cmd-btn");
+                                links += UI.makeCmd("[殺]", `kill ${npc.id}`, "cmd-btn cmd-btn-buy");
+                            }
+                        }
 
                         npcListHtml += `<div style="margin-top:4px;">${links}</div>`;
                     }
@@ -218,16 +226,16 @@ export const MapSystem = {
         }
     },
 
-    lookTarget: async (playerData, targetId) => {
+    lookTarget: async (playerData, targetIdOrName) => {
         UI.hideInspection();
 
         // 1. 檢查背包
         if (playerData.inventory) {
-            const item = playerData.inventory.find(i => i.id === targetId || i.name === targetId);
+            const item = playerData.inventory.find(i => i.id === targetIdOrName || i.name === targetIdOrName);
             if (item) {
                 const info = ItemDB[item.id];
                 if (info) {
-                    UI.showInspection(info.id || targetId, info.name, 'item');
+                    UI.showInspection(info.id || targetIdOrName, info.name, 'item');
                     UI.print(UI.titleLine(info.name), "chat", true);
                     UI.print(info.desc || "看起來平平無奇。");
                     UI.print(UI.attrLine("價值", UI.formatMoney(info.value)), "chat", true);
@@ -241,13 +249,28 @@ export const MapSystem = {
 
         // 2. 檢查房間內的 NPC
         const room = WorldMap[playerData.location];
-        if (room.npcs && room.npcs.includes(targetId)) {
-            const npc = NPCDB[targetId];
-            if (npc) {
-                // 找出該 NPC 在房間的「活體」索引
-                let realIndex = -1;
-                let deadIndices = [];
+        if (room.npcs) {
+            let targetNpcId = null;
+            let realIndex = -1;
+            
+            // 先嘗試 ID 匹配，再嘗試名稱匹配
+            if (room.npcs.includes(targetIdOrName)) {
+                targetNpcId = targetIdOrName;
+            } else {
+                // 用名稱找 ID
+                for (const nid of room.npcs) {
+                    if (NPCDB[nid] && NPCDB[nid].name === targetIdOrName) {
+                        targetNpcId = nid;
+                        break;
+                    }
+                }
+            }
 
+            if (targetNpcId) {
+                const npc = NPCDB[targetNpcId];
+                
+                // 找出該 NPC 在房間的「活體」索引 (排除屍體)
+                let deadIndices = [];
                 try {
                     const deadRef = collection(db, "dead_npcs");
                     const q = query(deadRef, where("roomId", "==", playerData.location));
@@ -255,14 +278,15 @@ export const MapSystem = {
                     const now = Date.now();
                     snapshot.forEach(doc => {
                         const data = doc.data();
-                        if (now < data.respawnTime && data.npcId === targetId) {
+                        if (now < data.respawnTime && data.npcId === targetNpcId) {
                             deadIndices.push(data.index);
                         }
                     });
                 } catch(e) { console.error(e); }
 
+                // 找到第一個活著的實體
                 for(let i=0; i<room.npcs.length; i++) {
-                    if (room.npcs[i] === targetId) {
+                    if (room.npcs[i] === targetNpcId) {
                         if (!deadIndices.includes(i)) {
                             realIndex = i;
                             break; 
@@ -271,32 +295,48 @@ export const MapSystem = {
                 }
 
                 if (realIndex === -1) {
-                    UI.print("你看不到 " + targetId + " (可能已經死了)。", "error");
+                    UI.print("你看不到 " + targetIdOrName + " (可能已經死了)。", "error");
                     return;
                 }
 
-                const uniqueId = `${playerData.location}_${targetId}_${realIndex}`;
+                const uniqueId = `${playerData.location}_${targetNpcId}_${realIndex}`;
                 
                 let displayHp = npc.combat.hp;
                 let isUnconscious = false;
                 
+                // === [超級修正] 讀取狀態，包含容錯搜尋 ===
                 try {
                     const activeRef = doc(db, "active_npcs", uniqueId);
                     const activeSnap = await getDoc(activeRef);
+                    
                     if (activeSnap.exists()) {
                         const activeData = activeSnap.data();
                         displayHp = activeData.currentHp;
-                        
-                        // [修改] 讀取資料庫中的 isUnconscious 狀態
-                        if (activeData.isUnconscious === true || displayHp <= 0) {
-                            isUnconscious = true;
+                        if (activeData.isUnconscious === true || displayHp <= 0) isUnconscious = true;
+                    } else {
+                        // 如果找不到精確 ID，嘗試用 Query 找同房間、同名的受傷紀錄 (容錯)
+                        // 這是為了防止 index 計算有微小誤差導致找不到資料
+                        const colRef = collection(db, "active_npcs");
+                        const q = query(
+                            colRef, 
+                            where("roomId", "==", playerData.location),
+                            where("npcName", "==", npc.name)
+                        );
+                        const qSnap = await getDocs(q);
+                        if (!qSnap.empty) {
+                            // 找到匹配名稱的受傷紀錄，取第一筆
+                            const fallbackData = qSnap.docs[0].data();
+                            displayHp = fallbackData.currentHp;
+                            if (fallbackData.isUnconscious === true || displayHp <= 0) isUnconscious = true;
                         }
                     }
                 } catch (e) {
                     console.error("Fetch NPC state error:", e);
                 }
 
-                UI.showInspection(npc.id || targetId, npc.name, 'npc');
+                displayHp = Math.max(0, displayHp); // 確保不顯示負數
+
+                UI.showInspection(npc.id, npc.name, 'npc');
                 UI.print(UI.titleLine(npc.name), "chat", true); 
                 UI.print(npc.description);
                 
@@ -327,7 +367,7 @@ export const MapSystem = {
             }
         }
         
-        UI.print("你看不到 " + targetId + "。", "error");
+        UI.print("你看不到 " + targetIdOrName + "。", "error");
     },
 
     move: async (playerData, direction, userId) => {

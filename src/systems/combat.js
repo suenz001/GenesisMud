@@ -16,7 +16,7 @@ function getUniqueNpcId(roomId, npcId, index) {
     return `${roomId}_${npcId}_${index}`;
 }
 
-// === [修改] 新增 isUnconscious 參數並記錄到資料庫 ===
+// === [修改] 增加 console.log 以利除錯 ===
 async function syncNpcState(uniqueId, currentHp, maxHp, roomId, npcName, isUnconscious = false) {
     try {
         const ref = doc(db, "active_npcs", uniqueId);
@@ -25,9 +25,10 @@ async function syncNpcState(uniqueId, currentHp, maxHp, roomId, npcName, isUncon
             maxHp: maxHp,
             roomId: roomId,
             npcName: npcName,
-            isUnconscious: isUnconscious, // 明確記錄昏迷狀態
+            isUnconscious: isUnconscious,
             lastCombatTime: Date.now()
         }, { merge: true });
+        console.log(`[Combat] Sync NPC: ${npcName} (${uniqueId}) HP:${currentHp} UNC:${isUnconscious}`);
     } catch (e) {
         console.error("同步 NPC 狀態失敗", e);
     }
@@ -333,7 +334,6 @@ export const CombatSystem = {
 
         const diffInfo = getDifficultyInfo(playerData, npc.id);
         
-        // 如果目標已經昏迷 (0血)
         if (realHp <= 0) {
             if (isLethal) {
                 const killMsg = UI.txt(`你對昏迷中的 ${npc.name} 下了毒手！`, "#ff0000", true);
@@ -425,6 +425,7 @@ export const CombatSystem = {
                 }
     
                 let skillBaseDmg = action.damage || 10;
+                
                 let msg = action.msg
                     .replace(/\$P/g, playerData.name)
                     .replace(/\$N/g, npc.name)
@@ -441,9 +442,12 @@ export const CombatSystem = {
                     let damage = playerStats.ap - npcStats.dp;
                     damage += ((skillBaseDmg * (playerStats.atkRating || 1.0)) / 2); 
                     damage += forceBonus;
+
                     damage = damage * (0.9 + Math.random() * 0.2);
                     if (damage <= 0) damage = Math.random() * 5 + 1;
+    
                     if (!isLethal) damage = damage / 2;
+                    
                     damage = Math.round(damage) || 1;
     
                     currentCombatState.npcHp -= damage;
@@ -461,7 +465,10 @@ export const CombatSystem = {
                     }
 
                     let damageMsg = `(造成了 ${damage} 點傷害)`;
-                    if (forceBonus > 0) damageMsg = `(運功消耗 ${actualCost} 內力，造成了 ${damage} 點傷害)`;
+                    if (forceBonus > 0) {
+                        damageMsg = `(運功消耗 ${actualCost} 內力，造成了 ${damage} 點傷害)`;
+                    }
+                    
                     UI.print(damageMsg, "chat");
     
                     const statusMsg = getStatusDesc(npc.name, currentCombatState.npcHp, currentCombatState.maxNpcHp);
@@ -537,7 +544,9 @@ export const CombatSystem = {
                 if (nIsHit) {
                     let dmg = npcStats.ap - playerStats.dp;
                     if (dmg <= 0) dmg = Math.random() * 3 + 1;
+                    
                     if (!isLethal) dmg = dmg / 2;
+
                     dmg = Math.round(dmg) || 1;
     
                     playerData.attributes.hp -= dmg;
@@ -585,6 +594,7 @@ export const CombatSystem = {
             }
     
             UI.updateHUD(playerData);
+
             await updatePlayer(userId, { 
                 "attributes.hp": playerData.attributes.hp,
                 "attributes.force": playerData.attributes.force 
