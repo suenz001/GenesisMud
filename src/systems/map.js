@@ -1,5 +1,5 @@
 // src/systems/map.js
-import { doc, updateDoc, collection, query, where, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, updateDoc, collection, query, where, getDocs, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { WorldMap } from "../data/world.js";
 import { UI } from "../ui.js";
 import { db, auth } from "../firebase.js"; 
@@ -30,11 +30,12 @@ function getSkillDesc(level) {
     return UI.txt("略有小成", "#ffffff");
 }
 
-// === [新增] 從血量比例取得狀態描述文字 ===
+// === [修改] 狀態描述邏輯：血量 <= 0 顯示昏迷 ===
 function getNpcStatusText(currentHp, maxHp) {
     if (currentHp >= maxHp) return "";
     const pct = currentHp / maxHp;
-    if (pct <= 0) return UI.txt(" (瀕死)", "#ff0000");
+    // 這裡修改：<= 0 視為昏迷
+    if (pct <= 0) return UI.txt(" (昏迷不醒)", "#888888");
     if (pct < 0.2) return UI.txt(" (重傷)", "#ff5555");
     if (pct < 0.5) return UI.txt(" (受傷)", "#ffaa00");
     if (pct < 0.8) return UI.txt(" (輕傷)", "#ffff00");
@@ -100,7 +101,7 @@ export const MapSystem = {
             }
         });
 
-        // === [新增] 讀取該房間所有受傷的 NPC 資料 ===
+        // 讀取該房間所有受傷的 NPC 資料
         const activeNpcMap = new Map();
         try {
             const activeRef = collection(db, "active_npcs");
@@ -108,12 +109,9 @@ export const MapSystem = {
             const activeSnaps = await getDocs(qActive);
             activeSnaps.forEach(doc => {
                 const data = doc.data();
-                // 檢查是否脫戰回血 (3分鐘)
                 if (Date.now() - data.lastCombatTime > 180000) {
-                     // 超時，不放入 map (顯示為滿血)，並順便清理資料庫 (非同步執行即可)
                      deleteDoc(doc.ref);
                 } else {
-                     // 使用文檔 ID (格式: roomId_npcId_index) 作為 Key
                      activeNpcMap.set(doc.id, data);
                 }
             });
@@ -144,7 +142,6 @@ export const MapSystem = {
                 if (!isDead) {
                     const npc = NPCDB[npcId];
                     if (npc) {
-                        // 產生唯一 ID
                         const uniqueId = `${playerData.location}_${npcId}_${index}`;
                         
                         let statusTag = "";
@@ -154,7 +151,7 @@ export const MapSystem = {
                             statusTag += UI.txt(" 【戰鬥中】", "#ff0000", true);
                         }
 
-                        // 2. 檢查受傷狀態 (新增)
+                        // 2. 檢查受傷狀態
                         if (activeNpcMap.has(uniqueId)) {
                             const activeData = activeNpcMap.get(uniqueId);
                             statusTag += getNpcStatusText(activeData.currentHp, activeData.maxHp);
@@ -228,7 +225,8 @@ export const MapSystem = {
         }
     },
 
-    lookTarget: (playerData, targetId) => {
+    // === [重點修改] lookTarget 現在會去撈取即時血量 ===
+    lookTarget: async (playerData, targetId) => {
         UI.hideInspection();
 
         // 1. 檢查背包
@@ -238,14 +236,11 @@ export const MapSystem = {
                 const info = ItemDB[item.id];
                 if (info) {
                     UI.showInspection(info.id || targetId, info.name, 'item');
-
                     UI.print(UI.titleLine(info.name), "chat", true);
                     UI.print(info.desc || "看起來平平無奇。");
                     UI.print(UI.attrLine("價值", UI.formatMoney(info.value)), "chat", true);
-                    
                     if (info.damage) UI.print(UI.attrLine("殺傷力", info.damage), "chat", true);
                     if (info.defense) UI.print(UI.attrLine("防禦力", info.defense), "chat", true);
-                    
                     UI.print(UI.titleLine("End"), "chat", true);
                     return; 
                 }
@@ -257,22 +252,42 @@ export const MapSystem = {
         if (room.npcs && room.npcs.includes(targetId)) {
             const npc = NPCDB[targetId];
             if (npc) {
-                // [新增] 查詢此 NPC 的動態血量
+                // 找出該 NPC 在房間的索引 (預設找第一個符合的)
                 const index = room.npcs.indexOf(targetId);
                 const uniqueId = `${playerData.location}_${targetId}_${index}`;
                 
-                // 這裡我們用非同步去拉資料顯示，或直接顯示靜態，
-                // 為了簡單起見，這裡先顯示基本資料，若有受傷狀態在 look 大表已經看得到
-                UI.showInspection(npc.id || targetId, npc.name, 'npc');
+                // === [新增] 嘗試從 active_npcs 取得即時血量 ===
+                let displayHp = npc.combat.hp;
+                let isUnconscious = false;
+                
+                try {
+                    const activeRef = doc(db, "active_npcs", uniqueId);
+                    const activeSnap = await getDoc(activeRef);
+                    if (activeSnap.exists()) {
+                        const activeData = activeSnap.data();
+                        displayHp = activeData.currentHp;
+                        // 如果血量 <= 0，標記為昏迷
+                        if (displayHp <= 0) isUnconscious = true;
+                    }
+                } catch (e) {
+                    console.error("Fetch NPC state error:", e);
+                }
 
+                UI.showInspection(npc.id || targetId, npc.name, 'npc');
                 UI.print(UI.titleLine(npc.name), "chat", true); 
                 UI.print(npc.description);
-                UI.print(UI.attrLine("體力", `${npc.combat.hp}/${npc.combat.maxHp}`), "chat", true); 
+                
+                // === [新增] 狀態顯示優化 ===
+                if (isUnconscious) {
+                    UI.print(UI.txt("【 狀態：昏迷不醒 】", "#888888", true), "chat", true);
+                    UI.print(UI.attrLine("體力", `${displayHp}/${npc.combat.maxHp}`), "chat", true);
+                } else {
+                    UI.print(UI.attrLine("體力", `${displayHp}/${npc.combat.maxHp}`), "chat", true);
+                }
 
                 if (playerData.family && playerData.family.masterId === npc.id && npc.skills) {
                     let skillHtml = `<br>${UI.txt("【 師傳武學 】", "#ffff00")}<br>`;
                     skillHtml += `<div style="display:grid; grid-template-columns: 1fr auto auto; gap:5px;">`;
-                    
                     for (const [sid, lvl] of Object.entries(npc.skills)) {
                         const sInfo = SkillDB[sid];
                         if (sInfo) {
