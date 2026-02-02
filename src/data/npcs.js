@@ -83,7 +83,7 @@ export const NPCDB = {
         attributes: { str: 25, con: 20, per: 30, kar: 10, int: 15, cor: 10 },
         combat: { hp: 150, maxHp: 150, attack: 45, defense: 15, xp: 80 },
         skills: { "dodge": 80, "unarmed": 80 },
-        drops: [{ id: "wolf_skin", rate: 0.4 }, { id: "rabbit_meat", rate: 0.5 }]
+        drops: [{ id: "wolf_skin", rate: 0.4 }]
     },
     "bear": {
         id: "bear",

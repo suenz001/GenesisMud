@@ -30,6 +30,17 @@ function getSkillDesc(level) {
     return UI.txt("略有小成", "#ffffff");
 }
 
+// === [新增] 從血量比例取得狀態描述文字 ===
+function getNpcStatusText(currentHp, maxHp) {
+    if (currentHp >= maxHp) return "";
+    const pct = currentHp / maxHp;
+    if (pct <= 0) return UI.txt(" (瀕死)", "#ff0000");
+    if (pct < 0.2) return UI.txt(" (重傷)", "#ff5555");
+    if (pct < 0.5) return UI.txt(" (受傷)", "#ffaa00");
+    if (pct < 0.8) return UI.txt(" (輕傷)", "#ffff00");
+    return UI.txt(" (擦傷)", "#cccccc");
+}
+
 export const MapSystem = {
     getRoom: (roomId) => WorldMap[roomId],
 
@@ -59,7 +70,6 @@ export const MapSystem = {
     look: async (playerData) => {
         if (!playerData || !playerData.location) return;
         
-        // [新增] 看房間時，隱藏單一物品/NPC 的觀察面板
         UI.hideInspection();
         
         const room = WorldMap[playerData.location];
@@ -72,7 +82,6 @@ export const MapSystem = {
         if (room.safe) UI.print(UI.txt("【 安全區 】", "#00ff00"), "system", true);
         UI.print(room.description);
 
-        // === [新增] 先讀取房間內所有玩家資料，以便判斷 NPC 是否正在被戰鬥 ===
         let playersInRoom = [];
         try {
             const playersRef = collection(db, "players");
@@ -90,6 +99,25 @@ export const MapSystem = {
                 fightingNpcKeys.add(`${p.combatTarget.id}_${p.combatTarget.index}`);
             }
         });
+
+        // === [新增] 讀取該房間所有受傷的 NPC 資料 ===
+        const activeNpcMap = new Map();
+        try {
+            const activeRef = collection(db, "active_npcs");
+            const qActive = query(activeRef, where("roomId", "==", playerData.location));
+            const activeSnaps = await getDocs(qActive);
+            activeSnaps.forEach(doc => {
+                const data = doc.data();
+                // 檢查是否脫戰回血 (3分鐘)
+                if (Date.now() - data.lastCombatTime > 180000) {
+                     // 超時，不放入 map (顯示為滿血)，並順便清理資料庫 (非同步執行即可)
+                     deleteDoc(doc.ref);
+                } else {
+                     // 使用文檔 ID (格式: roomId_npcId_index) 作為 Key
+                     activeNpcMap.set(doc.id, data);
+                }
+            });
+        } catch(e) { console.error("讀取受傷 NPC 失敗", e); }
 
         // === 顯示 NPC 列表 ===
         if (room.npcs && room.npcs.length > 0) {
@@ -116,9 +144,20 @@ export const MapSystem = {
                 if (!isDead) {
                     const npc = NPCDB[npcId];
                     if (npc) {
+                        // 產生唯一 ID
+                        const uniqueId = `${playerData.location}_${npcId}_${index}`;
+                        
                         let statusTag = "";
+                        
+                        // 1. 檢查戰鬥狀態
                         if (fightingNpcKeys.has(`${npcId}_${index}`)) {
-                            statusTag = UI.txt(" 【戰鬥中】", "#ff0000", true);
+                            statusTag += UI.txt(" 【戰鬥中】", "#ff0000", true);
+                        }
+
+                        // 2. 檢查受傷狀態 (新增)
+                        if (activeNpcMap.has(uniqueId)) {
+                            const activeData = activeNpcMap.get(uniqueId);
+                            statusTag += getNpcStatusText(activeData.currentHp, activeData.maxHp);
                         }
 
                         const diff = CombatSystem.getDifficultyInfo(playerData, npcId);
@@ -190,16 +229,14 @@ export const MapSystem = {
     },
 
     lookTarget: (playerData, targetId) => {
-        // [新增] 先隱藏舊的圖片，以防找不到新圖時殘留
         UI.hideInspection();
 
-        // 1. 優先檢查玩家身上的背包
+        // 1. 檢查背包
         if (playerData.inventory) {
             const item = playerData.inventory.find(i => i.id === targetId || i.name === targetId);
             if (item) {
                 const info = ItemDB[item.id];
                 if (info) {
-                    // [新增] 呼叫 UI 顯示圖片 (type = item)
                     UI.showInspection(info.id || targetId, info.name, 'item');
 
                     UI.print(UI.titleLine(info.name), "chat", true);
@@ -220,7 +257,12 @@ export const MapSystem = {
         if (room.npcs && room.npcs.includes(targetId)) {
             const npc = NPCDB[targetId];
             if (npc) {
-                // [新增] 呼叫 UI 顯示圖片 (type = npc)
+                // [新增] 查詢此 NPC 的動態血量
+                const index = room.npcs.indexOf(targetId);
+                const uniqueId = `${playerData.location}_${targetId}_${index}`;
+                
+                // 這裡我們用非同步去拉資料顯示，或直接顯示靜態，
+                // 為了簡單起見，這裡先顯示基本資料，若有受傷狀態在 look 大表已經看得到
                 UI.showInspection(npc.id || targetId, npc.name, 'npc');
 
                 UI.print(UI.titleLine(npc.name), "chat", true); 
