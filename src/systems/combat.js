@@ -14,8 +14,7 @@ import { updatePlayer, getCombatStats } from "./player.js";
 // 用來控制戰鬥迴圈的計時器儲存物件
 const combatControllers = {}; 
 
-// 產生唯一的 ID (對應 active_npcs 集合中的文件 ID)
-// 這裡的 active_npcs 僅代表「受傷狀態表」，不代表替身
+// 產生唯一的 ID
 function getUniqueNpcId(roomId, npcId, index) {
     return `${roomId}_${npcId}_${index}`;
 }
@@ -48,7 +47,7 @@ async function handleKillRewards(playerData, npcData, userId) {
         }
     }
 
-    // 2. 潛能與經驗 (簡易版)
+    // 2. 潛能與經驗
     const potGain = 100; 
     const newPot = (playerData.combat.potential || 0) + potGain;
     const newKills = (playerData.combat.kills || 0) + 1;
@@ -69,7 +68,6 @@ async function handlePlayerDeath(playerData, userId) {
     CombatSystem.stopCombat(userId);
 
     const deathLocation = "ghost_gate";
-    // 死亡懲罰：恢復滿狀態但送去鬼門關
     const resetAttr = {
         hp: playerData.attributes.maxHp,
         sp: playerData.attributes.maxSp,
@@ -92,12 +90,13 @@ async function handlePlayerDeath(playerData, userId) {
 export const CombatSystem = {
     getDifficultyInfo, 
 
-    // 停止戰鬥 (清除本地排程)
+    // 停止戰鬥 (清除本地排程 + 重置狀態)
     stopCombat: (userId) => {
         if (combatControllers[userId]) {
             clearTimeout(combatControllers[userId]); 
             delete combatControllers[userId];
         }
+        // 這裡加上 firestore 更新，確保玩家狀態被釋放
         updatePlayer(userId, { state: 'normal', combatTarget: null });
     },
 
@@ -133,11 +132,8 @@ export const CombatSystem = {
 
         const npcId = roomNpcs[npcIndex];
         const npcProto = NPCDB[npcId];
+        // 傳遞完整的 roomId 避免切割錯誤
         const uniqueId = getUniqueNpcId(playerData.location, npcId, npcIndex);
-
-        // 2. 檢查目標是否已死 (從 dead_npcs 查)
-        // 雖然 map.js 已經過濾顯示，但為了安全起見再查一次，或者在 Loop 裡查
-        // 這裡為了流暢度，直接開始，Loop 裡會檢查
 
         // 3. 標記玩家狀態
         await updatePlayer(userId, { 
@@ -151,12 +147,12 @@ export const CombatSystem = {
         UI.print(UI.txt(`你對 ${npcProto.name} ${typeText}！戰鬥開始！`, color, true), "system", true);
         MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 對 ${npcProto.name} ${typeText}，大戰一觸即發！`, color, true));
 
-        // 5. 直接進入迴圈，不需要先建立資料庫文件
-        CombatSystem.combatLoop(userId, uniqueId, npcId, npcIndex, isLethal);
+        // 5. 進入迴圈 (加入 playerData.location 作為參數)
+        CombatSystem.combatLoop(userId, uniqueId, npcId, npcIndex, isLethal, playerData.location);
     },
 
     // 核心戰鬥迴圈
-    combatLoop: async (userId, uniqueId, npcId, npcIndex, isLethal) => {
+    combatLoop: async (userId, uniqueId, npcId, npcIndex, isLethal, originalRoomId) => {
         // A. 讀取階段
         // ----------------------------------------------------
         // 1. 玩家資料
@@ -164,12 +160,16 @@ export const CombatSystem = {
         if (!pDoc.exists()) return; 
         const pData = pDoc.data();
 
-        if (pData.state !== 'fighting' || pData.location !== uniqueId.split('_')[0]) {
-            return; // 停止
+        // [修正] 嚴格檢查：如果狀態不對，或者位置變了，必須「主動停止戰鬥」以防卡死
+        if (pData.state !== 'fighting') {
+            return; // 已經被其他方式停止
+        }
+        if (pData.location !== originalRoomId) {
+            CombatSystem.stopCombat(userId); // 玩家移動了，強制結束
+            return;
         }
 
-        // 2. NPC 資料 (關鍵修改：讀不到就當滿血)
-        // active_npcs 在這裡只作為「傷勢紀錄表」使用
+        // 2. NPC 資料
         const nDocRef = doc(db, "active_npcs", uniqueId);
         const nDoc = await getDoc(nDocRef);
         
@@ -179,21 +179,16 @@ export const CombatSystem = {
         let npcIsUnconscious = false;
         let npcName = proto.name;
 
-        // 如果資料庫有紀錄，代表受傷過，使用資料庫的數值
+        // 如果資料庫有紀錄，代表受傷過
         if (nDoc.exists()) {
             const d = nDoc.data();
             currentNpcHp = d.currentHp;
             npcIsUnconscious = d.isUnconscious || false;
-        } else {
-            // 如果資料庫沒紀錄，檢查是否已經死了 (dead_npcs)
-            // 這裡簡單做：假設沒 active_npcs 紀錄就是滿血活著
-            // (如果剛死掉還沒重生，MapSystem 不會顯示，玩家也點不到，所以這裡假設活著是安全的)
         }
 
         // B. 計算階段
         // ----------------------------------------------------
         const pStats = getCombatStats(pData);
-        // 簡易 NPC 數值
         const nStats = {
             ap: (proto.attributes?.str || 20) * 3 + (proto.combat?.attack || 10),
             dp: (proto.attributes?.con || 20) * 3 + (proto.combat?.defense || 10),
@@ -207,7 +202,6 @@ export const CombatSystem = {
         let pMsg = "";
 
         if (!pData.isUnconscious) {
-            // 如果 NPC 已經暈了且不是下殺手，停止攻擊
             if (npcIsUnconscious && !isLethal) {
                 UI.print(`${npcName} 已經暈過去了，你收住了手。`, "system");
                 CombatSystem.stopCombat(userId);
@@ -243,18 +237,15 @@ export const CombatSystem = {
             }
         }
 
-        // C. 寫入階段 (一定要寫入 DB 才能同步)
+        // C. 寫入階段
         // ----------------------------------------------------
         let newNpcHp = currentNpcHp - dmgToNpc;
         let newPlayerHp = pData.attributes.hp - dmgToPlayer;
         
-        // 顯示訊息
         UI.print(pMsg, "chat");
         if (nMsg) UI.print(nMsg, "chat");
         UI.updateHUD({ ...pData, attributes: { ...pData.attributes, hp: newPlayerHp } });
 
-        // 準備 NPC 狀態更新 (只有當有傷害變化，或者原本沒紀錄時才必須寫入)
-        // 這裡我們每回合寫入一次，確保狀態最新
         const npcStateData = {
             currentHp: newNpcHp,
             maxHp: maxNpcHp,
@@ -262,25 +253,23 @@ export const CombatSystem = {
             npcName: npcName,
             npcId: npcId,
             index: npcIndex,
-            isUnconscious: npcIsUnconscious, // 暫時維持原狀，下面判定勝負時再改
+            isUnconscious: npcIsUnconscious,
             lastCombatTime: Date.now()
         };
 
         try {
-            // 使用 setDoc({merge: true})，這樣如果文件不存在就會自動建立 (解決初始化錯誤！)
             await Promise.all([
                 setDoc(nDocRef, npcStateData, { merge: true }),
                 updatePlayer(userId, { "attributes.hp": newPlayerHp })
             ]);
         } catch (e) {
             console.error("同步失敗", e);
-            return; // 寫入失敗暫停
+            CombatSystem.stopCombat(userId); // 出錯時也要釋放玩家
+            return;
         }
 
         // D. 判定與結算
         // ----------------------------------------------------
-        
-        // 1. 玩家敗北
         if (newPlayerHp <= 0) {
             if (isLethal) {
                 await handlePlayerDeath(pData, userId);
@@ -293,39 +282,30 @@ export const CombatSystem = {
             return;
         }
 
-        // 2. NPC 敗北 (HP <= 0)
         if (newNpcHp <= 0) {
             if (isLethal) {
-                // === 殺死邏輯 ===
                 UI.print(UI.txt(`${npcName} 慘叫一聲，倒地身亡！`, "#ff0000", true), "system", true);
                 MessageSystem.broadcast(pData.location, UI.txt(`${npcName} 被 ${pData.name} 殺死了。`, "#ff0000", true));
                 
-                // 刪除傷勢紀錄 (active_npcs)
                 await deleteDoc(nDocRef);
                 
-                // 加入死亡名單 (dead_npcs)，3分鐘重生
                 await addDoc(collection(db, "dead_npcs"), { 
                     roomId: pData.location, 
                     npcId: npcId, 
                     index: npcIndex, 
-                    respawnTime: Date.now() + 180000 // 3分鐘
+                    respawnTime: Date.now() + 180000 
                 });
 
-                // 發獎勵
                 await handleKillRewards(pData, { npcId, npcName }, userId);
                 CombatSystem.stopCombat(userId);
                 
-                // 刷新畫面 (讓屍體消失)
                 MapSystem.look(pData);
                 return;
-
             } else {
-                // === 打暈邏輯 ===
                 if (!npcIsUnconscious) {
                     UI.print(UI.txt(`${npcName} 晃了晃，咚的一聲倒在地上暈了過去。`, "#ffff00"), "system", true);
                     MessageSystem.broadcast(pData.location, `${pData.name} 打暈了 ${npcName}。`);
                     
-                    // 標記昏迷，HP 設為 0
                     await updateDoc(nDocRef, { isUnconscious: true, currentHp: 0 });
                     
                     const newPot = (pData.combat.potential || 0) + 10;
@@ -339,7 +319,7 @@ export const CombatSystem = {
 
         // E. 下一回合
         combatControllers[userId] = setTimeout(() => {
-            CombatSystem.combatLoop(userId, uniqueId, npcId, npcIndex, isLethal);
+            CombatSystem.combatLoop(userId, uniqueId, npcId, npcIndex, isLethal, originalRoomId);
         }, 2000);
     }
 };
