@@ -244,12 +244,10 @@ export const MapSystem = {
         if (room.npcs && room.npcs.includes(targetId)) {
             const npc = NPCDB[targetId];
             if (npc) {
-                // === [修正] 找出該 NPC 在房間的「活體」索引 ===
-                // 我們必須避開已經死亡的 index，否則會抓到屍體或錯誤的 index
+                // 找出該 NPC 在房間的「活體」索引
                 let realIndex = -1;
                 let deadIndices = [];
 
-                // 先撈取該房間所有的屍體索引
                 try {
                     const deadRef = collection(db, "dead_npcs");
                     const q = query(deadRef, where("roomId", "==", playerData.location));
@@ -263,12 +261,11 @@ export const MapSystem = {
                     });
                 } catch(e) { console.error(e); }
 
-                // 遍歷房間 NPC，找到第一個與 ID 吻合且不在 deadIndices 的索引
                 for(let i=0; i<room.npcs.length; i++) {
                     if (room.npcs[i] === targetId) {
                         if (!deadIndices.includes(i)) {
                             realIndex = i;
-                            break; // 找到第一個活著的就停止
+                            break; 
                         }
                     }
                 }
@@ -289,7 +286,11 @@ export const MapSystem = {
                     if (activeSnap.exists()) {
                         const activeData = activeSnap.data();
                         displayHp = activeData.currentHp;
-                        if (displayHp <= 0) isUnconscious = true;
+                        
+                        // [修改] 讀取資料庫中的 isUnconscious 狀態
+                        if (activeData.isUnconscious === true || displayHp <= 0) {
+                            isUnconscious = true;
+                        }
                     }
                 } catch (e) {
                     console.error("Fetch NPC state error:", e);
