@@ -245,7 +245,9 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 10px;
+    
+    /* 移除上下 padding 讓圖片能貼邊 */
+    padding: 5px;
     cursor: pointer;
     overflow: hidden;
 }
@@ -255,32 +257,6 @@ body {
     border-color: #fff;
 }
 
-.inspection-header {
-    flex-shrink: 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    height: 24px;
-    border-bottom: 1px solid #333;
-    margin-bottom: 5px;
-}
-
-.inspection-title {
-    font-size: 14px;
-    color: var(--accent-green);
-    font-weight: bold;
-}
-
-#btn-close-inspect {
-    background: none;
-    border: none;
-    color: #888;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 0 5px;
-}
-#btn-close-inspect:hover { color: #fff; }
-
 #inspect-img-box {
     /* [關鍵] 讓圖片容器自動填滿剩餘空間 */
     flex-grow: 1; 
@@ -289,7 +265,7 @@ body {
     background: radial-gradient(circle, #1a1a1a 0%, #000 100%);
     border: 1px solid #333;
     border-radius: 4px;
-    margin: 5px 0;
+    margin: 0 0 5px 0; /* 下方留一點縫隙給名字 */
     
     display: flex;
     justify-content: center;
@@ -298,7 +274,6 @@ body {
 }
 
 #inspect-img {
-    /* 使用 contain 確保圖片完整顯示 */
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -310,10 +285,10 @@ body {
     opacity: 1;
 }
 
-/* 底部資訊區塊 */
+/* 底部資訊區塊 (縮小高度) */
 .inspection-info-foot {
     flex-shrink: 0;
-    height: 40px;
+    height: 30px; /* 從 40px 縮小為 30px，增加圖片空間 */
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -325,12 +300,6 @@ body {
     font-size: 16px;
     text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
     line-height: 1.2;
-}
-
-.inspect-hint {
-    font-size: 10px;
-    color: #666;
-    margin-top: 2px;
 }
 
 /* --- 3. 精氣神 (Vitals) --- */

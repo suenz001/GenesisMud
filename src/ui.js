@@ -38,10 +38,9 @@ const btnAutoDrink = document.getElementById('btn-auto-drink');
 // 儀表板元素 - 內力控制
 const valEnforce = document.getElementById('val-enforce');
 
-// 新增：面板切換元素
+// 新增：面板切換元素 (移除 btnCloseInspect)
 const panelInspection = document.getElementById('panel-inspection');
 const panelStatsGroup = document.getElementById('panel-stats-group');
-const btnCloseInspect = document.getElementById('btn-close-inspect');
 
 // 暫存目前的內力值
 let currentEnforceValue = 0;
@@ -356,10 +355,10 @@ export const UI = {
     }
 };
 
-// 綁定關閉按鈕事件 (放在最後，確保 DOM 載入後執行)
-if (btnCloseInspect) {
-    btnCloseInspect.addEventListener('click', (e) => {
-        e.stopPropagation(); // 避免冒泡
+// 綁定關閉事件 (直接綁在面板上)
+if (panelInspection) {
+    panelInspection.addEventListener('click', (e) => {
+        // 不需要 stopPropagation，因為面板就是我們要監聽的最上層目標
         UI.hideInspection();
     });
 }
