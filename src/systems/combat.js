@@ -1,605 +1,405 @@
 // src/systems/combat.js
-import { doc, getDoc, updateDoc, setDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { db, auth } from "../firebase.js";
+import { 
+    doc, getDoc, setDoc, updateDoc, deleteDoc, 
+    collection, addDoc, serverTimestamp 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { db } from "../firebase.js";
 import { UI } from "../ui.js";
 import { NPCDB } from "../data/npcs.js";
 import { ItemDB } from "../data/items.js";
 import { SkillDB } from "../data/skills.js";
-import { MapSystem } from "./map.js"; // 確保引用 MapSystem
+import { MapSystem } from "./map.js";
 import { MessageSystem } from "./messages.js"; 
 import { updatePlayer, getCombatStats } from "./player.js";
 
-// 用來控制戰鬥迴圈的標記
-let isFighting = false;
-let currentCombatSessionId = 0;
+// 用來控制遞迴迴圈的旗標
+const combatControllers = {}; 
 
+// 產生唯一的 NPC 實體 ID (Room + NPC ID + Index)
 function getUniqueNpcId(roomId, npcId, index) {
     return `${roomId}_${npcId}_${index}`;
 }
 
-// === 同步 NPC 狀態 (寫入) ===
-async function syncNpcState(uniqueId, currentHp, maxHp, roomId, npcName, isUnconscious) {
-    try {
-        // 確保數值安全
-        const safeHp = Math.max(0, Math.floor(currentHp));
-        const safeUnconscious = !!isUnconscious; // 強制轉布林值
-
-        const ref = doc(db, "active_npcs", uniqueId);
-        await setDoc(ref, {
-            currentHp: safeHp,
-            maxHp: maxHp,
-            roomId: roomId,
-            npcName: npcName,
-            isUnconscious: safeUnconscious,
-            lastCombatTime: Date.now()
-        }, { merge: true });
-        
-        console.log(`[Combat] Saved: ${npcName} HP:${safeHp} UNC:${safeUnconscious} ID:${uniqueId}`);
-    } catch (e) {
-        console.error("同步 NPC 狀態失敗", e);
-    }
-}
-
-// === 獲取 NPC 狀態 (讀取) ===
-async function fetchNpcState(uniqueId, defaultMaxHp) {
-    try {
-        const ref = doc(db, "active_npcs", uniqueId);
-        const snap = await getDoc(ref);
-        
-        if (snap.exists()) {
-            const data = snap.data();
-            // 檢查是否超時 (3分鐘沒戰鬥視為脫離)
-            if (Date.now() - data.lastCombatTime > 180000) {
-                await deleteDoc(ref);
-                return { hp: defaultMaxHp, isUnconscious: false };
-            } else {
-                return { hp: data.currentHp, isUnconscious: data.isUnconscious };
-            }
-        }
-    } catch (e) {
-        console.error("讀取 NPC 狀態失敗", e);
-    }
-    // 如果沒有紀錄，回傳滿血狀態
-    return { hp: defaultMaxHp, isUnconscious: false };
-}
-
-function getNPCCombatStats(npc) {
-    const atkType = 'unarmed'; 
-    let maxSkill = 0;
-    let rating = 1.0; 
-
-    if (npc.skills) {
-        for (const [sid, lvl] of Object.entries(npc.skills)) {
-            const sInfo = SkillDB[sid];
-            if (lvl > maxSkill) {
-                maxSkill = lvl;
-                if (sInfo && sInfo.rating) rating = sInfo.rating;
-            }
-        }
-    }
-    const effAtkSkill = maxSkill;
-
-    const str = npc.attributes?.str || 20;
-    const con = npc.attributes?.con || 20;
-    const per = npc.attributes?.per || 20;
+// 獲取或初始化 NPC 的實體狀態
+// 如果 active_npcs 裡沒有這隻怪的資料，就從 NPCDB 複製一份新的上去
+async function getOrInitActiveNpc(roomId, npcId, index) {
+    const uniqueId = getUniqueNpcId(roomId, npcId, index);
+    const docRef = doc(db, "active_npcs", uniqueId);
     
-    const ap = (str * 2.5) + (effAtkSkill * 5 * rating) + (npc.combat.attack || 0);
-    const dp = (con * 2.5) + (effAtkSkill * 2) + (npc.combat.defense || 0);
-    const hit = (per * 2.5) + (effAtkSkill * 3 * rating);
-    const dodge = (per * 2.5) + (effAtkSkill * 4);
+    try {
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            // 資料庫已有此 NPC 的受傷/戰鬥狀態，直接回傳
+            return { uniqueId, ...docSnap.data() };
+        } else {
+            // 資料庫沒有，代表它是滿血狀態，初始化它
+            const proto = NPCDB[npcId];
+            if (!proto) return null;
 
-    return { ap, dp, hit, dodge, atkType, effAtkSkill, rating };
+            const maxHp = proto.combat.maxHp;
+            const initialState = {
+                currentHp: maxHp,
+                maxHp: maxHp,
+                roomId: roomId,
+                npcName: proto.name,
+                npcId: npcId,
+                index: index,
+                isUnconscious: false,
+                lastCombatTime: Date.now()
+            };
+
+            // 寫入資料庫
+            await setDoc(docRef, initialState);
+            return { uniqueId, ...initialState };
+        }
+    } catch (e) {
+        console.error("NPC 初始化失敗", e);
+        return null;
+    }
 }
 
-function calculateCombatPower(stats, hp) {
-    return (stats.ap + stats.dp) * 2 + hp;
-}
-
+// 取得難度顏色 (Look 用)
 export function getDifficultyInfo(playerData, npcId) {
     const npc = NPCDB[npcId];
     if (!npc) return { color: "#fff", ratio: 1 };
-
-    const pStats = getCombatStats(playerData);
-    const nStats = getNPCCombatStats(npc);
-
-    const pPower = calculateCombatPower(pStats, playerData.attributes.maxHp);
-    const nPower = calculateCombatPower(nStats, npc.combat.maxHp);
-
-    const ratio = nPower / (pPower || 1); 
-
-    let color = "#ffffff"; 
-    if (ratio < 0.5) color = "#888888"; 
-    else if (ratio < 0.8) color = "#00ff00"; 
-    else if (ratio < 1.2) color = "#ffffff"; 
-    else if (ratio < 2.0) color = "#ffff00"; 
-    else color = "#ff0000"; 
-
-    return { color, ratio };
+    // 這裡僅做簡易評估，不涉及即時血量
+    return { color: "#ffffff", ratio: 1.0 }; 
 }
 
-function getStatusDesc(name, current, max) {
-    if (max <= 0) return null;
-    const pct = current / max;
-    if (pct <= 0) return UI.txt(`${name} 已經昏迷不醒，倒在地上一動也不動。`, "#888888");
-    if (pct <= 0.1 && pct > 0) return UI.txt(`${name} 搖頭晃腦，眼看就要倒在地上了！`, "#ff5555");
-    if (pct <= 0.4 && pct > 0.1) return UI.txt(`${name} 氣喘呼呼，看起來狀況不太好。`, "#ffaa00");
-    return null;
-}
-
-function getLevel(character) {
-    const skills = character.skills || {};
-    let maxMartial = 0, maxForce = 0;
-    for (const [sid, lvl] of Object.entries(skills)) {
-        const skillInfo = SkillDB[sid];
-        if (skillInfo && skillInfo.base) {
-            if (skillInfo.type === 'martial' && lvl > maxMartial) maxMartial = lvl;
-            if (skillInfo.type === 'force' && lvl > maxForce) maxForce = lvl;
-        }
-    }
-    return maxMartial + maxForce;
-}
-
-async function findAliveNPC(roomId, targetId) {
-    const room = MapSystem.getRoom(roomId);
-    if (!room || !room.npcs) return null;
-
-    const deadRef = collection(db, "dead_npcs");
-    const q = query(deadRef, where("roomId", "==", roomId));
-    const snapshot = await getDocs(q);
+// 處理掉落物與獎勵
+async function handleKillRewards(playerData, npcData, userId) {
+    const proto = NPCDB[npcData.npcId];
     
-    const deadIndices = [];
-    const now = Date.now();
-    snapshot.forEach(doc => {
-        const data = doc.data();
-        if (now < data.respawnTime) {
-            if (data.npcId === targetId) deadIndices.push(data.index);
-        }
-    });
-
-    for (let i = 0; i < room.npcs.length; i++) {
-        if (room.npcs[i] === targetId) {
-            if (!deadIndices.includes(i)) {
-                const npcData = NPCDB[targetId];
-                return { ...npcData, index: i, isUnconscious: false }; 
+    // 1. 掉落物
+    if (proto && proto.drops) {
+        for (const drop of proto.drops) {
+            if (Math.random() <= drop.rate) {
+                const itemInfo = ItemDB[drop.id];
+                if(itemInfo) {
+                    await addDoc(collection(db, "room_items"), {
+                        roomId: playerData.location, 
+                        itemId: drop.id, 
+                        name: itemInfo.name, 
+                        droppedBy: "SYSTEM", 
+                        timestamp: serverTimestamp()
+                    });
+                    UI.print(`${npcData.npcName} 掉出了 ${itemInfo.name}。`, "system");
+                }
             }
         }
     }
-    return null;
+
+    // 2. 潛能與經驗
+    const potGain = 100; // 簡化計算
+    const newPot = (playerData.combat.potential || 0) + potGain;
+    const newKills = (playerData.combat.kills || 0) + 1;
+
+    UI.print(UI.txt(`獲得了 ${potGain} 點潛能。`, "#00ff00"), "system");
+
+    await updatePlayer(userId, {
+        "combat.potential": newPot,
+        "combat.kills": newKills
+    });
 }
 
 // 處理玩家死亡
 async function handlePlayerDeath(playerData, userId) {
-    const deathMsg = UI.txt("你眼前一黑，感覺靈魂脫離了軀體...", "#ff0000", true);
-    UI.print(deathMsg, "system", true);
+    UI.print(UI.txt("你眼前一黑，感覺靈魂脫離了軀體...", "#ff0000", true), "system", true);
     MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 慘叫一聲，倒在地上死了。`, "#ff0000", true));
 
+    // 停止戰鬥
     CombatSystem.stopCombat(userId);
 
-    if (playerData.skills) {
-        for (let skillId in playerData.skills) {
-            if (playerData.skills[skillId] > 0) playerData.skills[skillId] -= 1;
-        }
-    }
-
+    // 設定死亡狀態
     const deathLocation = "ghost_gate";
-    playerData.attributes.hp = playerData.attributes.maxHp;
-    playerData.attributes.sp = playerData.attributes.maxSp;
-    playerData.attributes.mp = playerData.attributes.maxMp;
-    playerData.isUnconscious = false; 
-    
-    playerData.location = deathLocation; 
+    const resetAttr = {
+        hp: playerData.attributes.maxHp,
+        sp: playerData.attributes.maxSp,
+        mp: playerData.attributes.maxMp
+    };
 
     await updatePlayer(userId, {
         location: deathLocation,
-        skills: playerData.skills,
-        attributes: playerData.attributes,
+        attributes: { ...playerData.attributes, ...resetAttr },
         state: 'normal',
         combatTarget: null,
         isUnconscious: false,
-        deathTime: Date.now() 
+        deathTime: Date.now()
     });
 
-    UI.updateHUD(playerData);
     UI.print("你悠悠醒來，發現自己身處【鬼門關】。", "system");
-    UI.print("你的武功修為受到了一些損耗。", "system");
-    UI.print(UI.txt("黑白無常說道：「陽壽未盡？在這反省 3 分鐘再回去吧！」", "#aaa"), "chat", true);
     
-    MapSystem.look(playerData);
-
-    setTimeout(async () => {
-        const pRef = doc(db, "players", userId);
-        const pSnap = await getDoc(pRef);
-        if (pSnap.exists()) {
-            const currentP = pSnap.data();
-            if (currentP.location === "ghost_gate") {
-                const respawnPoint = currentP.savePoint || "inn_start";
-                playerData.location = respawnPoint;
-                await updatePlayer(userId, { location: respawnPoint });
-                
-                if (auth.currentUser && auth.currentUser.uid === userId) {
-                    UI.print("一道金光閃過，你還陽了！", "system");
-                    MapSystem.look(playerData);
-                }
-            }
-        }
-    }, 180000);
-}
-
-function getDodgeMessage(entity, attackerName) {
-    let msg = `$N身形一晃，閃過了$P的攻擊！`; 
-    let activeDodge = null;
-    if (entity.enabled_skills && entity.enabled_skills.dodge) {
-        activeDodge = entity.enabled_skills.dodge;
-    } else if (entity.skills && entity.skills.dodge && entity.skills.dodge > 20) {
-    }
-
-    if (activeDodge && SkillDB[activeDodge] && SkillDB[activeDodge].dodge_actions) {
-        const actions = SkillDB[activeDodge].dodge_actions;
-        msg = actions[Math.floor(Math.random() * actions.length)];
-    }
-
-    return UI.txt(msg.replace(/\$N/g, entity.name || "你").replace(/\$P/g, attackerName), "#aaa");
-}
-
-// 處理擊殺獎勵 (Kill)
-async function handleKillReward(npc, playerData, currentCombatState, userId) {
-    try {
-        const deadMsg = UI.txt(`${npc.name} 慘叫一聲，被你結果了性命。`, "#ff0000", true);
-        UI.print(deadMsg, "system", true);
-        MessageSystem.broadcast(playerData.location, UI.txt(`${npc.name} 被 ${playerData.name} 殺死了。`, "#ff0000", true));
-        
-        const playerLvl = getLevel(playerData);
-        const npcLvl = getLevel(npc); 
-        let potGain = 100 + ((npcLvl - playerLvl) * 10);
-        if (potGain < 10) potGain = 10;
-
-        const ratio = currentCombatState.diffRatio;
-        if (ratio < 0.5) {
-            potGain = 0; 
-            UI.print("這對手太弱了，你從戰鬥中毫無所獲。", "chat");
-        } else if (ratio < 0.8) {
-            potGain = Math.floor(potGain * 0.5);
-            UI.print("這對手對你來說太輕鬆了，收穫不多。", "chat");
-        }
-        
-        if (potGain > 0) {
-            playerData.combat.potential = (playerData.combat.potential || 0) + potGain;
-            UI.print(UI.txt(`戰鬥勝利！獲得 ${potGain} 點潛能。`, "#00ff00", true), "system", true);
-        }
-        
-        playerData.combat.kills = (playerData.combat.kills || 0) + 1;
-
-        if (npc.drops) {
-            for (const drop of npc.drops) {
-                if (Math.random() <= drop.rate) {
-                    const itemInfo = ItemDB[drop.id];
-                    if(itemInfo) {
-                        await addDoc(collection(db, "room_items"), {
-                            roomId: playerData.location, itemId: drop.id, name: itemInfo.name, droppedBy: "SYSTEM", timestamp: serverTimestamp()
-                        });
-                        UI.print(`${npc.name} 掉出了 ${itemInfo.name}。`, "system");
-                    }
-                }
-            }
-        }
-
-        await addDoc(collection(db, "dead_npcs"), { 
-            roomId: playerData.location, npcId: npc.id, index: npc.index, respawnTime: Date.now() + 300000 
-        });
-        
-        // 刪除受傷紀錄 (因為已經死了)
-        try {
-            await deleteDoc(doc(db, "active_npcs", currentCombatState.uniqueId));
-        } catch (e) { /* ignore */ }
-
-        await updatePlayer(userId, { 
-            "combat.potential": playerData.combat.potential,
-            "combat.kills": playerData.combat.kills 
-        });
-        
-    } catch (err) {
-        console.error("Handle Kill Reward Error:", err);
-    } finally {
-        CombatSystem.stopCombat(userId);
-        MapSystem.look(playerData); // 更新場景
-    }
-}
-
-// 戰鬥邏輯迴圈
-async function combatLoop(playerData, userId, combatState, sessionId) {
-    if (!isFighting || currentCombatSessionId !== sessionId) return;
-    if (playerData.location !== combatState.roomId) {
-        UI.print("你已經離開了戰場。", "system");
-        CombatSystem.stopCombat(userId);
-        return;
-    }
-
-    const { targetId, targetIndex, uniqueId, maxNpcHp, npcName, isLethal } = combatState;
-    const npc = NPCDB[targetId];
-
-    // === Step 1: 讀取最新狀態 ===
-    const npcState = await fetchNpcState(uniqueId, maxNpcHp);
-    let currentNpcHp = npcState.hp;
-    let npcIsUnconscious = npcState.isUnconscious;
-
-    if (currentNpcHp <= 0 && !isLethal) {
-        // 切磋模式且對方已倒，停止
-        UI.print(`${npcName} 已經倒在地上，勝負已分。`, "system");
-        CombatSystem.stopCombat(userId);
-        return;
-    }
-    // 若 kill 模式且 hp<=0，視為昏迷，繼續允許攻擊(處決)
-
-    const playerStats = getCombatStats(playerData);
-    const npcStats = getNPCCombatStats(npc);
-
-    // === Step 2: 攻防計算 ===
-    
-    // --- 2a. 玩家攻擊 ---
-    if (!playerData.isUnconscious) {
-        // ... (內力計算)
-        const enforceLevel = playerData.combat.enforce || 0;
-        let forceBonus = 0;
-        let actualCost = 0;
-        if (enforceLevel > 0) {
-            const forceSkill = playerData.skills.force || 0;
-            const maxForce = playerData.attributes.maxForce || 10;
-            const consumptionRate = 0.3; 
-            let idealCost = Math.floor(maxForce * (enforceLevel / 10) * consumptionRate);
-            if (idealCost < 1) idealCost = 1; 
-            actualCost = Math.min(playerData.attributes.force, idealCost);
-            if (actualCost > 0) {
-                playerData.attributes.force -= actualCost; 
-                const efficiency = 1.0 + (forceSkill / 100);
-                let multiplier = 0.5; 
-                if (playerStats.atkType === 'unarmed') multiplier = 0.8; 
-                forceBonus = Math.floor(actualCost * efficiency * multiplier);
-            }
-        }
-
-        let enabledType = playerData.enabled_skills && playerData.enabled_skills[playerStats.atkType];
-        let activeSkillId = enabledType || playerStats.atkType;
-        let skillInfo = SkillDB[activeSkillId];
-        let action = { msg: "$P對$N發起攻擊。", damage: 10 };
-        if (skillInfo && skillInfo.actions && skillInfo.actions.length > 0) {
-            action = skillInfo.actions[Math.floor(Math.random() * skillInfo.actions.length)];
-        }
-        let skillBaseDmg = action.damage || 10;
-        let msg = action.msg
-            .replace(/\$P/g, playerData.name)
-            .replace(/\$N/g, npcName)
-            .replace(/\$w/g, playerStats.weaponData ? playerStats.weaponData.name : "雙手");
-
-        const pHitChance = Math.random() * (playerStats.hit + npcStats.dodge);
-        const isHit = npcIsUnconscious ? true : (pHitChance < playerStats.hit);
-        
-        const finalMsg = UI.txt(msg, "#ffff00");
-        UI.print(finalMsg, "system", true);
-        MessageSystem.broadcast(playerData.location, finalMsg);
-
-        if (isHit) {
-            let damage = playerStats.ap - npcStats.dp;
-            damage += ((skillBaseDmg * (playerStats.atkRating || 1.0)) / 2); 
-            damage += forceBonus;
-            damage = damage * (0.9 + Math.random() * 0.2);
-            if (damage <= 0) damage = Math.random() * 5 + 1;
-            
-            if (!isLethal) damage = damage / 2;
-            damage = Math.round(damage) || 1;
-
-            currentNpcHp -= damage;
-
-            let damageMsg = `(造成了 ${damage} 點傷害)`;
-            if (forceBonus > 0) damageMsg = `(運功消耗 ${actualCost} 內力，造成了 ${damage} 點傷害)`;
-            UI.print(damageMsg, "chat");
-
-            const statusMsg = getStatusDesc(npcName, currentNpcHp, maxNpcHp);
-            if (statusMsg) {
-                UI.print(statusMsg, "chat", true);
-                MessageSystem.broadcast(playerData.location, statusMsg);
-            }
-        } else {
-            const dodgeMsg = UI.txt(`${npcName} 身形一晃，閃過了你的攻擊！`, "#aaa");
-            UI.print(dodgeMsg, "chat", true);
-            MessageSystem.broadcast(playerData.location, dodgeMsg);
-        }
-    } else {
-        UI.print("你現在暈頭轉向，根本無法攻擊！", "error");
-    }
-
-    // --- 2b. NPC 反擊 ---
-    if (!npcIsUnconscious && currentNpcHp > 0) {
-        let npcMsg = UI.txt(`${npcName} 往 ${playerData.name} 撲了過來！`, "#ff5555");
-        const nHitChance = Math.random() * (npcStats.hit + playerStats.dodge);
-        const nIsHit = playerData.isUnconscious ? true : (nHitChance < npcStats.hit);
-        
-        UI.print(npcMsg, "system", true);
-        MessageSystem.broadcast(playerData.location, npcMsg);
-
-        if (nIsHit) {
-            let dmg = npcStats.ap - playerStats.dp;
-            if (dmg <= 0) dmg = Math.random() * 3 + 1;
-            if (!isLethal) dmg = dmg / 2;
-            dmg = Math.round(dmg) || 1;
-
-            playerData.attributes.hp -= dmg;
-            UI.print(`(你受到了 ${dmg} 點傷害)`, "chat");
-
-            const statusMsg = getStatusDesc("你", playerData.attributes.hp, playerData.attributes.maxHp);
-            if (statusMsg) {
-                UI.print(statusMsg, "chat", true);
-                MessageSystem.broadcast(playerData.location, getStatusDesc(playerData.name, playerData.attributes.hp, playerData.attributes.maxHp));
-            }
-        } else {
-            const dodgeMsg = getDodgeMessage(playerData, npcName);
-            UI.print(dodgeMsg, "chat", true);
-            MessageSystem.broadcast(playerData.location, dodgeMsg);
-        }
-    } else if (npcIsUnconscious) {
-        if(Math.random() < 0.3) UI.print(UI.txt(`${npcName} 倒在地上，毫無反抗之力。`, "#888"), "chat", true);
-    }
-
-    // === Step 3: 立即寫入結果 ===
-    let newIsUnconscious = npcIsUnconscious;
-    if (currentNpcHp <= 0) {
-        currentNpcHp = 0;
-        newIsUnconscious = true; 
-    }
-
-    // 關鍵修正：確保這裡寫入完成
-    await syncNpcState(uniqueId, currentNpcHp, maxNpcHp, combatState.roomId, npcName, newIsUnconscious);
-
-    if (playerData.attributes.hp <= 0) {
-        playerData.attributes.hp = 0;
-        playerData.isUnconscious = true;
-    }
-    
-    await updatePlayer(userId, { 
-        "attributes.hp": playerData.attributes.hp,
-        "attributes.force": playerData.attributes.force,
-        "isUnconscious": playerData.isUnconscious
-    });
-    
-    UI.updateHUD(playerData);
-
-    // === Step 4: 判定結果 ===
-    
-    if (currentNpcHp <= 0) {
-        if (!isLethal) {
-            // 切磋勝利
-            const winMsg = UI.txt(`${npcName} 拱手說道：「佩服佩服，是在下輸了。」`, "#00ff00", true);
-            UI.print(winMsg, "chat", true);
-            MessageSystem.broadcast(playerData.location, winMsg);
-
-            playerData.combat.potential = (playerData.combat.potential || 0) + 10;
-            CombatSystem.stopCombat(userId);
-            await updatePlayer(userId, { "combat.potential": playerData.combat.potential });
-            
-            // 關鍵修正：勝利後立刻更新 Look，讓玩家看到昏迷狀態
-            MapSystem.look(playerData);
-            return;
-        } else {
-            // 殺戮處決
-            const uncMsg = UI.txt(`${npcName} 搖頭晃腦，腳步踉蹌，咚的一聲倒在地上，動彈不得！`, "#888");
-            UI.print(uncMsg, "system", true);
-            MessageSystem.broadcast(playerData.location, uncMsg);
-            
-            await handleKillReward(npc, playerData, combatState, userId);
-            // handleKillReward 內部會呼叫 Look，這裡不用重複
-            return; 
-        }
-    }
-
-    if (playerData.attributes.hp <= 0) {
-        if (!isLethal) {
-            const loseMsg = UI.txt("你眼前一黑，知道自己輸了，連忙跳出戰圈。", "#ffaa00", true);
-            UI.print(loseMsg, "system", true);
-            MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 敗下陣來，跳出了戰圈。`, "#ffaa00", true));
-            CombatSystem.stopCombat(userId);
-            MapSystem.look(playerData);
-            return;
-        } else {
-            const uncMsg = UI.txt("你只覺天旋地轉，站立不穩，咚的一聲倒在地上...", "#ff8800", true);
-            UI.print(uncMsg, "system", true);
-            MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 晃了晃，一頭栽倒在地上。`, "#ff8800", true));
-            UI.print(UI.txt("這致命的一擊奪走了你最後的生機！", "#ff0000", true), "system", true);
-            await handlePlayerDeath(playerData, userId);
-            return;
-        }
-    }
-
-    // === Step 5: 下一回合 ===
-    setTimeout(() => {
-        combatLoop(playerData, userId, combatState, sessionId);
-    }, 2000);
+    // 強制重整畫面
+    MapSystem.look({ ...playerData, location: deathLocation });
 }
 
 export const CombatSystem = {
-    getDifficultyInfo, 
+    getDifficultyInfo, // 匯出供 MapSystem 使用
 
+    // 停止戰鬥 (清除本地狀態)
     stopCombat: (userId) => {
-        isFighting = false;
-        currentCombatSessionId++; 
-        if (userId) updatePlayer(userId, { state: 'normal', combatTarget: null });
+        if (combatControllers[userId]) {
+            clearTimeout(combatControllers[userId]); // 清除下一回合的排程
+            delete combatControllers[userId];
+        }
+        updatePlayer(userId, { state: 'normal', combatTarget: null });
     },
 
     kill: async (playerData, args, userId) => {
-        CombatSystem.startCombat(playerData, args, userId, true);
+        CombatSystem.initiateCombat(playerData, args, userId, true);
     },
 
     fight: async (playerData, args, userId) => {
-        CombatSystem.startCombat(playerData, args, userId, false);
+        CombatSystem.initiateCombat(playerData, args, userId, false);
     },
 
-    startCombat: async (playerData, args, userId, isLethal) => {
+    // 戰鬥初始化入口
+    initiateCombat: async (playerData, args, userId, isLethal) => {
         if (args.length === 0) { UI.print("你想對誰動手？", "error"); return; }
         if (playerData.state === 'fighting') { UI.print("你已經在戰鬥中了！", "error"); return; }
         
         const room = MapSystem.getRoom(playerData.location);
         if (room.safe) { UI.print("這裡是安全區，禁止動武。", "error"); return; }
-        
+
         const targetId = args[0];
-        const npc = await findAliveNPC(playerData.location, targetId);
-    
-        if (!npc) { UI.print("這裡沒有這個人，或者他已經倒下了。", "error"); return; }
-
-        const uniqueId = getUniqueNpcId(playerData.location, npc.id, npc.index);
+        // 簡單查找 NPC 索引 (MapSystem 有更複雜的邏輯，這裡簡化處理)
+        const roomNpcs = room.npcs || [];
+        const npcIndex = roomNpcs.indexOf(targetId);
         
-        const npcState = await fetchNpcState(uniqueId, npc.combat.maxHp);
-        let realHp = npcState.hp;
-        npc.combat.hp = realHp; 
-
-        const diffInfo = getDifficultyInfo(playerData, npc.id);
-        
-        if (realHp <= 0) {
-            if (isLethal) {
-                const killMsg = UI.txt(`你對昏迷中的 ${npc.name} 下了毒手！`, "#ff0000", true);
-                UI.print(killMsg, "system", true);
-                
-                const killState = {
-                    targetId: npc.id, targetIndex: npc.index, uniqueId: uniqueId,
-                    npcHp: 0, maxNpcHp: npc.combat.maxHp, npcName: npc.name, roomId: playerData.location,
-                    diffRatio: diffInfo.ratio
-                };
-                
-                await handleKillReward(npc, playerData, killState, userId);
-                return;
-            } else {
-                UI.print(`${npc.name} 已經昏迷不醒，無法和你切磋。`, "error");
+        if (npcIndex === -1) {
+            // 嘗試用名稱查找
+            const idxByName = roomNpcs.findIndex(nid => NPCDB[nid] && NPCDB[nid].name === targetId);
+            if (idxByName === -1) {
+                UI.print("這裡沒有這個人。", "error");
                 return;
             }
+            // 遞迴呼叫使用正確的 ID
+            return CombatSystem.initiateCombat(playerData, [roomNpcs[idxByName]], userId, isLethal);
         }
-    
-        const combatType = isLethal ? "下殺手" : "切磋";
-        const color = isLethal ? "#ff0000" : "#ff8800";
-        const startMsg = UI.txt(`你對 ${npc.name} ${combatType}！戰鬥開始！`, color, true);
-        UI.print(startMsg, "system", true);
-        
-        const initStatus = getStatusDesc(npc.name, realHp, npc.combat.maxHp);
-        if (initStatus) UI.print(initStatus, "chat", true);
 
-        MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 對 ${npc.name} ${combatType}，大戰一觸即發！`, color, true));
+        const npcId = roomNpcs[npcIndex];
+        const npcProto = NPCDB[npcId];
+
+        UI.print("正在準備戰鬥數據...", "system");
+
+        // 1. 取得或建立雲端實體 NPC (關鍵步驟：確保打的是實體)
+        const activeNpc = await getOrInitActiveNpc(playerData.location, npcId, npcIndex);
         
-        const combatState = {
-            targetId: npc.id,
-            targetIndex: npc.index,
-            uniqueId: uniqueId, 
-            npcHp: realHp, 
-            maxNpcHp: npc.combat.maxHp,
-            npcName: npc.name,
-            roomId: playerData.location, 
-            npcIsUnconscious: false,
-            isLethal: isLethal,
-            diffRatio: diffInfo.ratio
-        };
-    
+        if (!activeNpc) {
+            UI.print("錯誤：無法初始化目標狀態。", "error");
+            return;
+        }
+
+        if (activeNpc.isUnconscious && !isLethal) {
+            UI.print(`${activeNpc.npcName} 已經昏迷不醒，不需要再切磋了。`, "error");
+            return;
+        }
+
+        // 2. 標記玩家狀態
         await updatePlayer(userId, { 
             state: 'fighting', 
-            combatTarget: { id: npc.id, index: npc.index } 
+            combatTarget: { id: npcId, index: npcIndex, uniqueId: activeNpc.uniqueId }
         });
 
-        isFighting = true;
-        currentCombatSessionId++; 
-        combatLoop(playerData, userId, combatState, currentCombatSessionId);
+        // 3. 顯示開場白
+        const typeText = isLethal ? "下殺手" : "切磋";
+        const color = isLethal ? "#ff0000" : "#ff8800";
+        UI.print(UI.txt(`你對 ${activeNpc.npcName} ${typeText}！戰鬥開始！`, color, true), "system", true);
+        MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 對 ${activeNpc.npcName} ${typeText}，大戰一觸即發！`, color, true));
+
+        // 4. 啟動非同步戰鬥迴圈
+        CombatSystem.combatLoop(userId, activeNpc.uniqueId, isLethal);
+    },
+
+    // 核心戰鬥迴圈 (Async/Await 遞迴結構)
+    combatLoop: async (userId, uniqueId, isLethal) => {
+        // A. 讀取階段：確保拿到雙方最新資料
+        // ----------------------------------------------------
+        // 1. 讀取玩家資料
+        const pDoc = await getDoc(doc(db, "players", userId));
+        if (!pDoc.exists()) return; // 玩家資料遺失
+        const pData = pDoc.data();
+
+        // 檢查戰鬥是否應繼續
+        if (pData.state !== 'fighting' || pData.location !== pData.combatTarget?.uniqueId.split('_')[0]) {
+            // 玩家已移動或停止戰鬥
+            return; 
+        }
+
+        // 2. 讀取 NPC 資料 (從 active_npcs)
+        const nDocRef = doc(db, "active_npcs", uniqueId);
+        const nDoc = await getDoc(nDocRef);
+
+        if (!nDoc.exists()) {
+            UI.print("對手已經不在了。", "system");
+            CombatSystem.stopCombat(userId);
+            return;
+        }
+        const nData = nDoc.data();
+
+        // B. 計算階段：執行攻防邏輯
+        // ----------------------------------------------------
+        const pStats = getCombatStats(pData);
+        // 簡易模擬 NPC 數值 (從 NPCDB 拿基礎值，這裡未來可擴充為從 nData 拿 buff 狀態)
+        const proto = NPCDB[nData.npcId];
+        const nStats = {
+            ap: (proto.attributes?.str || 20) * 3 + (proto.combat?.attack || 10),
+            dp: (proto.attributes?.con || 20) * 3 + (proto.combat?.defense || 10),
+            hit: (proto.attributes?.per || 20) * 3,
+            dodge: (proto.attributes?.per || 20) * 3,
+            atkType: 'unarmed'
+        };
+
+        // --- 玩家攻擊 NPC ---
+        let dmgToNpc = 0;
+        let pMsg = "";
+        
+        // 昏迷的玩家不能攻擊
+        if (!pData.isUnconscious) {
+            const hitRate = pStats.hit; 
+            const dodgeRate = nStats.dodge;
+            // 簡單命中公式
+            if (Math.random() * (hitRate + dodgeRate) < hitRate || nData.isUnconscious) {
+                dmgToNpc = Math.max(1, Math.floor((pStats.ap - nStats.dp) * (0.9 + Math.random() * 0.2)));
+                if (!isLethal) dmgToNpc = Math.ceil(dmgToNpc / 2);
+                pMsg = `你對 ${nData.npcName} 造成了 ${dmgToNpc} 點傷害！`;
+            } else {
+                pMsg = `${nData.npcName} 靈巧地閃過了你的攻擊。`;
+            }
+        } else {
+            pMsg = "你現在昏迷不醒，無法攻擊。";
+        }
+
+        // --- NPC 攻擊 玩家 (若 NPC 沒暈) ---
+        let dmgToPlayer = 0;
+        let nMsg = "";
+
+        if (!nData.isUnconscious && nData.currentHp > 0) {
+            const hitRate = nStats.hit;
+            const dodgeRate = pStats.dodge;
+            if (Math.random() * (hitRate + dodgeRate) < hitRate && !pData.isUnconscious) {
+                dmgToPlayer = Math.max(1, Math.floor((nStats.ap - pStats.dp) * (0.9 + Math.random() * 0.2)));
+                if (!isLethal) dmgToPlayer = Math.ceil(dmgToPlayer / 2);
+                nMsg = `${nData.npcName} 對你造成了 ${dmgToPlayer} 點傷害！`;
+            } else {
+                nMsg = `你閃過了 ${nData.npcName} 的攻擊。`;
+            }
+        } else {
+            // NPC 昏迷中，不攻擊
+        }
+
+        // C. 寫入階段：同步更新資料庫 (關鍵！必須 Await)
+        // ----------------------------------------------------
+        
+        // 更新本地數值以供顯示
+        let newNpcHp = nData.currentHp - dmgToNpc;
+        let newPlayerHp = pData.attributes.hp - dmgToPlayer;
+        let npcUnconscious = nData.isUnconscious;
+        let playerUnconscious = pData.isUnconscious;
+
+        // 1. 輸出訊息 (在寫入前或後皆可，這裡選擇寫入前顯示，讓玩家感覺流暢)
+        UI.print(pMsg, "chat");
+        if (nMsg) UI.print(nMsg, "chat");
+        UI.updateHUD({ ...pData, attributes: { ...pData.attributes, hp: newPlayerHp } });
+
+        // 2. 準備 NPC 更新資料
+        const npcUpdatePayload = {
+            currentHp: newNpcHp,
+            lastCombatTime: Date.now()
+        };
+
+        // 3. 準備 玩家 更新資料
+        const playerUpdatePayload = {
+            "attributes.hp": newPlayerHp
+        };
+
+        // 4. 執行寫入 (同步等待)
+        try {
+            await Promise.all([
+                updateDoc(nDocRef, npcUpdatePayload),
+                updatePlayer(userId, playerUpdatePayload)
+            ]);
+        } catch (e) {
+            console.error("戰鬥資料同步失敗", e);
+            // 發生錯誤時暫停一會再重試，或直接中斷
+            return; 
+        }
+
+        // D. 判定階段：檢查勝負
+        // ----------------------------------------------------
+        let battleEnded = false;
+
+        // 檢查玩家狀態
+        if (newPlayerHp <= 0) {
+            if (isLethal) {
+                // 被 NPC 殺死
+                await handlePlayerDeath(pData, userId);
+                return; // 結束
+            } else {
+                // 被打暈 (切磋輸了)
+                UI.print("你眼前一黑，敗下陣來。", "system");
+                MessageSystem.broadcast(pData.location, `${pData.name} 敗給了 ${nData.npcName}。`);
+                await updatePlayer(userId, { isUnconscious: true, "attributes.hp": 0 });
+                CombatSystem.stopCombat(userId);
+                return; // 結束
+            }
+        }
+
+        // 檢查 NPC 狀態
+        if (newNpcHp <= 0) {
+            if (isLethal) {
+                // 殺死 NPC
+                UI.print(UI.txt(`${nData.npcName} 慘叫一聲，倒地身亡！`, "#ff0000", true), "system", true);
+                MessageSystem.broadcast(pData.location, UI.txt(`${nData.npcName} 被 ${pData.name} 殺死了。`, "#ff0000", true));
+                
+                // 1. 刪除 active_npc (因為死了)
+                await deleteDoc(nDocRef);
+                
+                // 2. 加入 dead_npcs (計算重生)
+                await addDoc(collection(db, "dead_npcs"), { 
+                    roomId: pData.location, 
+                    npcId: nData.npcId, 
+                    index: nData.index, 
+                    respawnTime: Date.now() + 300000 // 5分鐘重生
+                });
+
+                // 3. 發獎勵
+                await handleKillRewards(pData, nData, userId);
+                
+                CombatSystem.stopCombat(userId);
+                
+                // 4. 刷新房間視覺
+                MapSystem.look(pData);
+                return; // 結束
+
+            } else {
+                // 打暈 NPC (Fight 勝利)
+                if (!npcUnconscious) {
+                    UI.print(UI.txt(`${nData.npcName} 晃了晃，咚的一聲倒在地上暈了過去。`, "#ffff00"), "system", true);
+                    MessageSystem.broadcast(pData.location, `${pData.name} 打暈了 ${nData.npcName}。`);
+                    
+                    // 標記為昏迷，但不刪除，讓它留在 active_npcs 裡保持昏迷狀態
+                    await updateDoc(nDocRef, { isUnconscious: true, currentHp: 0 });
+                    
+                    // 給一點獎勵
+                    const newPot = (pData.combat.potential || 0) + 10;
+                    await updatePlayer(userId, { "combat.potential": newPot });
+                    UI.print("切磋獲勝！獲得 10 點潛能。", "system");
+                } else {
+                    UI.print(`你看著暈倒的 ${nData.npcName}，收住了手。`, "system");
+                }
+                
+                CombatSystem.stopCombat(userId);
+                return; // 結束
+            }
+        }
+
+        // E. 排程階段：等待下一回合
+        // ----------------------------------------------------
+        // 只有在資料寫入完成、且戰鬥未結束時，才會排程下一次
+        combatControllers[userId] = setTimeout(() => {
+            CombatSystem.combatLoop(userId, uniqueId, isLethal);
+        }, 2000);
     }
 };
