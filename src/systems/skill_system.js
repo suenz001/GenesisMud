@@ -137,6 +137,8 @@ export const SkillSystem = {
             
             improved = true;
             let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
+            
+            // [修復] 加上 true 以顯示顏色
             UI.print(msg, "system", true);
 
             if (typeName === "內力") {
@@ -420,7 +422,8 @@ export const SkillSystem = {
             msg = `你聽了${npc.name}的指導，對${SkillDB[sid].name}有了更深的了解。 (EXP +${gain})`;
         }
         
-        UI.print(msg, "system"); 
+        // [修復] 加上 true 以顯示顏色
+        UI.print(msg, "system", true); 
         
         await updatePlayer(u, {
             "attributes.sp": p.attributes.sp,
@@ -503,7 +506,8 @@ export const SkillSystem = {
             msg = `你練習${skillName}，獲得了 ${gain} 點經驗。 (${p.skill_exp[targetSkillId]}/${maxExp})`;
         }
 
-        UI.print(msg, "system"); 
+        // [修復] 加上 true 以顯示顏色
+        UI.print(msg, "system", true); 
         
         await updatePlayer(u, {
             "attributes.hp": p.attributes.hp,
