@@ -348,6 +348,12 @@ export const CombatSystem = {
     },
 
     startCombat: async (playerData, args, userId, isLethal, specificNpc = null) => {
+        // [新增] 檢查修練狀態
+        if (playerData.state === 'exercising') {
+            UI.print("你正在專心修練，無法戰鬥！(輸入 autoforce 解除)", "error");
+            return;
+        }
+
         if (args.length === 0 && !specificNpc) { UI.print("你想對誰動手？", "error"); return; }
         
         const room = MapSystem.getRoom(playerData.location);

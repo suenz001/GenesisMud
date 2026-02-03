@@ -6,7 +6,7 @@ import { db, auth } from "../firebase.js";
 import { NPCDB } from "../data/npcs.js";
 import { MessageSystem } from "./messages.js";
 import { CommandSystem } from "./commands.js"; 
-import { SkillDB, getSkillLevelDesc } from "../data/skills.js"; // [修改] 匯入共用函式
+import { SkillDB, getSkillLevelDesc } from "../data/skills.js"; 
 import { CombatSystem } from "./combat.js";
 import { ItemDB } from "../data/items.js";
 
@@ -18,12 +18,9 @@ const DIR_OFFSET = {
     'southeast': { x: 1, y: -1, z: 0 }, 'southwest': { x: -1, y: -1, z: 0 }
 };
 
-// === 輔助函數：生成唯一 NPC ID (必須與 combat.js 一致) ===
 function getUniqueNpcId(roomId, npcId, index) {
     return `${roomId}_${npcId}_${index}`;
 }
-
-// [移除] 舊的 getSkillDesc 已經移除，現在統一使用 data/skills.js 內的版本
 
 function getNpcStatusText(currentHp, maxHp, isUnconscious) {
     if (isUnconscious || currentHp <= 0) return UI.txt(" (昏迷不醒)", "#888888");
@@ -105,7 +102,6 @@ export const MapSystem = {
             const now = Date.now();
             activeSnaps.forEach(doc => {
                 const data = doc.data();
-                // 清理太久沒互動的 active 狀態 (例如 5 分鐘)
                 if (now - data.lastCombatTime > 300000) {
                      deleteDoc(doc.ref);
                 } else {
@@ -126,10 +122,8 @@ export const MapSystem = {
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     if (now >= data.respawnTime) {
-                        // 復活時間已到，從死亡名單移除 (下次 look 就不會被過濾)
                         deleteDoc(doc.ref); 
                     } else {
-                        // 還在冷卻中，記錄 index
                         if (room.npcs[data.index] === data.npcId) {
                             deadIndices.push(data.index);
                         }
@@ -139,7 +133,6 @@ export const MapSystem = {
 
             let npcListHtml = "";
             room.npcs.forEach((npcId, index) => {
-                // 如果這個 index 的 NPC 在死亡名單中，跳過不顯示
                 if (deadIndices.includes(index)) return;
 
                 const npc = NPCDB[npcId];
@@ -149,7 +142,6 @@ export const MapSystem = {
                     let statusTag = "";
                     let isUnconscious = false;
                     
-                    // 檢查是否有 active 狀態 (受傷或昏迷)
                     if (activeNpcMap.has(uniqueId)) {
                         const activeData = activeNpcMap.get(uniqueId);
                         isUnconscious = activeData.isUnconscious || activeData.currentHp <= 0;
@@ -196,6 +188,7 @@ export const MapSystem = {
 
                 let status = "";
                 if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
+                else if (p.state === 'exercising') status = UI.txt(" (正在運功修練)", "#ffff00"); // [新增] 顯示修練狀態
                 if (p.isUnconscious) status += UI.txt(" (昏迷)", "#888");
 
                 playerHtml += `<div style="margin-top:2px;">[ 玩家 ] ${p.name} <span style="color:#aaa">(${p.id || 'unknown'})</span>${status}</div>`;
@@ -260,7 +253,6 @@ export const MapSystem = {
             let targetNpcId = null;
             let realIndex = -1;
             
-            // 嘗試 ID 或 名稱 匹配
             if (room.npcs.includes(targetIdOrName)) {
                 targetNpcId = targetIdOrName;
             } else {
@@ -275,7 +267,6 @@ export const MapSystem = {
             if (targetNpcId) {
                 const npc = NPCDB[targetNpcId];
                 
-                // 找出該 NPC 的死亡名單
                 let deadIndices = [];
                 try {
                     const deadRef = collection(db, "dead_npcs");
@@ -290,7 +281,6 @@ export const MapSystem = {
                     });
                 } catch(e) { console.error(e); }
 
-                // 找到第一個活著的實體 Index
                 for(let i=0; i<room.npcs.length; i++) {
                     if (room.npcs[i] === targetNpcId) {
                         if (!deadIndices.includes(i)) {
@@ -300,16 +290,14 @@ export const MapSystem = {
                     }
                 }
 
-                // 如果找不到活著的，代表都死了
                 if (realIndex === -1) {
                     UI.print("你看不到 " + targetIdOrName + " (可能已經死了)。", "error");
                     return;
                 }
 
-                // 取得唯一 ID 並讀取 active_npcs 狀態
                 const uniqueId = getUniqueNpcId(playerData.location, targetNpcId, realIndex);
                 
-                let displayHp = npc.combat.hp; // 預設滿血
+                let displayHp = npc.combat.hp; 
                 let isUnconscious = false;
                 
                 try {
@@ -327,7 +315,6 @@ export const MapSystem = {
 
                 displayHp = Math.max(0, displayHp);
 
-                // 顯示觀察結果
                 UI.showInspection(npc.id, npc.name, 'npc');
                 UI.print(UI.titleLine(npc.name), "chat", true); 
                 UI.print(npc.description);
@@ -336,7 +323,6 @@ export const MapSystem = {
                     UI.print(UI.txt("【 狀態：昏迷不醒 】", "#888888", true), "chat", true);
                     UI.print(UI.attrLine("體力", `${displayHp}/${npc.combat.maxHp}`), "chat", true);
                 } else {
-                    // 顯示血條比例
                     const hpPct = displayHp / npc.combat.maxHp;
                     let hpColor = "#00ff00";
                     if(hpPct < 0.5) hpColor = "#ffff00";
@@ -345,7 +331,6 @@ export const MapSystem = {
                     UI.print(UI.attrLine("體力", `${UI.txt(displayHp, hpColor)}/${npc.combat.maxHp}`), "chat", true);
                 }
 
-                // 顯示武學
                 if (playerData.family && playerData.family.masterId === npc.id && npc.skills) {
                     let skillHtml = `<br>${UI.txt("【 師傳武學 】", "#ffff00")}<br>`;
                     skillHtml += `<div style="display:grid; grid-template-columns: 1fr auto auto; gap:5px;">`;
@@ -354,7 +339,6 @@ export const MapSystem = {
                         if (sInfo) {
                             skillHtml += `<div>${sInfo.name} <span style="color:#aaa">(${sid})</span></div>`;
                             skillHtml += `<div>${UI.txt(lvl+"級", "#00ffff")}</div>`;
-                            // [修改] 這裡改用匯入的共用函式
                             skillHtml += `<div>${getSkillLevelDesc(lvl)} ${UI.makeCmd("[學習]", `learn ${sid} from ${npc.id}`, "cmd-btn")}</div>`;
                         }
                     }
@@ -373,6 +357,12 @@ export const MapSystem = {
     move: async (playerData, direction, userId) => {
         if (!playerData) return;
         
+        // [新增] 檢查修練狀態
+        if (playerData.state === 'exercising') {
+            UI.print("你正在專心修練，無法移動。(輸入 autoforce 解除)", "error");
+            return;
+        }
+
         if (playerData.state === 'fighting') {
             if (Math.random() < 0.5) {
                  UI.print("你被敵人纏住了，無法脫身！", "error");
@@ -417,13 +407,18 @@ export const MapSystem = {
         await MapSystem.look(playerData);
         await MessageSystem.broadcast(nextRoomId, `${playerData.name} 走了過來。`);
 
-        // === [新增]：移動後檢查是否有怪物主動攻擊 ===
         setTimeout(() => {
             CombatSystem.checkAggro(playerData, nextRoomId, userId);
         }, 800);
     },
 
     teleport: async (playerData, targetRoomId, userId) => {
+        // [新增] 檢查修練狀態
+        if (playerData.state === 'exercising') {
+            UI.print("你正在專心修練，無法傳送。(輸入 autoforce 解除)", "error");
+            return;
+        }
+
         if (!WorldMap[targetRoomId]) return UI.print("目標地點不存在。", "error");
         
         if (playerData.state === 'fighting' && CommandSystem.stopCombat) {
@@ -447,7 +442,6 @@ export const MapSystem = {
         await MapSystem.look(playerData);
         await MessageSystem.broadcast(targetRoomId, `${playerData.name} 出現了。`);
 
-        // === [新增]：傳送後也檢查是否有怪物主動攻擊 ===
         setTimeout(() => {
             CombatSystem.checkAggro(playerData, targetRoomId, userId);
         }, 800);

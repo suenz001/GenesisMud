@@ -1,6 +1,6 @@
 // src/systems/skill_system.js
 import { UI } from "../ui.js";
-import { SkillDB, getSkillLevelDesc } from "../data/skills.js"; // [修改] 匯入共用函式
+import { SkillDB, getSkillLevelDesc } from "../data/skills.js"; 
 import { updatePlayer } from "./player.js";
 import { MapSystem } from "./map.js";
 import { MessageSystem } from "./messages.js";
@@ -16,8 +16,6 @@ function calculateMaxExp(level) {
         return Math.pow(level + 1, 3);
     }
 }
-
-// [移除] 舊的 getSkillLevelDesc 已經移除，統一使用 data/skills.js 內的版本
 
 function findNPCInRoom(roomId, npcNameOrId) {
     const room = MapSystem.getRoom(roomId);
@@ -37,21 +35,33 @@ function findNPCInRoom(roomId, npcNameOrId) {
 
 export const SkillSystem = {
     // === 自動修練內力 (Auto Force) ===
-    autoForce: (p, a, u) => {
-        if (autoForceInterval) {
-            clearInterval(autoForceInterval);
+    autoForce: async (p, a, u) => {
+        // [修改] 如果已經在修練中，則停止
+        if (autoForceInterval || p.state === 'exercising') {
+            if (autoForceInterval) clearInterval(autoForceInterval);
             autoForceInterval = null;
+            p.state = 'normal'; // 恢復狀態
+            await updatePlayer(u, { state: 'normal' });
             UI.print("你停止了自動修練內力。", "system");
             return;
         }
 
-        UI.print("你開始閉目養神，自動運轉內息... (氣足則練，氣虛則待)", "system");
+        if (p.state === 'fighting') {
+            UI.print("戰鬥中無法修練！", "error");
+            return;
+        }
+
+        // [修改] 開始修練，設定狀態
+        p.state = 'exercising';
+        await updatePlayer(u, { state: 'exercising' });
+        UI.print("你開始閉目養神，自動運轉內息... (再次輸入 autoforce 以解除)", "system");
         
         autoForceInterval = setInterval(async () => {
-            if (p.state === 'fighting') {
+            // [修改] 檢查狀態是否被外部改變 (例如被打進入戰鬥)
+            if (p.state !== 'exercising') {
                 clearInterval(autoForceInterval);
                 autoForceInterval = null;
-                UI.print("戰鬥中無法分心修練，自動修練已停止。", "error");
+                UI.print("自動修練已被中斷。", "error");
                 return;
             }
 
@@ -80,7 +90,6 @@ export const SkillSystem = {
         const attr = playerData.attributes;
         let cost = 10;
 
-        // [新增] exercise double 邏輯
         if (args && args[0] === 'double') {
             const maxVal = attr[attrMax];
             const curVal = attr[attrCur];
@@ -91,9 +100,7 @@ export const SkillSystem = {
                 return;
             }
 
-            // 計算補滿所需的量
             const needed = limit - curVal;
-            // 氣血安全閥值 (保留 10 點)
             const safeAvailable = Math.max(0, attr[costAttr] - 10);
 
             if (safeAvailable <= 0) {
@@ -101,10 +108,7 @@ export const SkillSystem = {
                  return;
             }
 
-            // 決定消耗量：取 需要量 與 可用量 的最小值
             cost = Math.min(needed, safeAvailable);
-            
-            // 如果計算出來的 cost 太小 (例如 0)，就當作普通修練 10 點，讓系統判斷不足
             if (cost < 1) cost = 10;
 
         } else if (args && args.length > 0) {
@@ -129,9 +133,13 @@ export const SkillSystem = {
             if (maxVal >= maxCap) {
                 UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system", true);
                 UI.print(`(內力上限已達 ${maxVal}，需提升基本內功等級或根骨才能突破)`, "system");
+                
+                // [修改] 若達到瓶頸，自動停止修練並恢復狀態
                 if (autoForceInterval) {
                     clearInterval(autoForceInterval);
                     autoForceInterval = null;
+                    playerData.state = 'normal';
+                    await updatePlayer(userId, { state: 'normal' });
                     UI.print("已達瓶頸，自動修練停止。", "system");
                 }
                 return;
@@ -196,10 +204,15 @@ export const SkillSystem = {
         await updatePlayer(userId, updateData);
     },
 
-    // ... (後續函式 exert, skills, apprentice, enable, unenable, learn, practice 保持不變)
     exert: async (playerData, args, userId) => {
         if (playerData.state === 'fighting') {
             UI.print("戰鬥中運功療傷太危險了！你無法分心。", "error");
+            return;
+        }
+        
+        // [新增] 修練狀態檢查
+        if (playerData.state === 'exercising') {
+            UI.print("你正在專心修練，無法分心運功。(輸入 autoforce 解除)", "error");
             return;
         }
 
@@ -273,7 +286,6 @@ export const SkillSystem = {
             const info = SkillDB[id];
             if(id === 'parry') continue; 
             const name = info ? info.name : id;
-            // [修改] 改用匯入的共用函式
             const desc = getSkillLevelDesc(level);
             let statusMark = "";
             

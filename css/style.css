@@ -11,6 +11,9 @@
     --accent-blue: #33ccff;
     --accent-orange: #ff9900;
     --accent-purple: #cc66ff;
+    
+    /* [新增] 統一儀表板高度變數，確保切換時不跳動 */
+    --panel-fixed-height: 280px; 
 }
 
 body {
@@ -224,29 +227,30 @@ body {
     transition: all 0.2s;
 }
 
+/* [修改] 儀表板群組：強制固定高度 */
 #panel-stats-group {
     display: flex;
     flex-direction: column;
     gap: 10px; /* Vitals 和 Enforce 中間的縫隙 */
-    /* [關鍵] 設定最小高度，確保切換時側邊欄不會跳動 */
-    min-height: 240px; 
+    height: var(--panel-fixed-height); /* 強制高度 */
+    min-height: var(--panel-fixed-height);
+    max-height: var(--panel-fixed-height);
 }
 
-/* --- 2. 觀察面板 (取代屬性面板) --- */
+/* [修改] 觀察面板：強制固定高度，與上方一致 */
 #panel-inspection {
     text-align: center;
     background: #0f0f0f;
     border: 1px solid var(--accent-green);
     
-    /* [關鍵] 強制鎖定高度，等於 Vitals + Enforce + Gap 的總和 */
-    height: 240px; 
-    box-sizing: border-box;
+    height: var(--panel-fixed-height); /* 強制高度 */
+    min-height: var(--panel-fixed-height);
+    max-height: var(--panel-fixed-height);
     
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    
-    /* 移除上下 padding 讓圖片能貼邊 */
     padding: 5px;
     cursor: pointer;
     overflow: hidden;
@@ -258,15 +262,12 @@ body {
 }
 
 #inspect-img-box {
-    /* [關鍵] 讓圖片容器自動填滿剩餘空間 */
     flex-grow: 1; 
     width: 100%;
-    
     background: radial-gradient(circle, #1a1a1a 0%, #000 100%);
     border: 1px solid #333;
     border-radius: 4px;
-    margin: 0 0 5px 0; /* 下方留一點縫隙給名字 */
-    
+    margin: 0 0 5px 0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -285,10 +286,9 @@ body {
     opacity: 1;
 }
 
-/* 底部資訊區塊 (縮小高度) */
 .inspection-info-foot {
     flex-shrink: 0;
-    height: 30px; /* 從 40px 縮小為 30px，增加圖片空間 */
+    height: 30px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -303,10 +303,18 @@ body {
 }
 
 /* --- 3. 精氣神 (Vitals) --- */
+/* [新增] 讓 Vitals 面板佔滿剩餘空間 (扣除 Enforce 的空間) */
+#panel-vitals {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
 .vital-row {
     display: flex;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 6px; /* 微調 */
     gap: 8px;
 }
 
@@ -351,7 +359,7 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 8px; /* 微調 */
     padding-top: 5px;
     border-top: 1px solid #333;
 }
@@ -386,7 +394,7 @@ body {
 .survival-grid {
     display: flex;
     gap: 10px;
-    margin-top: 5px;
+    margin-top: auto; /* 推到底部 */
     background: rgba(0,0,0,0.3);
     padding: 5px;
     border-radius: 4px;
@@ -427,6 +435,14 @@ body {
 #status-food, #status-water { font-size: 10px; color: #888; }
 
 /* --- 4. 內力控制 (Enforce) --- */
+#panel-enforce {
+    flex-shrink: 0; /* 防止被壓縮 */
+    height: 50px; /* 給予固定高度 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
 .panel-title-sm {
     font-size: 12px;
     color: #888;
