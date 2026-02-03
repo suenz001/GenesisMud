@@ -97,7 +97,6 @@ export const SkillSystem = {
             const limit = maxVal * 2;
 
             if (curVal >= limit) {
-                // [修復] 這裡補上 true，避免 HTML 代碼外洩
                 UI.print(UI.txt(`你的${typeName}已經運轉至極限，無法再容納更多了。`, "#ffff00"), "system", true);
                 return;
             }
@@ -282,7 +281,10 @@ export const SkillSystem = {
         if (skillList.length === 0) { UI.print("你目前什麼都不會。", "chat"); return; }
         
         let html = UI.titleLine(`${playerData.name} 的武學`);
-        html += `<div style="display:grid; grid-template-columns: 1fr auto auto; gap: 5px; align-items:center;">`;
+        
+        // [修改] 使用 5 欄 Grid 布局，統一排版
+        // 欄位: 名稱(含ID與狀態) | 等級 | 經驗值 | 描述 | 按鈕
+        html += `<div style="display:grid; grid-template-columns: 2fr 0.5fr 1.2fr 0.8fr auto; gap: 5px; align-items:center; font-size: 14px;">`;
         
         for (const [id, level] of skillList) {
             const info = SkillDB[id];
@@ -292,12 +294,11 @@ export const SkillSystem = {
             let statusMark = "";
             let practiceBtn = "";
 
-            // [新增] 判斷是否顯示「練習」按鈕
-            // 條件：(有技能資訊) 且 (沒有 base 屬性 = 基礎武學) 且 (類型為 martial 或 dodge) 且 (類型不是 force)
+            // 判斷是否顯示「練習」按鈕
             if (info && !info.base) {
                 if (info.type === 'martial' || info.type === 'dodge') {
                     if (info.type !== 'force') {
-                        practiceBtn = UI.makeCmd("[練習]", `practice ${id}`, "cmd-btn");
+                        practiceBtn = UI.makeCmd("【練習】", `practice ${id}`, "cmd-btn");
                     }
                 }
             }
@@ -311,17 +312,21 @@ export const SkillSystem = {
             let enableBtn = "";
             if (info && info.base) {
                 const isEnabled = playerData.enabled_skills && playerData.enabled_skills[info.base] === id;
-                enableBtn = UI.makeCmd(isEnabled ? "[解除]" : "[激發]", isEnabled ? `unenable ${info.base}` : `enable ${info.base} ${id}`, "cmd-btn");
+                enableBtn = UI.makeCmd(isEnabled ? "【解除】" : "【激發】", isEnabled ? `unenable ${info.base}` : `enable ${info.base} ${id}`, "cmd-btn");
             }
 
             const curExp = skillExps[id] || 0;
             const maxExp = calculateMaxExp(level);
-            const expText = `<span style="font-size:0.8em; color:#888;">(${curExp}/${maxExp})</span>`;
+            const expText = `<span style="font-size:0.9em; color:#888;">(${curExp}/${maxExp})</span>`;
 
-            // 將 practiceBtn 加入第一行顯示
-            html += `<div style="color:#fff;">${name} <span style="color:#888; font-size:0.8em;">(${id})</span> ${statusMark} ${practiceBtn}</div>`;
-            html += `<div>${UI.txt(level+"級", "#00ffff")} ${expText} <span style="font-size:0.8em;">${desc}</span></div>`;
-            html += `<div>${enableBtn}</div>`;
+            // [排版] 分配欄位內容，按鈕統一放在最後一欄 (靠右)
+            const rowStyle = "padding: 4px 0; border-bottom: 1px dashed #333;";
+            
+            html += `<div style="${rowStyle} color:#fff;">${name} <span style="color:#aaa; font-size:0.9em;">(${id})</span> ${statusMark}</div>`;
+            html += `<div style="${rowStyle}">${UI.txt(level+"級", "#00ffff")}</div>`;
+            html += `<div style="${rowStyle}">${expText}</div>`;
+            html += `<div style="${rowStyle} font-size:0.9em;">${desc}</div>`;
+            html += `<div style="${rowStyle} text-align:right;">${practiceBtn}${enableBtn}</div>`;
         }
         html += `</div>` + UI.titleLine("End");
         UI.print(html, 'chat', true);
@@ -426,9 +431,8 @@ export const SkillSystem = {
             }
         }
 
-        // [修改] 消耗與收益公式調整
-        const spC = 5 + Math.floor(currentLvl / 5); // 精力消耗降低
-        const potC = 1; // [修改] 潛能固定消耗 1 點
+        const spC = 5 + Math.floor(currentLvl / 5); 
+        const potC = 1; 
         
         if(p.attributes.sp <= spC){UI.print("你現在精神不濟，無法專心聽講。(需要精: "+spC+")","error");return;} 
         if((p.combat.potential||0) < potC){UI.print("你的潛能不足，無法領悟其中的奧妙。(需要潛能: "+potC+")","error");return;} 
@@ -438,8 +442,6 @@ export const SkillSystem = {
         
         const int = p.attributes.int || 20;
         
-        // [修改] 大幅提升學習效率：(悟性 x 5~10倍) + (等級加成)
-        // 範例：悟性20，等級10 => (20 * 7) + 20 = 160點經驗 (以前是50點)
         const rndMult = 5 + Math.random() * 5; 
         let gain = Math.floor((int * rndMult) + (currentLvl * 2));
         if (gain < 1) gain = 1;
@@ -474,6 +476,12 @@ export const SkillSystem = {
         if(a.length === 0){ UI.print("指令格式：practice <基本武功> (例如 practice sword)", "error"); return; }
         const baseSkillId = a[0]; 
         
+        // [新增] 限制內功不可練習
+        if (baseSkillId === 'force') {
+            UI.print("內功修為需靠打坐(meditate)或呼吸吐納(exercise/respirate)，無法通過練習提升。", "error");
+            return;
+        }
+
         if(!p.skills[baseSkillId]){ UI.print("你不會這項基本武功。", "error"); return; }
         
         let targetSkillId = baseSkillId;
@@ -511,9 +519,10 @@ export const SkillSystem = {
 
         const int = p.attributes.int || 20;
         
-        // [修改] 練習效率低於學習：(悟性 x 2) + (基礎等級加成)
-        // 範例：悟性20，基礎等級10 => 40 + 5 = 45點經驗
-        let gain = Math.floor((int * 2) + (baseLvl * 0.5));
+        // [修改] 練習效率公式：大幅增加基礎等級的加成
+        // 舊：(int * 2) + (baseLvl * 0.5)
+        // 新：(int * 2) + (baseLvl * 2.5) -> 等級越高練得越快
+        let gain = Math.floor((int * 2) + (baseLvl * 2.5));
         if (gain < 1) gain = 1;
 
         if (!p.skill_exp) p.skill_exp = {};

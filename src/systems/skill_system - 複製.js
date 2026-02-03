@@ -290,6 +290,17 @@ export const SkillSystem = {
             const name = info ? info.name : id;
             const desc = getSkillLevelDesc(level);
             let statusMark = "";
+            let practiceBtn = "";
+
+            // [新增] 判斷是否顯示「練習」按鈕
+            // 條件：(有技能資訊) 且 (沒有 base 屬性 = 基礎武學) 且 (類型為 martial 或 dodge) 且 (類型不是 force)
+            if (info && !info.base) {
+                if (info.type === 'martial' || info.type === 'dodge') {
+                    if (info.type !== 'force') {
+                        practiceBtn = UI.makeCmd("[練習]", `practice ${id}`, "cmd-btn");
+                    }
+                }
+            }
             
             if (playerData.enabled_skills) {
                 for (const [slot, equippedId] of Object.entries(playerData.enabled_skills)) {
@@ -297,19 +308,20 @@ export const SkillSystem = {
                 }
             }
 
-            let btn = "";
+            let enableBtn = "";
             if (info && info.base) {
                 const isEnabled = playerData.enabled_skills && playerData.enabled_skills[info.base] === id;
-                btn = UI.makeCmd(isEnabled ? "[解除]" : "[激發]", isEnabled ? `unenable ${info.base}` : `enable ${info.base} ${id}`, "cmd-btn");
+                enableBtn = UI.makeCmd(isEnabled ? "[解除]" : "[激發]", isEnabled ? `unenable ${info.base}` : `enable ${info.base} ${id}`, "cmd-btn");
             }
 
             const curExp = skillExps[id] || 0;
             const maxExp = calculateMaxExp(level);
             const expText = `<span style="font-size:0.8em; color:#888;">(${curExp}/${maxExp})</span>`;
 
-            html += `<div style="color:#fff;">${name} <span style="color:#888; font-size:0.8em;">(${id})</span> ${statusMark}</div>`;
+            // 將 practiceBtn 加入第一行顯示
+            html += `<div style="color:#fff;">${name} <span style="color:#888; font-size:0.8em;">(${id})</span> ${statusMark} ${practiceBtn}</div>`;
             html += `<div>${UI.txt(level+"級", "#00ffff")} ${expText} <span style="font-size:0.8em;">${desc}</span></div>`;
-            html += `<div>${btn}</div>`;
+            html += `<div>${enableBtn}</div>`;
         }
         html += `</div>` + UI.titleLine("End");
         UI.print(html, 'chat', true);
