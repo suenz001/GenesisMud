@@ -6,6 +6,8 @@ import { MapSystem } from "./map.js";
 import { MessageSystem } from "./messages.js";
 import { NPCDB } from "../data/npcs.js";
 
+let autoForceInterval = null; // [新增] 用於控制自動修練的排程
+
 function getSkillLevelDesc(level) {
     let desc = "初學乍練";
     let color = "#aaa"; 
@@ -38,6 +40,57 @@ function findNPCInRoom(roomId, npcNameOrId) {
 }
 
 export const SkillSystem = {
+    // === [新增] 自動修練內力 (Auto Force) ===
+    autoForce: (p, a, u) => {
+        if (autoForceInterval) {
+            clearInterval(autoForceInterval);
+            autoForceInterval = null;
+            UI.print("你停止了自動修練內力。", "system");
+            return;
+        }
+
+        UI.print("你開始閉目養神，自動運轉內息... (氣足則練，氣虛則待)", "system");
+        
+        autoForceInterval = setInterval(async () => {
+            // 1. 戰鬥中自動中斷
+            if (p.state === 'fighting') {
+                clearInterval(autoForceInterval);
+                autoForceInterval = null;
+                UI.print("戰鬥中無法分心修練，自動修練已停止。", "error");
+                return;
+            }
+
+            const attr = p.attributes;
+            const maxForce = attr.maxForce;
+            const curForce = attr.force;
+            const limit = maxForce * 2;
+
+            // 2. 檢查氣血是否足夠 (保留一點點安全值)
+            if (attr.hp < 20) {
+                // 氣血不足，等待回氣，不做動作
+                return;
+            }
+
+            // 3. 判斷修練策略
+            if (curForce < limit) {
+                // 情境 A: 內力未達上限2倍 -> 努力填滿
+                const needed = limit - curForce;
+                // 每次最多投入 100 點氣，或者剩餘所有氣(扣除保留10點)
+                const affordable = attr.hp - 10;
+                
+                if (affordable > 0) {
+                    let amount = Math.min(needed, affordable, 100); 
+                    // 執行 exercise
+                    await SkillSystem.trainStat(p, u, "內力", "force", "maxForce", "hp", "氣", [amount.toString()]);
+                }
+            } else {
+                // 情境 B: 內力已達上限2倍 -> 嘗試突破 (只用 1 點氣觸發)
+                await SkillSystem.trainStat(p, u, "內力", "force", "maxForce", "hp", "氣", ["1"]);
+            }
+
+        }, 2000); // 每 2 秒檢查一次
+    },
+
     // === 屬性修練 (Exercise/Respirate/Meditate) ===
     trainStat: async (playerData, userId, typeName, attrCur, attrMax, costAttr, costName, args) => {
         const attr = playerData.attributes;
@@ -66,12 +119,18 @@ export const SkillSystem = {
         if (typeName === "內力") {
             const forceSkillLvl = playerData.skills.force || 0;
             const conBonus = playerData.attributes.con || 20;
-            // 上限公式： (基本內功 + 根骨) * 10
             const maxCap = (forceSkillLvl + conBonus) * 10;
 
             if (maxVal >= maxCap) {
                 UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system", true);
                 UI.print(`(內力上限已達 ${maxVal}，需提升基本內功等級或根骨才能突破)`, "system");
+                
+                // 如果是自動修練中遇到瓶頸，自動停止
+                if (autoForceInterval) {
+                    clearInterval(autoForceInterval);
+                    autoForceInterval = null;
+                    UI.print("已達瓶頸，自動修練停止。", "system");
+                }
                 return;
             }
         }
@@ -82,12 +141,15 @@ export const SkillSystem = {
         
         // 5. 執行修練：如果當前值已經到達極限邊緣，再練就會觸發上限提升
         if (curVal >= limit - 1) {
-            const pot = playerData.combat?.potential || 0;
-            if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
+            // [修改] 只有「非內力」的修練才需要消耗潛能
+            if (typeName !== "內力") {
+                const pot = playerData.combat?.potential || 0;
+                if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
+                playerData.combat.potential -= 1;
+            }
             
             // 突破瓶頸
             attr[costAttr] -= cost; 
-            playerData.combat.potential -= 1;
             attr[attrMax] += 1; // 上限 +1
             attr[attrCur] = attr[attrMax]; // 重置為新的上限
             
@@ -95,7 +157,7 @@ export const SkillSystem = {
             let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
             UI.print(msg, "system", true);
 
-            // [平衡修正] 易筋洗髓：內力上限提升時，同步提升氣血 (HP) +3
+            // 易筋洗髓：內力上限提升時，同步提升氣血 (HP) +3
             if (typeName === "內力") {
                 attr.maxHp = (attr.maxHp || 100) + 3;
                 attr.hp += 3;
@@ -138,15 +200,13 @@ export const SkillSystem = {
         await updatePlayer(userId, updateData);
     },
 
-    // === [新增] 內力運用 (Exert) ===
+    // === 內力運用 (Exert) ===
     exert: async (playerData, args, userId) => {
-        // 1. 戰鬥中限制 (避免無敵)
         if (playerData.state === 'fighting') {
             UI.print("戰鬥中運功療傷太危險了！你無法分心。", "error");
             return;
         }
 
-        // 2. 解析指令
         if (args.length === 0) {
             UI.print("指令格式: exert <regenerate|recover|refresh>", "error");
             return;
@@ -159,42 +219,33 @@ export const SkillSystem = {
         else if (type === 'refresh') { targetCur = 'mp'; targetMax = 'maxMp'; name = '神'; }
         else { UI.print("未知的功能。請使用 recover(氣), regenerate(精), refresh(神)。", "error"); return; }
 
-        // 3. 檢查是否需要運功
         const attr = playerData.attributes;
         if (attr[targetCur] >= attr[targetMax]) {
             UI.print(`你的${name}現在很充沛，不需要運功。`, "system");
             return;
         }
 
-        // 4. 檢查內力是否足夠
         const currentForce = attr.force;
         if (currentForce <= 0) {
             UI.print("你現在一點內力也沒有。", "error");
             return;
         }
 
-        // 5. 計算轉換效率 (Factor)
-        // 公式：1 + (基本內功 / 50)
-        // 0級=1倍, 50級=2倍, 100級=3倍
         const forceLvl = playerData.skills.force || 0;
         const factor = 1 + (forceLvl / 50);
 
-        // 6. 計算需求與執行
         const missing = attr[targetMax] - attr[targetCur];
-        // 需求內力 = 缺損值 / 倍率 (無條件進位)
         let cost = Math.ceil(missing / factor);
 
         let actualRecover = 0;
         let actualCost = 0;
 
         if (currentForce >= cost) {
-            // 內力足夠補滿
             actualCost = cost;
             actualRecover = missing;
             attr.force -= actualCost;
             attr[targetCur] = attr[targetMax];
         } else {
-            // 內力不足，耗盡所有內力
             actualCost = currentForce;
             actualRecover = Math.floor(actualCost * factor);
             attr.force = 0;

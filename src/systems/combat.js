@@ -448,7 +448,7 @@ export const CombatSystem = {
             const npcStats = getNPCCombatStats(npc); 
     
             if (!playerData.isUnconscious) {
-                // --- 玩家攻擊邏輯 (修改 Enforce 威力) ---
+                // --- 玩家攻擊邏輯 (Enforce 高爆發調整) ---
                 const enforceLevel = playerData.combat.enforce || 0;
                 let forceBonus = 0;
                 let actualCost = 0; 
@@ -506,7 +506,7 @@ export const CombatSystem = {
                 if (isHit) {
                     let damage = playerStats.ap - npcStats.dp;
                     damage += ((skillBaseDmg * (playerStats.atkRating || 1.0)) / 2); 
-                    damage += forceBonus; // 加上大幅提升的內力加成
+                    damage += forceBonus; 
                     damage = damage * (0.9 + Math.random() * 0.2);
                     if (damage <= 0) damage = Math.random() * 5 + 1;
                     if (!isLethal) damage = damage / 2;
@@ -557,7 +557,8 @@ export const CombatSystem = {
                         }
                         
                         if (combatList.length > 0) {
-                            UI.print(UI.txt(`你的目標轉向了 ${combatList[0].npcName}！`, "#ffff00"), "system");
+                            // [修正] 這裡補上 true，修復 HTML 代碼外洩問題
+                            UI.print(UI.txt(`你的目標轉向了 ${combatList[0].npcName}！`, "#ffff00"), "system", true);
                             await updatePlayer(userId, { combatTarget: { id: combatList[0].targetId, index: combatList[0].targetIndex } });
                         }
                     }
