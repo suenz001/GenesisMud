@@ -41,20 +41,53 @@ export function getEffectiveSkillLevel(entity, baseType) {
     }
 }
 
-// --- 計算戰鬥數值 (引入 Rating 係數) ---
+// --- [修改] 計算戰鬥數值 (支援多部位防禦與屬性加成) ---
 export function getCombatStats(entity) {
-    const attr = entity.attributes || {};
-    const str = attr.str || 10;
-    const con = attr.con || 10;
-    const per = attr.per || 10;
-    
+    // 1. 計算裝備提供的屬性加成 (Props)
+    const baseAttr = entity.attributes || {};
+    const effectiveAttr = { ...baseAttr }; // 複製一份基礎屬性
     const equipment = entity.equipment || {};
-    const weaponId = equipment.weapon || null;
-    const weaponData = weaponId ? ItemDB[weaponId] : null;
     
-    const atkType = weaponData ? weaponData.type : 'unarmed';
-    const armorId = equipment.armor || null;
-    const armorData = armorId ? ItemDB[armorId] : null;
+    let totalDefense = 0;
+    let weaponDmg = 0;
+    let weaponHit = 0;
+    let weaponType = 'unarmed';
+    let weaponData = null;
+
+    // 遍歷所有裝備欄位
+    for (const [slot, itemId] of Object.entries(equipment)) {
+        if (!itemId) continue;
+        const item = ItemDB[itemId];
+        if (!item) continue;
+
+        // 處理武器特有屬性
+        if (slot === 'weapon') {
+            weaponDmg = item.damage || 0;
+            weaponHit = item.hit || 0;
+            weaponType = item.type || 'unarmed';
+            weaponData = item;
+        } else {
+            // 處理防具防禦力 (累加所有部位)
+            if (item.defense) {
+                totalDefense += item.defense;
+            }
+        }
+
+        // 處理通用屬性加成 (props)
+        if (item.props) {
+            for (const [key, val] of Object.entries(item.props)) {
+                if (effectiveAttr[key] !== undefined) {
+                    effectiveAttr[key] += val;
+                }
+            }
+        }
+    }
+
+    // 使用加成後的屬性進行計算
+    const str = effectiveAttr.str || 10;
+    const con = effectiveAttr.con || 10;
+    const per = effectiveAttr.per || 10;
+    const atkType = weaponType;
     
     // 取得各類技能等級
     const effAtkSkill = getEffectiveSkillLevel(entity, atkType); 
@@ -79,24 +112,22 @@ export function getCombatStats(entity) {
         if (SkillDB[sid] && SkillDB[sid].rating) dodgeRating = SkillDB[sid].rating;
     }
 
-    const weaponDmg = weaponData ? (weaponData.damage || 0) : 0;
-    const weaponHit = weaponData ? (weaponData.hit || 0) : 0;
-    const armorDef = armorData ? (armorData.defense || 0) : 0;
-
     const baseAp = (str * 2.5) + (effAtkSkill * 5 * atkRating) + (effForce * 2);
     const baseDp = (con * 2.5) + (effForce * 5) + (effDodge * 2 * dodgeRating);
     const baseHit = (per * 2.5) + (effAtkSkill * 3 * atkRating);
     const baseDodge = (per * 2.5) + (effDodge * 4 * dodgeRating) + (effAtkSkill * 1);
 
     const ap = baseAp + weaponDmg;
-    const dp = baseDp + armorDef;
+    const dp = baseDp + totalDefense; // 使用加總後的防禦力
     const hit = baseHit + weaponHit;
     const dodge = baseDodge; 
 
     return { 
         ap, dp, hit, dodge, 
         baseAp, baseDp, baseHit, baseDodge,
-        equipAp: weaponDmg, equipDp: armorDef, equipHit: weaponHit,
+        equipAp: weaponDmg, 
+        equipDp: totalDefense, 
+        equipHit: weaponHit,
         atkType, weaponData, effAtkSkill,
         atkRating 
     };

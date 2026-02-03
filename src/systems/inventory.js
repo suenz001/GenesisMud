@@ -8,6 +8,25 @@ import { MessageSystem } from "./messages.js";
 import { updatePlayer } from "./player.js";
 import { NPCDB } from "../data/npcs.js";
 
+// === 裝備部位對照表 ===
+const SLOT_MAPPING = {
+    'armor': 'armor',
+    'head': 'head',
+    'neck': 'neck',
+    'necklace': 'neck', // 容錯：items.js 若寫 necklace 也對應到 neck
+    'cloak': 'cloak',
+    'wrists': 'wrists',
+    'pants': 'pants',
+    'boots': 'boots',
+    'belt': 'belt'
+};
+
+const SLOT_NAMES = {
+    'armor': '身穿', 'head': '頭戴', 'neck': '頸掛', 
+    'cloak': '背披', 'wrists': '手戴', 'pants': '腿穿', 
+    'boots': '腳踏', 'belt': '腰繫'
+};
+
 async function consumeItem(playerData, userId, itemId, amount = 1) {
     const inventory = playerData.inventory || [];
     const itemIndex = inventory.findIndex(i => i.id === itemId || i.name === itemId);
@@ -63,19 +82,36 @@ export const InventorySystem = {
                 let act = ""; 
                 let status = "";
 
-                const isWeaponEquipped = p.equipment && p.equipment.weapon === i.id;
-                const isArmorEquipped = p.equipment && p.equipment.armor === i.id;
+                // 檢查是否已裝備 (遍歷所有欄位)
+                let isEquipped = false;
+                if (p.equipment) {
+                    if (p.equipment.weapon === i.id) {
+                        isEquipped = true;
+                        status = UI.txt(" (手持)", "#ff00ff");
+                        act += UI.makeCmd("[卸下]", `unwield`, "cmd-btn");
+                    } else {
+                        // 檢查防具欄位
+                        for (const [slot, equippedId] of Object.entries(p.equipment)) {
+                            if (slot !== 'weapon' && equippedId === i.id) {
+                                isEquipped = true;
+                                const slotName = SLOT_NAMES[slot] || "裝備";
+                                status = UI.txt(` (${slotName})`, "#ff00ff");
+                                act += UI.makeCmd("[脫下]", `unwear ${i.id}`, "cmd-btn");
+                                break;
+                            }
+                        }
+                    }
+                }
 
-                if (isWeaponEquipped) {
-                    status = UI.txt(" (已裝備)", "#ff00ff");
-                    act += UI.makeCmd("[卸下]", `unwield`, "cmd-btn");
-                } else if (isArmorEquipped) {
-                    status = UI.txt(" (已穿戴)", "#ff00ff");
-                    act += UI.makeCmd("[脫下]", `unwear`, "cmd-btn");
-                } else {
-                    const allowedTypes = ['weapon', 'sword', 'blade', 'stick', 'dagger', 'whip', 'throwing', 'lance'];
-                    if (allowedTypes.includes(dat.type)) act += UI.makeCmd("[裝備]", `wield ${i.id}`, "cmd-btn");
-                    if (dat.type === 'armor') act += UI.makeCmd("[穿戴]", `wear ${i.id}`, "cmd-btn");
+                if (!isEquipped) {
+                    const weaponTypes = ['weapon', 'sword', 'blade', 'stick', 'dagger', 'whip', 'throwing', 'lance'];
+                    if (weaponTypes.includes(dat.type)) {
+                        act += UI.makeCmd("[裝備]", `wield ${i.id}`, "cmd-btn");
+                    } else if (SLOT_MAPPING[dat.type]) {
+                        // 如果是防具類 (在 Mapping 表中)
+                        act += UI.makeCmd("[穿戴]", `wear ${i.id}`, "cmd-btn");
+                    }
+                    
                     if (dat.type === 'food') act += UI.makeCmd("[吃]", `eat ${i.id}`, "cmd-btn"); 
                     if (dat.type === 'drink') act += UI.makeCmd("[喝]", `drink ${i.id}`, "cmd-btn"); 
                     
@@ -120,28 +156,70 @@ export const InventorySystem = {
         await updatePlayer(userId, { equipment: playerData.equipment });
     },
 
+    // [修改] 通用穿戴指令
     wear: async (playerData, args, userId) => {
-        if (args.length === 0) return UI.print("你要穿什麼？", "error");
+        if (args.length === 0) return UI.print("你要穿戴什麼？", "error");
         const itemId = args[0];
-        const invItem = playerData.inventory.find(i => i.id === itemId);
+        
+        // 1. 檢查背包
+        const invItem = playerData.inventory.find(i => i.id === itemId || i.name === itemId);
         if (!invItem) return UI.print("你身上沒有這個東西。", "error");
         
-        const itemData = ItemDB[itemId];
-        if (!itemData || itemData.type !== 'armor') return UI.print("這不是防具。", "error");
+        // 2. 檢查物品資料
+        const itemData = ItemDB[invItem.id];
+        if (!itemData) return UI.print("物品資料錯誤。", "error");
+
+        // 3. 檢查是否為可穿戴部位
+        const slot = SLOT_MAPPING[itemData.type];
+        if (!slot) return UI.print("這東西看起來不能穿在身上。", "error");
 
         if (!playerData.equipment) playerData.equipment = {};
-        if (playerData.equipment.armor) UI.print(`你脫下了身上的${ItemDB[playerData.equipment.armor].name}。`, "system");
 
-        playerData.equipment.armor = itemId;
-        UI.print(`你穿上了 ${itemData.name}。`, "system");
+        // 4. 替換舊裝備
+        if (playerData.equipment[slot]) {
+            const oldId = playerData.equipment[slot];
+            const oldName = ItemDB[oldId] ? ItemDB[oldId].name : oldId;
+            UI.print(`你脫下了身上的${oldName}。`, "system");
+        }
+
+        // 5. 穿上新裝備
+        playerData.equipment[slot] = invItem.id;
+        UI.print(`你穿戴上了 ${itemData.name}。`, "system");
+        
         await updatePlayer(userId, { equipment: playerData.equipment });
     },
 
+    // [修改] 通用脫下指令
     unwear: async (playerData, args, userId) => {
-        if (!playerData.equipment || !playerData.equipment.armor) return UI.print("你身上沒有穿防具。", "error");
-        const aName = ItemDB[playerData.equipment.armor].name;
-        playerData.equipment.armor = null;
-        UI.print(`你脫下了身上的 ${aName}。`, "system");
+        if (args.length === 0) return UI.print("你要脫下什麼？(請輸入物品ID或名稱)", "error");
+        const target = args[0];
+        
+        if (!playerData.equipment) return UI.print("你身上光溜溜的，沒什麼好脫的。", "error");
+
+        let foundSlot = null;
+        let foundItemId = null;
+
+        // 遍歷裝備欄尋找目標
+        for (const [slot, equippedId] of Object.entries(playerData.equipment)) {
+            if (slot === 'weapon') continue; // 跳過武器
+            const info = ItemDB[equippedId];
+            if (equippedId === target || (info && info.name === target)) {
+                foundSlot = slot;
+                foundItemId = equippedId;
+                break;
+            }
+        }
+
+        if (!foundSlot) {
+            UI.print("你身上沒有穿戴這樣裝備。", "error");
+            return;
+        }
+
+        // 執行脫下
+        const itemName = ItemDB[foundItemId] ? ItemDB[foundItemId].name : foundItemId;
+        delete playerData.equipment[foundSlot];
+        
+        UI.print(`你脫下了身上的 ${itemName}。`, "system");
         await updatePlayer(userId, { equipment: playerData.equipment });
     },
 
@@ -159,8 +237,6 @@ export const InventorySystem = {
 
         const success = await consumeItem(playerData, userId, invItem.id);
         if (success) {
-            // [修改] 允許溢出：直接加上數值，不再取 Math.min
-            // 但保留吃之前的檢查 (attr.food >= attr.maxFood)
             const oldVal = attr.food;
             attr.food = attr.food + itemData.value;
             const recover = attr.food - oldVal;
@@ -206,7 +282,6 @@ export const InventorySystem = {
 
         const success = await consumeItem(playerData, userId, invItem.id);
         if (success) {
-            // [修改] 允許溢出
             const oldVal = attr.water;
             attr.water = attr.water + itemData.value;
             const recover = attr.water - oldVal;
@@ -314,7 +389,18 @@ export const InventorySystem = {
             return;
         }
 
-        if ((p.equipment && p.equipment.weapon === itemId) || (p.equipment && p.equipment.armor === itemId)) {
+        // 檢查是否裝備中 (遍歷所有裝備欄位)
+        let isEquipped = false;
+        if (p.equipment) {
+            for (const key in p.equipment) {
+                if (p.equipment[key] === itemId) {
+                    isEquipped = true;
+                    break;
+                }
+            }
+        }
+
+        if (isEquipped) {
             UI.print(`你必須先卸下 ${item.name} 才能販賣。`, "error");
             return;
         }
