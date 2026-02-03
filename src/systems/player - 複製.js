@@ -41,7 +41,7 @@ export function getEffectiveSkillLevel(entity, baseType) {
     }
 }
 
-// --- [修改] 計算戰鬥數值 (支援多部位防禦與屬性加成) ---
+// --- 計算戰鬥數值 (支援多部位防禦與屬性加成) ---
 export function getCombatStats(entity) {
     // 1. 計算裝備提供的屬性加成 (Props)
     const baseAttr = entity.attributes || {};
@@ -114,11 +114,15 @@ export function getCombatStats(entity) {
 
     const baseAp = (str * 2.5) + (effAtkSkill * 5 * atkRating) + (effForce * 2);
     const baseDp = (con * 2.5) + (effForce * 5) + (effDodge * 2 * dodgeRating);
-    const baseHit = (per * 2.5) + (effAtkSkill * 3 * atkRating);
+    
+    // [修改] 命中率公式調整：增加 effDodge 的影響，並提高 effAtkSkill 的權重
+    // 原公式: (per * 2.5) + (effAtkSkill * 3 * atkRating)
+    const baseHit = (per * 2.0) + (effAtkSkill * 5 * atkRating) + (effDodge * 3 * dodgeRating);
+    
     const baseDodge = (per * 2.5) + (effDodge * 4 * dodgeRating) + (effAtkSkill * 1);
 
     const ap = baseAp + weaponDmg;
-    const dp = baseDp + totalDefense; // 使用加總後的防禦力
+    const dp = baseDp + totalDefense; 
     const hit = baseHit + weaponHit;
     const dodge = baseDodge; 
 
@@ -136,12 +140,8 @@ export function getCombatStats(entity) {
 // === 智慧修練指令生成邏輯 ===
 function getSmartTrainCmd(cmd, cur, max) {
     const limit = max * 2;
-    // 1. 若未滿最大值，補到滿 (Cost = Gap)
     if (cur < max) return `${cmd} ${max - cur}`;
-    // 2. 若已滿但未達極限，執行一次大的 (或補到 limit)
-    // 這裡直接設定消耗為剩餘空間，讓 skill_system 去執行累積
     if (cur < limit - 1) return `${cmd} ${limit - cur}`;
-    // 3. 若已達瓶頸，執行 1 來觸發突破
     return `${cmd} 1`;
 }
 
@@ -157,24 +157,25 @@ export const PlayerSystem = {
         let updateData = { lastSaved: new Date().toISOString() };
         let msg = "遊戲進度已保存。";
         
-        // 只有在允許存檔的地方才會更新重生點
         if (room && room.allowSave) {
             updateData.savePoint = p.location;
             msg += " (重生點已更新至此處)";
         }
         
-        // 這裡我們也順便把其他重要狀態存入，確保萬無一失
         updateData.attributes = p.attributes;
         updateData.skills = p.skills;
+        updateData.skill_exp = p.skill_exp || {}; 
         updateData.inventory = p.inventory;
         updateData.money = p.money;
         updateData.equipment = p.equipment;
+        updateData.enabled_skills = p.enabled_skills;
+        updateData.family = p.family;
+        updateData.sect = p.sect;
         
         await updatePlayer(u, updateData);
         UI.print(msg, "system");
     },
 
-    // === [新增] 離開遊戲 ===
     quit: async (p, a, u) => {
         if (p.state === 'fighting') {
             UI.print("戰鬥中不能離開遊戲！請先解決眼前的對手。", "error");
@@ -184,11 +185,11 @@ export const PlayerSystem = {
         UI.print("你決定暫時離開這個江湖，改日再來。", "system");
         UI.print("正在保存檔案...", "system");
         
-        // 執行完整存檔 (確保最新狀態被保存)
         await updatePlayer(u, {
             location: p.location,
             attributes: p.attributes,
             skills: p.skills,
+            skill_exp: p.skill_exp || {}, 
             inventory: p.inventory,
             money: p.money,
             equipment: p.equipment,
@@ -198,7 +199,6 @@ export const PlayerSystem = {
             lastSaved: new Date().toISOString()
         });
 
-        // 登出 Firebase，這會觸發 main.js 的 onAuthStateChanged，自動回到登入畫面
         await signOut(auth);
     },
 
@@ -234,7 +234,6 @@ export const PlayerSystem = {
         html += `<div>${UI.attrLine("食物", attr.food+"/"+attr.maxFood)}</div><div>${UI.attrLine("飲水", attr.water+"/"+attr.maxWater)}</div>`;
         html += `</div><br>`;
 
-        // === 智慧按鈕生成 ===
         const cmdSp = getSmartTrainCmd("respirate", attr.spiritual, attr.maxSpiritual);
         const cmdHp = getSmartTrainCmd("exercise", attr.force, attr.maxForce);
         const cmdMp = getSmartTrainCmd("meditate", attr.mana, attr.maxMana);
@@ -296,7 +295,7 @@ export const PlayerSystem = {
         msg += UI.txt(" 裝備指令：", "#ff5555") + "wield, unwield, wear, unwear\n";
         msg += UI.txt(" 基本指令：", "#00ffff") + "score, skills, inventory (i)\n";
         msg += UI.txt(" 武學指令：", "#ff5555") + "apprentice, learn, enable, unenable, practice\n";
-        msg += UI.txt(" 修練指令：", "#ffff00") + "exercise, respirate, meditate, enforce (內力運用)\n";
+        msg += UI.txt(" 修練指令：", "#ffff00") + "exercise, respirate, meditate, enforce, autoforce\n";
         msg += UI.txt(" 戰鬥指令：", "#ff0000") + "kill (殺), fight (切磋)\n";
         msg += UI.txt(" 生活指令：", "#00ff00") + "eat, drink, drop, get, look\n";
         msg += UI.txt(" 交易指令：", "#ffcc00") + "list, buy, sell\n";

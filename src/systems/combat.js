@@ -80,7 +80,6 @@ function getNPCCombatStats(npc) {
     return { ap, dp, hit, dodge, atkType: bestSkillId, effAtkSkill: maxSkill, rating };
 }
 
-// 戰鬥力計算公式：只使用 AP, DP, Hit, Dodge (移除 HP 影響)
 function calculateCombatPower(stats) {
     return stats.ap + stats.dp + stats.hit + stats.dodge;
 }
@@ -129,8 +128,6 @@ function getLevel(character) {
     return maxMartial + maxForce;
 }
 
-// [核心] 獲取戰鬥招式敘述
-// attackerName: 用於顯示的名稱 (例如 "你" 或 "張三")
 function getSkillActionMsg(attacker, defenderName, isPlayer, attackerNameOverride = null) {
     let skillId = 'unarmed';
     let weaponName = '拳頭';
@@ -157,7 +154,6 @@ function getSkillActionMsg(attacker, defenderName, isPlayer, attackerNameOverrid
     const finalAttackerName = attackerNameOverride || attacker.name;
     const skillData = SkillDB[skillId];
 
-    // 如果沒有招式資料，嘗試退回基礎武學
     if (!skillData || !skillData.actions || skillData.actions.length === 0) {
         if (skillData && skillData.base && SkillDB[skillData.base] && SkillDB[skillData.base].actions) {
              const baseActions = SkillDB[skillData.base].actions;
@@ -177,7 +173,6 @@ function parseActionMsg(msg, attackerName, defenderName, weaponName) {
               .replace(/\$w/g, weaponName);
 }
 
-// [核心] 獲取閃避敘述
 function getDodgeMessage(entity, attackerName, entityNameOverride = null) {
     let msg = `$N身形一晃，閃過了$P的攻擊！`; 
     let activeDodge = null;
@@ -398,6 +393,7 @@ export const CombatSystem = {
         MessageSystem.broadcast(playerData.location, `${playerData.name} 拒絕了 ${name} 的切磋請求。`);
     },
 
+    // [修改] 讓所有主動怪一起加入戰鬥
     checkAggro: async (playerData, roomId, userId) => {
         const room = MapSystem.getRoom(roomId);
         if (!room || !room.npcs || room.safe) return;
@@ -423,7 +419,10 @@ export const CombatSystem = {
 
         if (aggroTargets.length > 0) {
             UI.print(UI.txt("你感覺到一股殺氣！周圍的野獸盯上了你！", "#ff0000", true), "system", true);
-            await CombatSystem.startCombat(playerData, [aggroTargets[0].id], userId, true, aggroTargets[0]); 
+            // 遍歷所有主動怪，讓它們全部加入戰鬥
+            for (const target of aggroTargets) {
+                 await CombatSystem.startCombat(playerData, [target.id], userId, true, target); 
+            }
         }
     },
 
@@ -466,6 +465,8 @@ export const CombatSystem = {
 
         const uniqueId = getUniqueNpcId(playerData.location, npc.id, npc.index);
         const alreadyFighting = combatList.find(c => c.uniqueId === uniqueId);
+        
+        // 如果該 NPC 已經在戰鬥列表中，將其移到最前 (切換目標)，但不重複添加
         if (alreadyFighting) {
             const idx = combatList.indexOf(alreadyFighting);
             if (idx > 0) {
@@ -523,8 +524,10 @@ export const CombatSystem = {
         combatList.push(enemyState);
         await updatePlayer(userId, { state: 'fighting', combatTarget: { id: npc.id, index: npc.index } });
     
-        if (combatInterval) clearInterval(combatInterval);
-        CombatSystem.runCombatLoop(playerData, userId);
+        // 如果已經有戰鬥迴圈在跑，就不需要 restart，加入 list 即可
+        if (!combatInterval) {
+            CombatSystem.runCombatLoop(playerData, userId);
+        }
     },
 
     startPvPCombat: async (playerData, userId, targetData, targetId) => {
@@ -545,91 +548,96 @@ export const CombatSystem = {
     runCombatLoop: (playerData, userId) => {
         const combatRound = async () => {
             if (combatList.length === 0) { CombatSystem.stopCombat(userId); return; }
-            const currentTarget = combatList[0];
             
-            // ================== PVE 邏輯 ==================
-            if (currentTarget.type === 'pve') {
-                if (playerData.location !== currentTarget.roomId) { CombatSystem.stopCombat(userId); return; }
+            // --- 1. 玩家的回合：只攻擊目前鎖定的目標 (combatList[0]) ---
+            const mainTarget = combatList[0];
+            
+            if (mainTarget.type === 'pve') {
+                if (playerData.location !== mainTarget.roomId) { CombatSystem.stopCombat(userId); return; }
                 const playerStats = getCombatStats(playerData);
-                const npc = currentTarget.npcObj;
+                const npc = mainTarget.npcObj;
                 const npcStats = getNPCCombatStats(npc); 
         
-                // --- 1. 玩家攻擊 NPC ---
                 if (!playerData.isUnconscious) {
                     let dmg = Math.max(1, playerStats.ap - npcStats.dp);
                     dmg = Math.floor(dmg * (0.9 + Math.random() * 0.2));
-                    if (!currentTarget.isLethal) dmg = Math.floor(dmg / 2);
+                    if (!mainTarget.isLethal) dmg = Math.floor(dmg / 2);
 
                     const hitRate = playerStats.hit / (playerStats.hit + npcStats.dodge);
                     if (Math.random() < hitRate) {
-                        // 生成兩份戰鬥訊息：自己看(你) / 別人看(玩家名)
-                        const localMsg = getSkillActionMsg(playerData, currentTarget.npcName, true, "你");
-                        const publicMsg = getSkillActionMsg(playerData, currentTarget.npcName, true, playerData.name);
-                        
+                        const localMsg = getSkillActionMsg(playerData, mainTarget.npcName, true, "你");
+                        const publicMsg = getSkillActionMsg(playerData, mainTarget.npcName, true, playerData.name);
                         UI.print(localMsg, "chat", true);
-                        MessageSystem.broadcast(playerData.location, publicMsg); // 廣播給同房玩家看
+                        MessageSystem.broadcast(playerData.location, publicMsg);
 
-                        currentTarget.npcHp -= dmg;
-                        await syncNpcState(currentTarget.uniqueId, currentTarget.npcHp, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, false);
-                        UI.print(`(你對 ${currentTarget.npcName} 造成 ${dmg} 點傷害)`, "chat");
+                        mainTarget.npcHp -= dmg;
+                        await syncNpcState(mainTarget.uniqueId, mainTarget.npcHp, mainTarget.maxNpcHp, mainTarget.roomId, mainTarget.npcName, false);
+                        UI.print(`(你對 ${mainTarget.npcName} 造成 ${dmg} 點傷害)`, "chat");
                         
-                        const statusMsg = getStatusDesc(currentTarget.npcName, currentTarget.npcHp, currentTarget.maxNpcHp);
+                        const statusMsg = getStatusDesc(mainTarget.npcName, mainTarget.npcHp, mainTarget.maxNpcHp);
                         if (statusMsg) {
                             UI.print(statusMsg, "chat", true);
                             MessageSystem.broadcast(playerData.location, statusMsg);
                         }
                         
-                        if (currentTarget.npcHp <= 0) {
-                            currentTarget.npcHp = 0;
-                            currentTarget.npcIsUnconscious = true;
-                            await syncNpcState(currentTarget.uniqueId, 0, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, true);
+                        if (mainTarget.npcHp <= 0) {
+                            mainTarget.npcHp = 0;
+                            mainTarget.npcIsUnconscious = true;
+                            await syncNpcState(mainTarget.uniqueId, 0, mainTarget.maxNpcHp, mainTarget.roomId, mainTarget.npcName, true);
 
-                            if (!currentTarget.isLethal) {
-                                const winMsg = UI.txt(`${currentTarget.npcName} 拱手說道：「佩服佩服，是在下輸了。」`, "#00ff00", true);
+                            if (!mainTarget.isLethal) {
+                                const winMsg = UI.txt(`${mainTarget.npcName} 拱手說道：「佩服佩服，是在下輸了。」`, "#00ff00", true);
                                 UI.print(winMsg, "chat", true);
                                 MessageSystem.broadcast(playerData.location, winMsg);
                                 playerData.combat.potential = (playerData.combat.potential || 0) + 20;
                                 combatList.shift();
                             } else {
-                                 const uncMsg = UI.txt(`${currentTarget.npcName} 搖頭晃腦，咚的一聲倒在地上！`, "#888");
+                                 const uncMsg = UI.txt(`${mainTarget.npcName} 搖頭晃腦，咚的一聲倒在地上！`, "#888");
                                  UI.print(uncMsg, "system", true);
-                                 await handleKillReward(npc, playerData, currentTarget, userId);
+                                 await handleKillReward(npc, playerData, mainTarget, userId);
                                  combatList.shift();
                             }
                         }
                     } else {
-                        // 閃避時的廣播
-                        const localMsg = getSkillActionMsg(playerData, currentTarget.npcName, true, "你");
-                        const publicMsg = getSkillActionMsg(playerData, currentTarget.npcName, true, playerData.name);
-                        
+                        const localMsg = getSkillActionMsg(playerData, mainTarget.npcName, true, "你");
+                        const publicMsg = getSkillActionMsg(playerData, mainTarget.npcName, true, playerData.name);
                         UI.print(localMsg, "chat", true);
                         MessageSystem.broadcast(playerData.location, publicMsg);
 
-                        const localDodge = UI.txt(`${currentTarget.npcName} 身形一晃，閃過了你的攻擊！`, "#aaa");
-                        const publicDodge = UI.txt(`${currentTarget.npcName} 身形一晃，閃過了${playerData.name}的攻擊！`, "#aaa");
-                        
+                        const localDodge = UI.txt(`${mainTarget.npcName} 身形一晃，閃過了你的攻擊！`, "#aaa");
+                        const publicDodge = UI.txt(`${mainTarget.npcName} 身形一晃，閃過了${playerData.name}的攻擊！`, "#aaa");
                         UI.print(localDodge, "chat", true);
                         MessageSystem.broadcast(playerData.location, publicDodge);
                     }
                 }
+            }
+            
+            // --- 2. 敵人的回合：所有敵人輪流攻擊玩家 (圍毆邏輯) ---
+            // 使用複本遍歷，避免在迴圈中刪除陣列元素導致錯誤
+            const enemies = [...combatList];
+            const playerStats = getCombatStats(playerData);
 
-                // --- 2. NPC 攻擊 玩家 ---
-                if (currentTarget && currentTarget.npcHp > 0) {
-                    const eStats = npcStats;
+            for (const enemy of enemies) {
+                // 如果玩家已經被打暈或死了，停止所有人攻擊
+                if (playerData.isUnconscious || playerData.attributes.hp <= 0) break;
+
+                if (enemy.type === 'pve') {
+                    if (enemy.npcHp <= 0) continue; // 死人不能攻擊
+
+                    const npc = enemy.npcObj;
+                    const eStats = getNPCCombatStats(npc); 
                     const nHitChance = Math.random() * (eStats.hit + playerStats.dodge);
-                    const nIsHit = playerData.isUnconscious ? true : (nHitChance < eStats.hit);
+                    const nIsHit = (nHitChance < eStats.hit);
         
                     if (nIsHit) {
-                        // 生成 NPC 攻擊訊息
                         const localMsg = getSkillActionMsg(npc, "你", false);
                         const publicMsg = getSkillActionMsg(npc, playerData.name, false);
-
                         UI.print(localMsg, "chat", true);
                         MessageSystem.broadcast(playerData.location, publicMsg);
 
                         let dmg = eStats.ap - playerStats.dp;
                         if (dmg <= 0) dmg = Math.random() * 3 + 1;
-                        if (!currentTarget.isLethal) dmg = dmg / 2;
+                        if (!enemy.isLethal) dmg = dmg / 2;
                         dmg = Math.round(dmg) || 1;
         
                         playerData.attributes.hp -= dmg;
@@ -648,7 +656,7 @@ export const CombatSystem = {
                             playerData.isUnconscious = true;
                             UI.updateHUD(playerData); 
 
-                            if (!currentTarget.isLethal) {
+                            if (!enemy.isLethal) {
                                 const loseMsg = UI.txt("你眼前一黑，知道自己輸了，連忙跳出戰圈。", "#ffaa00", true);
                                 UI.print(loseMsg, "system", true);
                                 MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 敗下陣來，跳出了戰圈。`, "#ffaa00", true));
@@ -656,46 +664,48 @@ export const CombatSystem = {
                                 await updatePlayer(userId, { "attributes.hp": 0, isUnconscious: true });
                                 return;
                             } else {
-                                if (!playerData.isUnconscious) {
-                                    const uncMsg = UI.txt("你只覺天旋地轉，站立不穩，咚的一聲倒在地上...", "#ff8800", true);
-                                    UI.print(uncMsg, "system", true);
-                                    MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 晃了晃，一頭栽倒在地上。`, "#ff8800", true));
-                                    await updatePlayer(userId, { "attributes.hp": 0, isUnconscious: true });
-                                } else {
-                                    UI.print(UI.txt("這致命的一擊奪走了你最後的生機！", "#ff0000", true), "system", true);
-                                    await handlePlayerDeath(playerData, userId);
-                                    return; 
+                                const uncMsg = UI.txt("你只覺天旋地轉，站立不穩，咚的一聲倒在地上...", "#ff8800", true);
+                                UI.print(uncMsg, "system", true);
+                                MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 晃了晃，一頭栽倒在地上。`, "#ff8800", true));
+                                await updatePlayer(userId, { "attributes.hp": 0, isUnconscious: true });
+                                
+                                // 這裡只處理暈倒，真正的死亡在 handlePlayerDeath
+                                // 如果是致命攻擊，可能需要直接判死，但這邊先讓玩家暈倒比較保險
+                                if (playerData.attributes.hp <= 0 && enemy.isLethal) {
+                                     UI.print(UI.txt("這致命的一擊奪走了你最後的生機！", "#ff0000", true), "system", true);
+                                     await handlePlayerDeath(playerData, userId);
+                                     return;
                                 }
                             }
                         }
                     } else {
-                        // NPC 攻擊未命中
                         const localMsg = getSkillActionMsg(npc, "你", false);
                         const publicMsg = getSkillActionMsg(npc, playerData.name, false);
                         UI.print(localMsg, "chat", true);
                         MessageSystem.broadcast(playerData.location, publicMsg);
 
-                        // 閃避敘述
-                        const localDodge = getDodgeMessage(playerData, currentTarget.npcName, "你");
-                        const publicDodge = getDodgeMessage(playerData, currentTarget.npcName, playerData.name);
-                        
+                        const localDodge = getDodgeMessage(playerData, enemy.npcName, "你");
+                        const publicDodge = getDodgeMessage(playerData, enemy.npcName, playerData.name);
                         UI.print(localDodge, "chat", true);
                         MessageSystem.broadcast(playerData.location, publicDodge);
                     }
                 }
+                
+                // PvP 反擊邏輯保留在上方 loop 之外，或者也可以整合進來
+                // 為了簡化，目前 PvP 仍維持 1v1 邏輯，只有 PvE 支援多打一
             }
-
-            // ================== PVP 邏輯 ==================
-            else if (currentTarget.type === 'pvp') {
-                const targetId = currentTarget.targetId;
+            
+            // --- PvP 邏輯 (單獨處理) ---
+            if (mainTarget.type === 'pvp') {
+                const targetId = mainTarget.targetId;
                 const tDoc = await getDoc(doc(db, "players", targetId));
                 if (!tDoc.exists()) { CombatSystem.stopCombat(userId); return; }
                 const tData = tDoc.data();
-                currentTarget.targetData = tData;
+                mainTarget.targetData = tData;
                 const pStats = getCombatStats(playerData);
                 const tStats = getCombatStats(tData);
 
-                // --- 1. 我方攻擊 (主動方) ---
+                // 我方攻擊
                 if (!playerData.isUnconscious && tData.attributes.hp > 0) {
                     let dmg = Math.max(1, pStats.ap - tStats.dp);
                     dmg = Math.floor(dmg * (0.8 + Math.random() * 0.4)); 
@@ -703,7 +713,6 @@ export const CombatSystem = {
 
                     const hitProb = pStats.hit / (pStats.hit + tStats.dodge);
                     if (Math.random() < hitProb) {
-                        // 顯示攻擊招式
                         const localMsg = getSkillActionMsg(playerData, tData.name, true, "你");
                         const publicMsg = getSkillActionMsg(playerData, tData.name, true, playerData.name);
                         UI.print(localMsg, "chat", true);
@@ -721,12 +730,11 @@ export const CombatSystem = {
                             return;
                         }
                     } else {
-                        // 未命中
                         const localMsg = getSkillActionMsg(playerData, tData.name, true, "你");
                         const publicMsg = getSkillActionMsg(playerData, tData.name, true, playerData.name);
                         UI.print(localMsg, "chat", true);
                         MessageSystem.broadcast(playerData.location, publicMsg);
-                        
+
                         const dodgeMsg = UI.txt(`${tData.name} 靈巧地閃過了你的攻擊！`, "#aaa");
                         const pubDodgeMsg = UI.txt(`${tData.name} 靈巧地閃過了${playerData.name}的攻擊！`, "#aaa");
                         UI.print(dodgeMsg, "chat", true);
@@ -734,9 +742,7 @@ export const CombatSystem = {
                     }
                 }
 
-                // --- 2. 對方反擊 (被動方) ---
-                // 注意：這裡只負責顯示「自己被打」的過程，因為這是本地迴圈
-                // 對方也會跑自己的 loop，所以這裡主要是為了視覺效果與同步傷害
+                // 對方反擊
                 if (!tData.isUnconscious && playerData.attributes.hp > 0) {
                     let tDmg = Math.max(1, tStats.ap - pStats.dp);
                     tDmg = Math.floor(tDmg * (0.8 + Math.random() * 0.4));
@@ -744,7 +750,6 @@ export const CombatSystem = {
 
                     const tHitProb = tStats.hit / (tStats.hit + pStats.dodge);
                     if (Math.random() < tHitProb) {
-                        // 顯示對方攻擊招式
                         const localMsg = getSkillActionMsg(tData, "你", true);
                         const publicMsg = getSkillActionMsg(tData, playerData.name, true);
                         UI.print(localMsg, "chat", true);
@@ -768,7 +773,6 @@ export const CombatSystem = {
                             return;
                         }
                     } else {
-                        // 對方未命中 (我閃避)
                         const localMsg = getSkillActionMsg(tData, "你", true);
                         const publicMsg = getSkillActionMsg(tData, playerData.name, true);
                         UI.print(localMsg, "chat", true);

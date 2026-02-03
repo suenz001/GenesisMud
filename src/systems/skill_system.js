@@ -11,7 +11,6 @@ let autoForceInterval = null;
 // === 升級所需經驗值公式 (極速升級版) ===
 function calculateMaxExp(level) {
     if (level < 150) {
-        // [修改] 係數降為 5，升級速度飛快
         return Math.pow(level + 1, 2) * 5;
     } else {
         return Math.pow(level + 1, 3);
@@ -37,11 +36,10 @@ function findNPCInRoom(roomId, npcNameOrId) {
 export const SkillSystem = {
     // === 自動修練內力 (Auto Force) ===
     autoForce: async (p, a, u) => {
-        // 如果已經在修練中，則停止
         if (autoForceInterval || p.state === 'exercising') {
             if (autoForceInterval) clearInterval(autoForceInterval);
             autoForceInterval = null;
-            p.state = 'normal'; // 恢復狀態
+            p.state = 'normal'; 
             await updatePlayer(u, { state: 'normal' });
             UI.print("你停止了自動修練內力。", "system");
             return;
@@ -52,13 +50,11 @@ export const SkillSystem = {
             return;
         }
 
-        // 開始修練，設定狀態
         p.state = 'exercising';
         await updatePlayer(u, { state: 'exercising' });
         UI.print("你開始閉目養神，自動運轉內息... (再次輸入 autoforce 以解除)", "system");
         
         autoForceInterval = setInterval(async () => {
-            // 檢查狀態是否被外部改變 (例如被打進入戰鬥)
             if (p.state !== 'exercising') {
                 clearInterval(autoForceInterval);
                 autoForceInterval = null;
@@ -97,7 +93,6 @@ export const SkillSystem = {
             const limit = maxVal * 2;
 
             if (curVal >= limit) {
-                // [修復] 這裡補上 true，避免 HTML 代碼外洩
                 UI.print(UI.txt(`你的${typeName}已經運轉至極限，無法再容納更多了。`, "#ffff00"), "system", true);
                 return;
             }
@@ -136,7 +131,6 @@ export const SkillSystem = {
                 UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system", true);
                 UI.print(`(內力上限已達 ${maxVal}，需提升基本內功等級或根骨才能突破)`, "system");
                 
-                // 若達到瓶頸，自動停止修練並恢復狀態
                 if (autoForceInterval) {
                     clearInterval(autoForceInterval);
                     autoForceInterval = null;
@@ -212,7 +206,6 @@ export const SkillSystem = {
             return;
         }
         
-        // 修練狀態檢查
         if (playerData.state === 'exercising') {
             UI.print("你正在專心修練，無法分心運功。(輸入 autoforce 解除)", "error");
             return;
@@ -281,38 +274,75 @@ export const SkillSystem = {
         const skillList = Object.entries(skills);
         if (skillList.length === 0) { UI.print("你目前什麼都不會。", "chat"); return; }
         
-        let html = UI.titleLine(`${playerData.name} 的武學`);
-        html += `<div style="display:grid; grid-template-columns: 1fr auto auto; gap: 5px; align-items:center;">`;
+        // --- 美化版武學列表 ---
+        let h = `<div style="background:rgba(20,20,30,0.9); padding:10px; border-radius:8px; border:1px solid #445;">`;
+        h += `<div style="text-align:center; color:#00ffff; font-weight:bold; margin-bottom:10px; border-bottom:1px dashed #445; padding-bottom:5px;">
+                ${playerData.name} 的武學修為
+              </div>`;
+        
+        h += `<div style="display:grid; grid-template-columns: 1fr; gap: 8px;">`;
         
         for (const [id, level] of skillList) {
             const info = SkillDB[id];
             if(id === 'parry') continue; 
             const name = info ? info.name : id;
             const desc = getSkillLevelDesc(level);
-            let statusMark = "";
             
+            // 檢查激發狀態
+            let isEnabled = false;
+            let enabledSlot = "";
             if (playerData.enabled_skills) {
                 for (const [slot, equippedId] of Object.entries(playerData.enabled_skills)) {
-                    if (equippedId === id) statusMark = UI.txt(`[${slot}]`, "#00ff00");
+                    if (equippedId === id) {
+                        isEnabled = true;
+                        enabledSlot = slot; 
+                    }
                 }
             }
 
+            // 操作按鈕
             let btn = "";
             if (info && info.base) {
-                const isEnabled = playerData.enabled_skills && playerData.enabled_skills[info.base] === id;
-                btn = UI.makeCmd(isEnabled ? "[解除]" : "[激發]", isEnabled ? `unenable ${info.base}` : `enable ${info.base} ${id}`, "cmd-btn");
+                const isActive = playerData.enabled_skills && playerData.enabled_skills[info.base] === id;
+                // 注意樣式：激發狀態下按鈕變色
+                if (isActive) {
+                    btn = UI.makeCmd("[解除]", `unenable ${info.base}`, "cmd-btn cmd-btn-buy");
+                } else {
+                    btn = UI.makeCmd("[激發]", `enable ${info.base} ${id}`, "cmd-btn");
+                }
             }
 
             const curExp = skillExps[id] || 0;
             const maxExp = calculateMaxExp(level);
-            const expText = `<span style="font-size:0.8em; color:#888;">(${curExp}/${maxExp})</span>`;
+            // 經驗條計算
+            const expPct = Math.min(100, Math.floor((curExp/maxExp)*100));
+            const expBar = `<div style="height:2px; width:100%; background:#333; margin-top:3px;"><div style="width:${expPct}%; background:#00ff00; height:100%;"></div></div>`;
 
-            html += `<div style="color:#fff;">${name} <span style="color:#888; font-size:0.8em;">(${id})</span> ${statusMark}</div>`;
-            html += `<div>${UI.txt(level+"級", "#00ffff")} ${expText} <span style="font-size:0.8em;">${desc}</span></div>`;
-            html += `<div>${btn}</div>`;
+            // 卡片樣式
+            const cardBg = isEnabled ? "rgba(0,50,0,0.4)" : "rgba(255,255,255,0.03)";
+            const borderCol = isEnabled ? "#00aa00" : "#333";
+
+            h += `<div style="background:${cardBg}; border:1px solid ${borderCol}; padding:8px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="flex:1;">
+                        <div style="display:flex; align-items:center;">
+                            <span style="color:#fff; font-weight:bold; font-size:14px;">${name}</span>
+                            <span style="color:#888; font-size:12px; margin-left:5px;">(${id})</span>
+                            ${isEnabled ? `<span style="background:#006600; color:#fff; font-size:10px; padding:1px 4px; border-radius:2px; margin-left:5px;">激發: ${enabledSlot}</span>` : ""}
+                        </div>
+                        <div style="font-size:12px; margin-top:2px;">
+                            <span style="color:#00ffff;">${level} 級</span> 
+                            <span style="color:#aaa;">/ ${desc}</span>
+                        </div>
+                        ${expBar}
+                    </div>
+                    <div style="margin-left:10px;">
+                        ${btn}
+                    </div>
+                  </div>`;
         }
-        html += `</div>` + UI.titleLine("End");
-        UI.print(html, 'chat', true);
+        h += `</div>`; // End Grid
+        h += `</div>`; // End Container
+        UI.print(h, 'chat', true);
     },
 
     apprentice: async (playerData, args, userId) => {
@@ -414,9 +444,8 @@ export const SkillSystem = {
             }
         }
 
-        // [修改] 消耗與收益公式調整
-        const spC = 5 + Math.floor(currentLvl / 5); // 精力消耗降低
-        const potC = 1; // [修改] 潛能固定消耗 1 點
+        const spC = 5 + Math.floor(currentLvl / 5); 
+        const potC = 1; 
         
         if(p.attributes.sp <= spC){UI.print("你現在精神不濟，無法專心聽講。(需要精: "+spC+")","error");return;} 
         if((p.combat.potential||0) < potC){UI.print("你的潛能不足，無法領悟其中的奧妙。(需要潛能: "+potC+")","error");return;} 
@@ -426,8 +455,6 @@ export const SkillSystem = {
         
         const int = p.attributes.int || 20;
         
-        // [修改] 大幅提升學習效率：(悟性 x 5~10倍) + (等級加成)
-        // 範例：悟性20，等級10 => (20 * 7) + 20 = 160點經驗 (以前是50點)
         const rndMult = 5 + Math.random() * 5; 
         let gain = Math.floor((int * rndMult) + (currentLvl * 2));
         if (gain < 1) gain = 1;
@@ -499,8 +526,6 @@ export const SkillSystem = {
 
         const int = p.attributes.int || 20;
         
-        // [修改] 練習效率低於學習：(悟性 x 2) + (基礎等級加成)
-        // 範例：悟性20，基礎等級10 => 40 + 5 = 45點經驗
         let gain = Math.floor((int * 2) + (baseLvl * 0.5));
         if (gain < 1) gain = 1;
 
