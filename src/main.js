@@ -69,16 +69,14 @@ UI.onAuthAction({
     }
 });
 
-// [重要修正] 改為 async 並 await 指令執行過程
-UI.onInput(async (cmd) => {
+UI.onInput((cmd) => {
     if (!currentUser) {
         UI.print("請先登入。", "error");
         return;
     }
 
     if (gameState === 'PLAYING') {
-        // 等待指令解析與系統內部非同步動作完成
-        await CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
+        CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
         if (localPlayerData) {
             UI.updateHUD(localPlayerData); 
         }
@@ -91,6 +89,7 @@ UI.onInput(async (cmd) => {
 function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
     
+    // [修改] 加入計數器，用來降低飢渴消耗頻率
     let tickCount = 0;
 
     regenInterval = setInterval(async () => {
@@ -102,6 +101,7 @@ function startRegeneration(user) {
         let msg = [];
         let changed = false;
 
+        // 自然回復邏輯 (HP/MP/SP 每10秒回復一次，維持不變)
         if (attr.hp < attr.maxHp) {
             const recover = Math.floor(attr.maxHp * 0.1); 
             attr.hp = Math.min(attr.maxHp, attr.hp + recover);
@@ -121,12 +121,14 @@ function startRegeneration(user) {
             changed = true;
         }
         
+        // [修改] 飢渴消耗：每 6 次循環 (約 60 秒) 才扣 1 點
         if (tickCount % 6 === 0) {
             attr.food = Math.max(0, attr.food - 1);
             attr.water = Math.max(0, attr.water - 1);
             if (attr.food === 0 || attr.water === 0) changed = true;
         }
 
+        // 自動進食/飲水邏輯
         if (localPlayerData.inventory) {
             if (isAutoEat && attr.food < attr.maxFood * 0.8) {
                 const foodItem = localPlayerData.inventory.find(i => {
@@ -164,7 +166,7 @@ function startRegeneration(user) {
             }
         }
 
-    }, 10000); 
+    }, 10000); // 循環依然是 10 秒，但飢渴度每 60 秒才扣
 }
 
 async function handleCreationInput(input) {

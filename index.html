@@ -9,7 +9,7 @@
 </head>
 <body>
     <div id="game-wrapper">
-        <div id="header">【創世江湖行】GenesisMud - Ver 0.4.0 (UI重製版)</div>
+        <div id="header">【創世江湖行】GenesisMud - Ver 0.4.1 (UI優化版)</div>
         
         <div id="game-body">
             <div id="main-display">
@@ -113,23 +113,38 @@
                 </div> 
 
                 <div class="dash-panel" id="panel-move">
-                    <div class="dpad-container">
-                        <button class="btn-dir nw" data-dir="nw">↖</button>
-                        <button class="btn-dir n" data-dir="n">北</button>
-                        <button class="btn-dir ne" data-dir="ne">↗</button>
+                    
+                    <div class="move-shortcuts">
+                        <button class="btn-action-sm" data-cmd="respirate" title="修練：精 -> 靈力">運精</button>
+                        <button class="btn-action-sm" data-cmd="exert regenerate" title="回復：內力 -> 精">回精</button>
                         
-                        <button class="btn-dir w" data-dir="w">西</button>
-                        <button class="btn-action-center" data-cmd="look">看</button>
-                        <button class="btn-dir e" data-dir="e">東</button>
+                        <button class="btn-action-sm" data-cmd="exercise" title="修練：氣 -> 內力">運氣</button>
+                        <button class="btn-action-sm" data-cmd="exert recover" title="回復：內力 -> 氣">回氣</button>
                         
-                        <button class="btn-dir sw" data-dir="sw">↙</button>
-                        <button class="btn-dir s" data-dir="s">南</button>
-                        <button class="btn-dir se" data-dir="se">↘</button>
+                        <button class="btn-action-sm" data-cmd="meditate" title="修練：神 -> 法力">運神</button>
+                        <button class="btn-action-sm" data-cmd="exert refresh" title="回復：內力 -> 神">回神</button>
                     </div>
-                    <div class="vertical-move">
-                        <button class="btn-v-move" data-dir="up"><i class="fas fa-arrow-up"></i> 上樓</button>
-                        <button class="btn-v-move" data-dir="down"><i class="fas fa-arrow-down"></i> 下樓</button>
+
+                    <div class="move-controls">
+                        <div class="dpad-container">
+                            <button class="btn-dir nw" data-dir="nw">↖</button>
+                            <button class="btn-dir n" data-dir="n">北</button>
+                            <button class="btn-dir ne" data-dir="ne">↗</button>
+                            
+                            <button class="btn-dir w" data-dir="w">西</button>
+                            <button class="btn-action-center" data-cmd="look">看</button>
+                            <button class="btn-dir e" data-dir="e">東</button>
+                            
+                            <button class="btn-dir sw" data-dir="sw">↙</button>
+                            <button class="btn-dir s" data-dir="s">南</button>
+                            <button class="btn-dir se" data-dir="se">↘</button>
+                        </div>
+                        <div class="vertical-move">
+                            <button class="btn-v-move" data-dir="up"><i class="fas fa-arrow-up"></i> 上</button>
+                            <button class="btn-v-move" data-dir="down"><i class="fas fa-arrow-down"></i> 下</button>
+                        </div>
                     </div>
+
                 </div>
 
                 <div class="dash-panel" id="panel-utility">
