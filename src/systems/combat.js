@@ -314,10 +314,20 @@ export const CombatSystem = {
 
     // === PvP 接受/拒絕指令 ===
     acceptDuel: async (playerData, args, userId) => {
-        if (!playerData.duelRequest) { UI.print("目前沒有人想跟你切磋。", "error"); return; }
+        // [修正] 強制從資料庫讀取最新的玩家資料，確保能讀取到別人寫入的 duelRequest
+        const playerRef = doc(db, "players", userId);
+        const playerSnap = await getDoc(playerRef);
         
-        const requesterId = playerData.duelRequest.from;
-        const requesterName = playerData.duelRequest.name;
+        if (!playerSnap.exists()) return;
+        const freshData = playerSnap.data();
+
+        if (!freshData.duelRequest) { 
+            UI.print("目前沒有人想跟你切磋。", "error"); 
+            return; 
+        }
+        
+        const requesterId = freshData.duelRequest.from;
+        const requesterName = freshData.duelRequest.name;
         
         // 清除請求
         await updatePlayer(userId, { duelRequest: null });
@@ -336,8 +346,15 @@ export const CombatSystem = {
     },
 
     rejectDuel: async (playerData, args, userId) => {
-        if (!playerData.duelRequest) { UI.print("目前沒有人想跟你切磋。", "error"); return; }
-        const name = playerData.duelRequest.name;
+        // 拒絕也要讀取最新資料
+        const playerRef = doc(db, "players", userId);
+        const playerSnap = await getDoc(playerRef);
+        if (!playerSnap.exists()) return;
+        const freshData = playerSnap.data();
+
+        if (!freshData.duelRequest) { UI.print("目前沒有人想跟你切磋。", "error"); return; }
+        
+        const name = freshData.duelRequest.name;
         await updatePlayer(userId, { duelRequest: null });
         UI.print(`你拒絕了 ${name} 的切磋請求。`, "system");
         MessageSystem.broadcast(playerData.location, `${playerData.name} 拒絕了 ${name} 的切磋請求。`);
@@ -368,7 +385,6 @@ export const CombatSystem = {
 
         if (aggroTargets.length > 0) {
             UI.print(UI.txt("你感覺到一股殺氣！周圍的野獸盯上了你！", "#ff0000", true), "system", true);
-            // 只觸發一隻，避免同時太多訊息
             await CombatSystem.startCombat(playerData, [aggroTargets[0].id], userId, true, aggroTargets[0]); 
         }
     },
@@ -386,7 +402,7 @@ export const CombatSystem = {
         
         const targetId = args[0];
 
-        // 1. [新增] 檢查是否為玩家 (PvP)
+        // 1. 檢查是否為玩家 (PvP)
         if (!specificNpc) {
             const playersRef = collection(db, "players");
             const q = query(playersRef, where("id", "==", targetId), where("location", "==", playerData.location));
@@ -401,7 +417,8 @@ export const CombatSystem = {
 
                 // 發送切磋請求
                 UI.print(`你向 ${targetData.name} 發出了切磋請求...`, "system");
-                MessageSystem.broadcast(playerData.location, `${playerData.name} 想找 ${targetData.name} 切磋武藝。`);
+                // [修正] 廣播訊息增加提示，讓對方知道要輸入 y
+                MessageSystem.broadcast(playerData.location, `${playerData.name} 想找 ${targetData.name} 切磋武藝。${UI.txt(" (請輸入 y 接受)", "#00ff00")}`);
                 
                 await updatePlayer(targetDoc.id, { 
                     duelRequest: { from: userId, name: playerData.name, timestamp: Date.now() } 
@@ -469,7 +486,7 @@ export const CombatSystem = {
         if (initStatus) UI.print(initStatus, "chat", true);
 
         const enemyState = {
-            type: 'pve', // 標記為 PvE
+            type: 'pve', 
             targetId: npc.id,
             targetIndex: npc.index,
             uniqueId: uniqueId, 
@@ -494,7 +511,7 @@ export const CombatSystem = {
         CombatSystem.runCombatLoop(playerData, userId);
     },
 
-    // === [新增] PvP 啟動邏輯 ===
+    // === PvP 啟動邏輯 ===
     startPvPCombat: async (playerData, userId, targetData, targetId) => {
         MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 與 ${targetData.name} 接受了切磋，兩人拉開架式！`, "#ff8800", true));
         
@@ -505,7 +522,7 @@ export const CombatSystem = {
             targetName: targetData.name,
             targetHp: targetData.attributes.hp,
             targetMaxHp: targetData.attributes.maxHp,
-            targetData: targetData // 暫存對手資料
+            targetData: targetData 
         }];
 
         await updatePlayer(userId, { state: 'fighting', combatTarget: { id: targetData.id, type: 'player' } });
@@ -515,7 +532,7 @@ export const CombatSystem = {
         CombatSystem.runCombatLoop(playerData, userId);
     },
 
-    // === [修改] 統一戰鬥迴圈 ===
+    // === 統一戰鬥迴圈 ===
     runCombatLoop: (playerData, userId) => {
         const combatRound = async () => {
             if (combatList.length === 0) { CombatSystem.stopCombat(userId); return; }
@@ -628,11 +645,11 @@ export const CombatSystem = {
                 }
             }
 
-            // 2. [新增] PvP 邏輯
+            // 2. PvP 邏輯
             else if (currentTarget.type === 'pvp') {
                 const targetId = currentTarget.targetId;
                 
-                // 重新讀取對手資料以確保 HP 同步 (模擬即時性)
+                // 重新讀取對手資料以確保 HP 同步
                 const tDoc = await getDoc(doc(db, "players", targetId));
                 if (!tDoc.exists()) { CombatSystem.stopCombat(userId); return; }
                 const tData = tDoc.data();
@@ -641,26 +658,24 @@ export const CombatSystem = {
                 const pStats = getCombatStats(playerData);
                 const tStats = getCombatStats(tData);
 
-                // --- 雙方互毆 (由接受者主機模擬雙方回合) ---
+                // --- 雙方互毆 ---
                 
-                // 我方攻擊對方
+                // 我方攻擊
                 if (!playerData.isUnconscious && tData.attributes.hp > 0) {
                     let dmg = Math.max(1, pStats.ap - tStats.dp);
-                    dmg = Math.floor(dmg * (0.8 + Math.random() * 0.4)); // 傷害浮動大一點
-                    dmg = Math.floor(dmg / 2); // 切磋傷害減半
+                    dmg = Math.floor(dmg * (0.8 + Math.random() * 0.4)); 
+                    dmg = Math.floor(dmg / 2); // PvP 減傷
 
                     const hitProb = pStats.hit / (pStats.hit + tStats.dodge);
                     if (Math.random() < hitProb) {
                         tData.attributes.hp -= dmg;
                         UI.print(`你擊中了 ${tData.name}，造成 ${dmg} 點傷害！`, "chat");
-                        // 更新對手血量
                         await updatePlayer(targetId, { "attributes.hp": tData.attributes.hp });
                         
                         if (tData.attributes.hp <= 0) {
                             UI.print(UI.txt(`戰鬥結束！${tData.name} 被你打暈了！`, "#00ff00", true), "system", true);
                             MessageSystem.broadcast(playerData.location, UI.txt(`${tData.name} 在切磋中被 ${playerData.name} 打暈了！`, "#ffff00", true));
                             
-                            // 對手暈倒，結束戰鬥
                             await updatePlayer(targetId, { 
                                 "attributes.hp": 0, isUnconscious: true, state: 'normal', combatTarget: null 
                             });
@@ -672,7 +687,7 @@ export const CombatSystem = {
                     }
                 }
 
-                // 對方反擊 (模擬)
+                // 對方反擊
                 if (!tData.isUnconscious && playerData.attributes.hp > 0) {
                     let tDmg = Math.max(1, tStats.ap - pStats.dp);
                     tDmg = Math.floor(tDmg * (0.8 + Math.random() * 0.4));
@@ -690,7 +705,6 @@ export const CombatSystem = {
                             playerData.attributes.hp = 0;
                             playerData.isUnconscious = true;
                             
-                            // 雙方都停止戰鬥
                             CombatSystem.stopCombat(userId);
                             await updatePlayer(targetId, { state: 'normal', combatTarget: null });
                             await updatePlayer(userId, { "attributes.hp": 0, isUnconscious: true });
@@ -712,6 +726,6 @@ export const CombatSystem = {
         };
     
         combatRound();
-        combatInterval = setInterval(combatRound, 2500); // 稍微放慢一點節奏
+        combatInterval = setInterval(combatRound, 2500); 
     }
 };
