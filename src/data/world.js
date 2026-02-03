@@ -7,7 +7,7 @@ export const WorldMap = {
         description: "這是一間名震江湖的老字號客棧。牆上掛著『賓至如歸』的牌匾。角落裡有一口古老的水井，井水清澈見底。",
         allowSave: true,
         safe: true, 
-        hasWell: true, // === [新增] 水井屬性，允許 drink water ===
+        hasWell: true, 
         x: 0, y: 0, z: 0,
         npcs: ["waiter"],
         region: ["world", "inn"] 
@@ -72,34 +72,69 @@ export const WorldMap = {
         npcs: ["blacksmith"]
     },
 
-    // === 北方森林 ===
+    // === 北方森林 (擴建區域) ===
+    
+    // 1. 森林入口 (1,3) - 安全區邊緣
     "forest_entry": {
         title: "森林入口",
-        description: "揚州城北門外的森林入口，光線變得有些昏暗，遠處傳來野獸的嚎叫聲。",
+        description: "揚州城北門外的森林入口，光線變得有些昏暗。這裡比較安全，偶爾有小動物出沒。",
         x: 1, y: 3, z: 0,
         region: ["world", "forest"],
-        npcs: ["rabbit", "rabbit"]
+        npcs: ["rabbit", "rabbit"] // 只有兔子
     },
+
+    // 2. 林間小道 (1,4) - 初級區
     "forest_path": {
         title: "林間小道",
-        description: "一條蜿蜒的小路，周圍草叢很高，似乎隱藏著危險。",
+        description: "一條蜿蜒的小路，兩旁草叢中傳來窸窸窣窣的聲音。往東是一片開闊地，往西則草木叢生。",
         x: 1, y: 4, z: 0,
         region: ["forest"],
-        npcs: ["rabbit", "boar"]
+        npcs: ["rabbit", "pheasant"] // 兔子 + 野雞
     },
+
+    // 3. 林間空地 (2,4) - 敏捷系生物區
+    "forest_clearing": {
+        title: "林間空地",
+        description: "樹木在這裡比較稀疏，陽光灑落在草地上。樹上常有猴子在嬉戲。",
+        x: 2, y: 4, z: 0,
+        region: ["forest"],
+        npcs: ["monkey", "pheasant"] // 猴子 + 野雞
+    },
+
+    // 4. 茂密灌木叢 (0,4) - 毒物區
+    "forest_thicket": {
+        title: "茂密灌木叢",
+        description: "這裡的植被非常茂密，寸步難行。空氣中有一股潮濕腐敗的味道，小心毒蛇。",
+        x: 0, y: 4, z: 0,
+        region: ["forest"],
+        npcs: ["snake", "snake"] // 蟒蛇
+    },
+
+    // 5. 森林深處 (1,5) - 中級區 (野豬出沒)
     "forest_deep": {
         title: "森林深處",
-        description: "這裡樹木參天，遮蔽了陽光。空氣中瀰漫著一股血腥味。",
+        description: "古樹參天，遮蔽了陽光。這裡已經人跡罕至，地上有巨大的蹄印。",
         x: 1, y: 5, z: 0,
         region: ["forest"],
-        npcs: ["wolf", "boar"] 
+        npcs: ["boar", "bobcat"] // 野豬 + 山貓
     },
+
+    // 6. 陰暗樹林 (0,5) - 危險混和區
+    "dark_grove": {
+        title: "陰暗樹林",
+        description: "四周一片漆黑，陰風陣陣。樹影婆娑，彷彿有無數雙眼睛在盯著你。",
+        x: 0, y: 5, z: 0,
+        region: ["forest"],
+        npcs: ["snake", "bobcat"] // 蟒蛇 + 山貓
+    },
+
+    // 7. 野獸巢穴 (2,5) - BOSS區
     "beast_nest": {
         title: "野獸巢穴",
-        description: "一個巨大的洞穴，周圍散落著各種動物的白骨。",
+        description: "一個巨大的岩石洞穴，周圍散落著各種動物的白骨，令人不寒而慄。",
         x: 2, y: 5, z: 0,
         region: ["forest"],
-        npcs: ["bear", "wolf"]
+        npcs: ["bear", "wolf"] // 狼 + 熊
     },
 
     // === 南邊與西邊 ===
@@ -145,8 +180,7 @@ export const WorldMap = {
         title: "鬼門關",
         description: "四周陰風慘慘，鬼哭神號。濃霧之中隱約可見無數亡魂在排隊，等著孟婆湯...",
         safe: true,
-        x: 9999, y: 9999, z: -9999, // 設在一個無法走到的座標
+        x: 9999, y: 9999, z: -9999, 
         region: ["underworld"]
-        // 沒有 exits，玩家無法自行離開
     }
 };
