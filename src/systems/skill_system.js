@@ -403,7 +403,7 @@ export const SkillSystem = {
         await updatePlayer(userId, { enabled_skills: playerData.enabled_skills });
     },
 
-    // [新增] 放棄技能
+    // [修正] 放棄技能 (增加 UI.print 的 allowHtml 參數)
     abandon: async (p, a, u) => {
         if (a.length === 0) { UI.print("放棄什麼? (abandon <skill_id>)", "error"); return; }
         const skillId = a[0];
@@ -414,8 +414,9 @@ export const SkillSystem = {
         if (p.tempAbandon !== skillId) {
             p.tempAbandon = skillId;
             const sName = SkillDB[skillId] ? SkillDB[skillId].name : skillId;
-            UI.print(UI.txt(`警告！你確定要廢除 ${sName} (${skillId}) 嗎？`, "#ff5555"), "system");
-            UI.print(UI.txt("這將會完全清除該技能的等級，且不可恢復！", "#ff5555"), "system");
+            // [修正] 這裡加上 true
+            UI.print(UI.txt(`警告！你確定要廢除 ${sName} (${skillId}) 嗎？`, "#ff5555"), "system", true);
+            UI.print(UI.txt("這將會完全清除該技能的等級，且不可恢復！", "#ff5555"), "system", true);
             UI.print("請再次輸入相同的指令以確認。", "system");
             return;
         }
@@ -458,15 +459,14 @@ export const SkillSystem = {
         
         const currentLvl = p.skills[sid] || 0;
         
-        // [新增] 檢查技能數量上限 (靈性限制)
-        // 只有當這是一個新技能(目前等級為0或undefined)時才檢查
+        // 檢查技能數量上限 (靈性限制)
         if (!currentLvl || currentLvl <= 0) {
             const currentSkillCount = Object.keys(p.skills || {}).length;
             const cor = p.attributes.cor || 20; // 預設 20
             const maxSkills = Math.floor(cor / 2); // 20點靈性 => 10招
             
             if (currentSkillCount >= maxSkills) {
-                UI.print(UI.txt(`你的靈性(${cor})不足以容納更多的武學常識。(上限: ${maxSkills}種)`, "#ff5555"), "error");
+                UI.print(UI.txt(`你的靈性(${cor})不足以容納更多的武學常識。(上限: ${maxSkills}種)`, "#ff5555"), "error", true);
                 UI.print("請先嘗試放棄(abandon)一些不常用的技能。", "system");
                 return;
             }
