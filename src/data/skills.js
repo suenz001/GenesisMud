@@ -1,5 +1,4 @@
 // src/data/skills.js
-
 export const SkillDB = {
     // ================== 基礎武學 (Basic) Rating: 1.0 ==================
     "unarmed": {
@@ -71,10 +70,8 @@ export const SkillDB = {
     "dodge": { name: "基本閃躲", type: "dodge", rating: 1.0, desc: "閃避敵人攻擊的基礎身法。" },
 
     // ================== 進階武學 (Advanced) ==================
-    // 說明：進階武學 rating 較高 (1.2 ~ 1.5)
-    // 招式敘述使用 HTML span 增加顏色與光暈特效
 
-    // 拳腳 - 鐵砂掌 (Rating: 1.4, 風格: 剛猛, 色系: 紅/黑/橘)
+
     "iron-palm": {
         name: "鐵砂掌", id: "iron-palm", base: "unarmed", type: "martial", rating: 1.4,
         desc: "剛猛無比的掌法，掌力如鐵。",
@@ -84,8 +81,6 @@ export const SkillDB = {
             { msg: "$P雙掌連環拍出，漫天掌影如<span style='color:#550000; text-shadow:0 0 5px #880000; font-weight:bold;'>「黑風煞煞」</span>，徹底封死了$N的退路！", damage: 45 }
         ]
     },
-
-    // 劍 - 疾風劍法 (Rating: 1.2, 風格: 極快, 色系: 青/白/藍)
     "swift-sword": {
         name: "疾風劍法", id: "swift-sword", base: "sword", type: "martial", rating: 1.2,
         desc: "出劍如風，快如閃電。",
@@ -95,8 +90,6 @@ export const SkillDB = {
             { msg: "$P劍鋒一轉，寒光乍現，好一招<span style='color:#e0ffff; text-shadow:0 0 8px #ffffff; font-weight:bold;'>「電光火石」</span>，直取$N眉心！", damage: 50 }
         ]
     },
-
-    // 刀 - 八卦刀 (Rating: 1.3, 風格: 陣法/穩重, 色系: 黃/綠/太極色)
     "eight-trigram-blade": {
         name: "八卦刀", id: "eight-trigram-blade", base: "blade", type: "martial", rating: 1.3,
         desc: "配合八卦方位的刀法，攻守兼備。",
@@ -106,8 +99,6 @@ export const SkillDB = {
             { msg: "$P身形如風般旋轉，手中$w捲起氣流，這招<span style='color:#98fb98; text-shadow:0 0 5px #00ff00; font-weight:bold;'>「巽下斷」</span>直取$N下盤！", damage: 50 }
         ]
     },
-
-    // 棍 - 羅漢棍 (Rating: 1.3, 風格: 佛門/莊嚴, 色系: 金/黃)
     "arhat-stick": {
         name: "羅漢棍", id: "arhat-stick", base: "stick", type: "martial", rating: 1.3,
         desc: "佛門入門棍法，招式平正，威力不俗。",
@@ -117,8 +108,6 @@ export const SkillDB = {
             { msg: "$P躍起半空，手中$w如擎天之柱當頭砸下，好一招<span style='color:#ffffed; text-shadow:0 0 10px #ffd700; font-weight:bold;'>「佛光普照」</span>！", damage: 55 }
         ]
     },
-
-    // 短兵 - 如影隨形刺 (Rating: 1.3, 風格: 詭異/暗殺, 色系: 紫/灰/暗藍)
     "shadow-dagger": {
         name: "如影隨形刺", id: "shadow-dagger", base: "dagger", type: "martial", rating: 1.3,
         desc: "如影子般貼身纏鬥，招招陰毒。",
@@ -128,8 +117,6 @@ export const SkillDB = {
             { msg: "$P手中$w在掌心飛速旋轉，化作一片死亡光影，<span style='color:#483d8b; text-shadow:0 0 5px #000080; font-weight:bold;'>「鬼影幢幢」</span>切向$N的咽喉！", damage: 48 }
         ]
     },
-
-    // 鞭 - 流雲鞭 (Rating: 1.2, 風格: 柔和/纏繞, 色系: 白/粉/天藍)
     "cloud-whip": {
         name: "流雲鞭", id: "cloud-whip", base: "whip", type: "martial", rating: 1.2,
         desc: "鞭法行雲流水，變幻莫測。",
@@ -139,8 +126,6 @@ export const SkillDB = {
             { msg: "$P長鞭揮舞成圈，如雲霧繚繞，這招<span style='color:#e6e6fa; text-shadow:0 0 5px #da70d6; font-weight:bold;'>「雲霧鎖身」</span>困住了$N！", damage: 38 }
         ]
     },
-
-    // 暗器 - 金錢鏢 (Rating: 1.3, 風格: 富貴/連擊, 色系: 金/銅)
     "golden-dart": {
         name: "金錢鏢", id: "golden-dart", base: "throwing", type: "martial", rating: 1.3,
         desc: "使用銅錢作為暗器的獨門手法。",
@@ -150,8 +135,6 @@ export const SkillDB = {
             { msg: "$P雙手齊出，銅錢如連珠砲般射出，這招<span style='color:#ffff00; text-shadow:0 0 5px #ffffaa; font-weight:bold;'>「連珠鏢」</span>逼得$N手忙腳亂！", damage: 45 }
         ]
     },
-
-    // 槍 - 楊家槍 (Rating: 1.5, 風格: 戰陣/霸氣, 色系: 紅/血紅/銀)
     "yang-spear": {
         name: "楊家槍", id: "yang-spear", base: "lance", type: "martial", rating: 1.5,
         desc: "戰場殺伐之術，氣勢磅礴。",
@@ -161,23 +144,13 @@ export const SkillDB = {
             { msg: "$P長槍如龍，殺氣沖天，這招<span style='color:#dc143c; text-shadow:0 0 10px #ff4500; font-weight:bold;'>「直搗黃龍」</span>勢不可擋！", damage: 55 }
         ]
     },
-
     "turtle-force": { name: "龜息功", id: "turtle-force", base: "force", type: "force", rating: 1.1, desc: "模仿神龜呼吸的內功。" },
-    
-// === 輕功/閃避技能 (修正版) ===
     "leaf-steps": { 
         name: "隨風步", id: "leaf-steps", base: "dodge", type: "dodge", rating: 1.3,
         desc: "身形飄忽不定，如落葉隨風。",
         dodge_actions: [
-            // 原本是 $P ... 改為 $N (閃避者)
             "$N身形如一片<span style='color:#90ee90'>落葉</span>般隨風飄起，輕輕巧巧地避開了這一擊。",
-            
-            // 原本是 $P ... 閃過了 $N 的攻擊
-            // 改為 $N (閃避者) ... 閃過了 $P (攻擊者) 的攻擊
             "$N腳步虛浮，看似要跌倒，卻在<span style='color:#00ff7f'>間不容髮</span>之際閃過了$P的攻擊。",
-            
-            // 原本是 $P ...
-            // 改為 $N (閃避者)
             "$N身體隨著對方的拳風擺動，<span style='color:#adff2f'>如影隨形</span>，毫髮無傷地躲開了招式。"
         ]
     }

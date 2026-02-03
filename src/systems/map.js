@@ -425,6 +425,11 @@ export const MapSystem = {
         } catch (e) { console.error(e); }
         await MapSystem.look(playerData);
         await MessageSystem.broadcast(nextRoomId, `${playerData.name} 走了過來。`);
+
+        // === [新增]：移動後檢查是否有怪物主動攻擊 ===
+        setTimeout(() => {
+            CombatSystem.checkAggro(playerData, nextRoomId, userId);
+        }, 800);
     },
 
     teleport: async (playerData, targetRoomId, userId) => {
@@ -450,5 +455,10 @@ export const MapSystem = {
         } catch (e) { console.error(e); }
         await MapSystem.look(playerData);
         await MessageSystem.broadcast(targetRoomId, `${playerData.name} 出現了。`);
+
+        // === [新增]：傳送後也檢查是否有怪物主動攻擊 ===
+        setTimeout(() => {
+            CombatSystem.checkAggro(playerData, targetRoomId, userId);
+        }, 800);
     }
 };

@@ -82,6 +82,7 @@ export const NPCDB = {
     "snake": {
         id: "snake",
         name: "蟒蛇",
+aggro: true, // <--- 會主動攻擊
         description: "一條盤踞在樹枝上的蟒蛇，吐著信子。",
         attributes: { str: 15, con: 10, per: 20, kar: 10, int: 10, cor: 10 },
         combat: { hp: 90, maxHp: 90, attack: 28, defense: 5, xp: 45 }, // XP: 45 (攻高血低)
@@ -113,6 +114,7 @@ export const NPCDB = {
     "wolf": {
         id: "wolf",
         name: "野狼",
+aggro: true, // <--- 會主動攻擊
         description: "眼神兇惡的野狼，成群結隊。",
         attributes: { str: 30, con: 20, per: 30, kar: 10, int: 15, cor: 10 },
         combat: { hp: 200, maxHp: 200, attack: 50, defense: 20, xp: 100 },
@@ -122,6 +124,7 @@ export const NPCDB = {
     "bear": {
         id: "bear",
         name: "黑熊",
+aggro: true, // <--- 會主動攻擊
         description: "一頭巨大的黑熊，站起來像一座小山。",
         attributes: { str: 80, con: 80, per: 15, kar: 10, int: 10, cor: 10 },
         combat: { hp: 800, maxHp: 800, attack: 90, defense: 60, xp: 300 },
