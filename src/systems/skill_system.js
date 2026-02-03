@@ -11,7 +11,6 @@ let autoForceInterval = null;
 // === 升級所需經驗值公式 (極速升級版) ===
 function calculateMaxExp(level) {
     if (level < 150) {
-        // [修改] 係數降為 5，升級速度飛快
         return Math.pow(level + 1, 2) * 5;
     } else {
         return Math.pow(level + 1, 3);
@@ -35,13 +34,11 @@ function findNPCInRoom(roomId, npcNameOrId) {
 }
 
 export const SkillSystem = {
-    // === 自動修練內力 (Auto Force) ===
     autoForce: async (p, a, u) => {
-        // 如果已經在修練中，則停止
         if (autoForceInterval || p.state === 'exercising') {
             if (autoForceInterval) clearInterval(autoForceInterval);
             autoForceInterval = null;
-            p.state = 'normal'; // 恢復狀態
+            p.state = 'normal'; 
             await updatePlayer(u, { state: 'normal' });
             UI.print("你停止了自動修練內力。", "system");
             return;
@@ -52,13 +49,11 @@ export const SkillSystem = {
             return;
         }
 
-        // 開始修練，設定狀態
         p.state = 'exercising';
         await updatePlayer(u, { state: 'exercising' });
         UI.print("你開始閉目養神，自動運轉內息... (再次輸入 autoforce 以解除)", "system");
         
         autoForceInterval = setInterval(async () => {
-            // 檢查狀態是否被外部改變 (例如被打進入戰鬥)
             if (p.state !== 'exercising') {
                 clearInterval(autoForceInterval);
                 autoForceInterval = null;
@@ -86,7 +81,6 @@ export const SkillSystem = {
         }, 2000); 
     },
 
-    // === 屬性修練 (Exercise/Respirate/Meditate) ===
     trainStat: async (playerData, userId, typeName, attrCur, attrMax, costAttr, costName, args) => {
         const attr = playerData.attributes;
         let cost = 10;
@@ -97,7 +91,6 @@ export const SkillSystem = {
             const limit = maxVal * 2;
 
             if (curVal >= limit) {
-                // [修復] 這裡補上 true，避免 HTML 代碼外洩
                 UI.print(UI.txt(`你的${typeName}已經運轉至極限，無法再容納更多了。`, "#ffff00"), "system", true);
                 return;
             }
@@ -136,7 +129,6 @@ export const SkillSystem = {
                 UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system", true);
                 UI.print(`(內力上限已達 ${maxVal}，需提升基本內功等級或根骨才能突破)`, "system");
                 
-                // 若達到瓶頸，自動停止修練並恢復狀態
                 if (autoForceInterval) {
                     clearInterval(autoForceInterval);
                     autoForceInterval = null;
@@ -212,7 +204,6 @@ export const SkillSystem = {
             return;
         }
         
-        // 修練狀態檢查
         if (playerData.state === 'exercising') {
             UI.print("你正在專心修練，無法分心運功。(輸入 autoforce 解除)", "error");
             return;
@@ -298,9 +289,16 @@ export const SkillSystem = {
             }
 
             let btn = "";
-            if (info && info.base) {
-                const isEnabled = playerData.enabled_skills && playerData.enabled_skills[info.base] === id;
-                btn = UI.makeCmd(isEnabled ? "[解除]" : "[激發]", isEnabled ? `unenable ${info.base}` : `enable ${info.base} ${id}`, "cmd-btn");
+            if (info) {
+                // 如果是進階武學，顯示 enable/unenable
+                if (info.base) {
+                    const isEnabled = playerData.enabled_skills && playerData.enabled_skills[info.base] === id;
+                    btn = UI.makeCmd(isEnabled ? "[解除]" : "[激發]", isEnabled ? `unenable ${info.base}` : `enable ${info.base} ${id}`, "cmd-btn");
+                } 
+                // [新增] 如果是基礎武學，顯示練習按鈕
+                else if (info.type === 'martial') {
+                    btn = UI.makeCmd("[練習]", `practice ${id}`, "cmd-btn");
+                }
             }
 
             const curExp = skillExps[id] || 0;
@@ -414,9 +412,8 @@ export const SkillSystem = {
             }
         }
 
-        // [修改] 消耗與收益公式調整
-        const spC = 5 + Math.floor(currentLvl / 5); // 精力消耗降低
-        const potC = 1; // [修改] 潛能固定消耗 1 點
+        const spC = 5 + Math.floor(currentLvl / 5); 
+        const potC = 1; 
         
         if(p.attributes.sp <= spC){UI.print("你現在精神不濟，無法專心聽講。(需要精: "+spC+")","error");return;} 
         if((p.combat.potential||0) < potC){UI.print("你的潛能不足，無法領悟其中的奧妙。(需要潛能: "+potC+")","error");return;} 
@@ -426,8 +423,6 @@ export const SkillSystem = {
         
         const int = p.attributes.int || 20;
         
-        // [修改] 大幅提升學習效率：(悟性 x 5~10倍) + (等級加成)
-        // 範例：悟性20，等級10 => (20 * 7) + 20 = 160點經驗 (以前是50點)
         const rndMult = 5 + Math.random() * 5; 
         let gain = Math.floor((int * rndMult) + (currentLvl * 2));
         if (gain < 1) gain = 1;
@@ -499,8 +494,6 @@ export const SkillSystem = {
 
         const int = p.attributes.int || 20;
         
-        // [修改] 練習效率低於學習：(悟性 x 2) + (基礎等級加成)
-        // 範例：悟性20，基礎等級10 => 40 + 5 = 45點經驗
         let gain = Math.floor((int * 2) + (baseLvl * 0.5));
         if (gain < 1) gain = 1;
 
