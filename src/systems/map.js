@@ -6,7 +6,7 @@ import { db, auth } from "../firebase.js";
 import { NPCDB } from "../data/npcs.js";
 import { MessageSystem } from "./messages.js";
 import { CommandSystem } from "./commands.js"; 
-import { SkillDB } from "../data/skills.js"; 
+import { SkillDB, getSkillLevelDesc } from "../data/skills.js"; // [修改] 匯入共用函式
 import { CombatSystem } from "./combat.js";
 import { ItemDB } from "../data/items.js";
 
@@ -23,17 +23,7 @@ function getUniqueNpcId(roomId, npcId, index) {
     return `${roomId}_${npcId}_${index}`;
 }
 
-function getSkillDesc(level) {
-    if (level >= 500) return UI.txt("深不可測", "#ff00ff");
-    if (level >= 400) return UI.txt("返璞歸真", "#ff0000");
-    if (level >= 300) return UI.txt("出神入化", "#ff8800");
-    if (level >= 200) return UI.txt("登峰造極", "#ffff00");
-    if (level >= 150) return UI.txt("出類拔萃", "#00ff00");
-    if (level >= 100) return UI.txt("爐火純青", "#00ffff");
-    if (level >= 60) return UI.txt("融會貫通", "#0088ff");
-    if (level >= 30) return UI.txt("駕輕就熟", "#8888ff");
-    return UI.txt("略有小成", "#ffffff");
-}
+// [移除] 舊的 getSkillDesc 已經移除，現在統一使用 data/skills.js 內的版本
 
 function getNpcStatusText(currentHp, maxHp, isUnconscious) {
     if (isUnconscious || currentHp <= 0) return UI.txt(" (昏迷不醒)", "#888888");
@@ -364,7 +354,8 @@ export const MapSystem = {
                         if (sInfo) {
                             skillHtml += `<div>${sInfo.name} <span style="color:#aaa">(${sid})</span></div>`;
                             skillHtml += `<div>${UI.txt(lvl+"級", "#00ffff")}</div>`;
-                            skillHtml += `<div>${getSkillDesc(lvl)} ${UI.makeCmd("[學習]", `learn ${sid} from ${npc.id}`, "cmd-btn")}</div>`;
+                            // [修改] 這裡改用匯入的共用函式
+                            skillHtml += `<div>${getSkillLevelDesc(lvl)} ${UI.makeCmd("[學習]", `learn ${sid} from ${npc.id}`, "cmd-btn")}</div>`;
                         }
                     }
                     skillHtml += `</div>`;

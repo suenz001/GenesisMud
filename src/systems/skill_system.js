@@ -1,6 +1,6 @@
 // src/systems/skill_system.js
 import { UI } from "../ui.js";
-import { SkillDB } from "../data/skills.js";
+import { SkillDB, getSkillLevelDesc } from "../data/skills.js"; // [修改] 匯入共用函式
 import { updatePlayer } from "./player.js";
 import { MapSystem } from "./map.js";
 import { MessageSystem } from "./messages.js";
@@ -17,19 +17,7 @@ function calculateMaxExp(level) {
     }
 }
 
-function getSkillLevelDesc(level) {
-    if (level >= 200) return UI.txt("返璞歸真", "#ff00ff", true);
-    if (level >= 181) return UI.txt("深不可測", "#ff4500");
-    if (level >= 161) return UI.txt("神乎其技", "#ff8800");
-    if (level >= 141) return UI.txt("出神入化", "#ffd700");
-    if (level >= 121) return UI.txt("登峰造極", "#ffff00");
-    if (level >= 101) return UI.txt("一代宗師", "#adff2f");
-    if (level >= 81)  return UI.txt("出類拔萃", "#00ff00");
-    if (level >= 61)  return UI.txt("融會貫通", "#00ffff");
-    if (level >= 41)  return UI.txt("駕輕就熟", "#00bfff");
-    if (level >= 21)  return UI.txt("粗通皮毛", "#8888ff");
-    return UI.txt("初學乍練", "#cccccc");
-}
+// [移除] 舊的 getSkillLevelDesc 已經移除，統一使用 data/skills.js 內的版本
 
 function findNPCInRoom(roomId, npcNameOrId) {
     const room = MapSystem.getRoom(roomId);
@@ -285,6 +273,7 @@ export const SkillSystem = {
             const info = SkillDB[id];
             if(id === 'parry') continue; 
             const name = info ? info.name : id;
+            // [修改] 改用匯入的共用函式
             const desc = getSkillLevelDesc(level);
             let statusMark = "";
             

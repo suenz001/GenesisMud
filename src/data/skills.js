@@ -1,4 +1,22 @@
 // src/data/skills.js
+import { UI } from "../ui.js";
+
+// === 共用工具：取得技能等級描述 ===
+// 這份邏輯原本在 skill_system.js，現在統一放在這裡供各處呼叫
+export function getSkillLevelDesc(level) {
+    if (level >= 200) return UI.txt("返璞歸真", "#ff00ff", true);
+    if (level >= 181) return UI.txt("深不可測", "#ff4500");
+    if (level >= 161) return UI.txt("神乎其技", "#ff8800");
+    if (level >= 141) return UI.txt("出神入化", "#ffd700");
+    if (level >= 121) return UI.txt("登峰造極", "#ffff00");
+    if (level >= 101) return UI.txt("一代宗師", "#adff2f");
+    if (level >= 81)  return UI.txt("出類拔萃", "#00ff00");
+    if (level >= 61)  return UI.txt("融會貫通", "#00ffff");
+    if (level >= 41)  return UI.txt("駕輕就熟", "#00bfff");
+    if (level >= 21)  return UI.txt("粗通皮毛", "#8888ff");
+    return UI.txt("初學乍練", "#cccccc");
+}
+
 export const SkillDB = {
     // ================== 基礎武學 (Basic) Rating: 1.0 ==================
     "unarmed": {
