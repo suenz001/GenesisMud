@@ -29,7 +29,6 @@ export function getEffectiveSkillLevel(entity, baseType) {
         advancedLvl = skills[enabledId];
     }
 
-    // 進階武功等級不能超過基礎武功等級
     if (advancedLvl > baseLvl) {
         advancedLvl = baseLvl;
     }
@@ -41,11 +40,10 @@ export function getEffectiveSkillLevel(entity, baseType) {
     }
 }
 
-// --- 計算戰鬥數值 (支援多部位防禦與屬性加成) ---
+// --- 計算戰鬥數值 ---
 export function getCombatStats(entity) {
-    // 1. 計算裝備提供的屬性加成 (Props)
     const baseAttr = entity.attributes || {};
-    const effectiveAttr = { ...baseAttr }; // 複製一份基礎屬性
+    const effectiveAttr = { ...baseAttr };
     const equipment = entity.equipment || {};
     
     let totalDefense = 0;
@@ -54,51 +52,39 @@ export function getCombatStats(entity) {
     let weaponType = 'unarmed';
     let weaponData = null;
 
-    // 遍歷所有裝備欄位
     for (const [slot, itemId] of Object.entries(equipment)) {
         if (!itemId) continue;
         const item = ItemDB[itemId];
         if (!item) continue;
 
-        // 處理武器特有屬性
         if (slot === 'weapon') {
             weaponDmg = item.damage || 0;
             weaponHit = item.hit || 0;
             weaponType = item.type || 'unarmed';
             weaponData = item;
         } else {
-            // 處理防具防禦力 (累加所有部位)
-            if (item.defense) {
-                totalDefense += item.defense;
-            }
+            if (item.defense) totalDefense += item.defense;
         }
 
-        // 處理通用屬性加成 (props)
         if (item.props) {
             for (const [key, val] of Object.entries(item.props)) {
-                if (effectiveAttr[key] !== undefined) {
-                    effectiveAttr[key] += val;
-                }
+                if (effectiveAttr[key] !== undefined) effectiveAttr[key] += val;
             }
         }
     }
 
-    // 使用加成後的屬性進行計算
     const str = effectiveAttr.str || 10;
     const con = effectiveAttr.con || 10;
     const per = effectiveAttr.per || 10;
     const atkType = weaponType;
     
-    // 取得各類技能等級
     const effAtkSkill = getEffectiveSkillLevel(entity, atkType); 
     const effForce = getEffectiveSkillLevel(entity, 'force');    
     const effDodge = getEffectiveSkillLevel(entity, 'dodge');    
 
-    // 取得武功強度係數 (Rating)
     let atkRating = 1.0;
     let dodgeRating = 1.0;
     
-    // 攻擊武功係數
     if (entity.enabled_skills && entity.enabled_skills[atkType]) {
         const sid = entity.enabled_skills[atkType];
         if (SkillDB[sid] && SkillDB[sid].rating) atkRating = SkillDB[sid].rating;
@@ -106,7 +92,6 @@ export function getCombatStats(entity) {
         if (SkillDB[atkType]) atkRating = SkillDB[atkType].rating || 1.0;
     }
 
-    // 輕功係數
     if (entity.enabled_skills && entity.enabled_skills['dodge']) {
         const sid = entity.enabled_skills['dodge'];
         if (SkillDB[sid] && SkillDB[sid].rating) dodgeRating = SkillDB[sid].rating;
@@ -114,11 +99,7 @@ export function getCombatStats(entity) {
 
     const baseAp = (str * 2.5) + (effAtkSkill * 5 * atkRating) + (effForce * 2);
     const baseDp = (con * 2.5) + (effForce * 5) + (effDodge * 2 * dodgeRating);
-    
-    // [修改] 命中率公式調整：增加 effDodge 的影響，並提高 effAtkSkill 的權重
-    // 原公式: (per * 2.5) + (effAtkSkill * 3 * atkRating)
     const baseHit = (per * 2.0) + (effAtkSkill * 5 * atkRating) + (effDodge * 3 * dodgeRating);
-    
     const baseDodge = (per * 2.5) + (effDodge * 4 * dodgeRating) + (effAtkSkill * 1);
 
     const ap = baseAp + weaponDmg;
@@ -137,7 +118,6 @@ export function getCombatStats(entity) {
     };
 }
 
-// === 智慧修練指令生成邏輯 ===
 function getSmartTrainCmd(cmd, cur, max) {
     const limit = max * 2;
     if (cur < max) return `${cmd} ${max - cur}`;
@@ -202,65 +182,77 @@ export const PlayerSystem = {
         await signOut(auth);
     },
 
+    // [優化] Score 顯示：更緊湊、對齊的 MUD 風格
     score: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
         const s = getCombatStats(playerData); 
 
-        const moneyStr = UI.formatMoney(playerData.money || 0);
+        const moneyStr = playerData.money || 0;
         const potential = playerData.combat?.potential || 0;
         const kills = playerData.combat?.kills || 0;
         const enforce = playerData.combat?.enforce || 0;
-        const showStat = (total, equip) => {
-            if (equip > 0) return `${Math.floor(total)} <span style="color:#00ff00;">(+${equip})</span>`;
-            return Math.floor(total);
-        };
-
-        let html = UI.titleLine(`${playerData.name} 的狀態`);
-        html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
-        html += `<div>${UI.attrLine("性別", playerData.gender)}</div><div>${UI.attrLine("門派", playerData.sect || "無")}</div>`;
-        html += `<div>${UI.attrLine("財產", moneyStr)}</div>`;
-        html += `<div>${UI.attrLine("潛能", UI.txt(potential, "#ffff00", true))}</div>`;
-        html += `</div><br>`;
-
-        html += UI.txt("【 天賦屬性 】", "#00ffff") + "<br>";
-        html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
-        html += `<div>${UI.attrLine("膂力", attr.str)}</div><div>${UI.attrLine("根骨", attr.con)}</div>`;
-        html += `<div>${UI.attrLine("悟性", attr.int)}</div><div>${UI.attrLine("定力", attr.per)}</div>`;
-        html += `<div>${UI.attrLine("福緣", attr.kar)}</div><div>${UI.attrLine("靈性", attr.cor)}</div>`;
-        html += `</div><br>`;
-        
-        html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
-        html += `<div>${UI.attrLine("食物", attr.food+"/"+attr.maxFood)}</div><div>${UI.attrLine("飲水", attr.water+"/"+attr.maxWater)}</div>`;
-        html += `</div><br>`;
 
         const cmdSp = getSmartTrainCmd("respirate", attr.spiritual, attr.maxSpiritual);
         const cmdHp = getSmartTrainCmd("exercise", attr.force, attr.maxForce);
         const cmdMp = getSmartTrainCmd("meditate", attr.mana, attr.maxMana);
 
-        html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
-        html += `<div>${UI.txt("【 精 與 靈 】", "#ff5555")}</div><div>${UI.makeCmd("[運精]", cmdSp, "cmd-btn")}</div>`;
-        html += `<div>${UI.attrLine("精 (SP)", attr.sp+"/"+attr.maxSp)}</div>`;
-        html += `<div>${UI.attrLine("靈力", attr.spiritual+"/"+attr.maxSpiritual)}</div>`;
+        const border = UI.txt("---------------------------------------------------", "#444");
         
-        html += `<div>${UI.txt("【 氣 與 內 】", "#5555ff")}</div><div>${UI.makeCmd("[運氣]", cmdHp, "cmd-btn")}</div>`;
-        html += `<div>${UI.attrLine("氣 (HP)", attr.hp+"/"+attr.maxHp)}</div>`;
-        html += `<div>${UI.attrLine("內力", attr.force+"/"+attr.maxForce)}</div>`;
-
-        html += `<div>${UI.txt("【 神 與 法 】", "#ffff55")}</div><div>${UI.makeCmd("[運神]", cmdMp, "cmd-btn")}</div>`;
-        html += `<div>${UI.attrLine("神 (MP)", attr.mp+"/"+attr.maxMp)}</div>`;
-        html += `<div>${UI.attrLine("法力", attr.mana+"/"+attr.maxMana)}</div>`;
-        html += `</div><br>`;
-
-        html += UI.txt("【 戰鬥參數 】", "#00ff00") + "<br>";
-        html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">`;
-        html += `<div>${UI.attrLine("攻擊力", showStat(s.ap, s.equipAp))}</div><div>${UI.attrLine("防禦力", showStat(s.dp, s.equipDp))}</div>`;
-        html += `<div>${UI.attrLine("命中率", showStat(s.hit, s.equipHit))}</div><div>${UI.attrLine("閃避率", showStat(s.dodge, 0))}</div>`;
-        html += `<div>${UI.attrLine("殺氣", UI.txt(kills, "#ff0000"))}</div>`;
-        html += `<div>${UI.attrLine("內力運用", UI.txt(enforce+" 成", enforce > 0 ? "#ff9800" : "#aaa"))}</div>`;
-        html += `</div>` + UI.titleLine("End");
+        let html = `<div style="font-family: 'Courier New', monospace; line-height: 1.4; background: rgba(0,0,0,0.3); padding: 10px; border: 1px solid #333;">`;
         
-        UI.print(html, 'chat', true);
+        html += `<div style="text-align:center; color:#00ffff; margin-bottom:5px;">≡ ${playerData.name} (${playerData.id}) ≡</div>`;
+        html += `${border}<br>`;
+        
+        // 第一行：基本資料
+        html += `<span style="color:#aaa">門派：</span><span style="color:#fff; display:inline-block; width:100px;">${playerData.sect || "無"}</span>`;
+        html += `<span style="color:#aaa">性別：</span><span style="color:#fff">${playerData.gender}</span><br>`;
+        
+        // 第二行：資源
+        html += `<span style="color:#aaa">財產：</span><span style="color:#ffd700; display:inline-block; width:100px;">${moneyStr}</span>`;
+        html += `<span style="color:#aaa">潛能：</span><span style="color:#ffff00">${potential}</span><br>`;
+        
+        html += `${border}<br>`;
+
+        // 第三行：屬性 (一行顯示)
+        html += `<span style="color:#88bbcc">膂</span>:${UI.txt(attr.str,"#fff")} <span style="color:#88bbcc">根</span>:${UI.txt(attr.con,"#fff")} <span style="color:#88bbcc">悟</span>:${UI.txt(attr.int,"#fff")} <span style="color:#88bbcc">定</span>:${UI.txt(attr.per,"#fff")} <span style="color:#88bbcc">福</span>:${UI.txt(attr.kar,"#fff")} <span style="color:#88bbcc">靈</span>:${UI.txt(attr.cor,"#fff")}<br>`;
+        
+        html += `${border}<br>`;
+
+        // 第四行：修練數值 (左右分欄)
+        // 使用 CSS Grid 進行簡單排版
+        html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">`;
+        
+        // 左欄
+        html += `<div>`;
+        html += `精：<span style="color:#ffd700">${attr.sp}/${attr.maxSp}</span><br>`;
+        html += `氣：<span style="color:#ff5555">${attr.hp}/${attr.maxHp}</span><br>`;
+        html += `神：<span style="color:#00bfff">${attr.mp}/${attr.maxMp}</span><br>`;
+        html += `</div>`;
+
+        // 右欄 (含按鈕)
+        html += `<div>`;
+        html += `靈力：<span style="color:#eee">${attr.spiritual}/${attr.maxSpiritual}</span> ${UI.makeCmd("[運]", cmdSp, "cmd-btn")}<br>`;
+        html += `內力：<span style="color:#eee">${attr.force}/${attr.maxForce}</span> ${UI.makeCmd("[運]", cmdHp, "cmd-btn")}<br>`;
+        html += `法力：<span style="color:#eee">${attr.mana}/${attr.maxMana}</span> ${UI.makeCmd("[運]", cmdMp, "cmd-btn")}<br>`;
+        html += `</div>`;
+        
+        html += `</div>`; // End Grid
+
+        html += `${border}<br>`;
+        
+        // 第五行：戰鬥參數
+        html += `攻擊：<span style="color:#fff; display:inline-block; width:40px;">${Math.floor(s.ap)}</span> `;
+        html += `防禦：<span style="color:#fff; display:inline-block; width:40px;">${Math.floor(s.dp)}</span> `;
+        html += `殺氣：<span style="color:#ff0000">${kills}</span><br>`;
+        
+        html += `命中：<span style="color:#fff; display:inline-block; width:40px;">${Math.floor(s.hit)}</span> `;
+        html += `閃避：<span style="color:#fff; display:inline-block; width:40px;">${Math.floor(s.dodge)}</span> `;
+        html += `加力：<span style="color:#ff9800">${enforce}</span><br>`;
+        
+        html += `</div>`;
+
+        UI.print(html, 'normal', true);
     },
 
     enforce: async (p, a, u) => {
