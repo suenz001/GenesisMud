@@ -8,23 +8,21 @@ import { MessageSystem } from "./messages.js";
 import { updatePlayer } from "./player.js";
 import { NPCDB } from "../data/npcs.js";
 
-// === 裝備部位對照表 ===
-const SLOT_MAPPING = {
-    'armor': 'armor',
-    'head': 'head',
-    'neck': 'neck',
-    'necklace': 'neck', // 容錯：items.js 若寫 necklace 也對應到 neck
-    'cloak': 'cloak',
-    'wrists': 'wrists',
-    'pants': 'pants',
-    'boots': 'boots',
-    'belt': 'belt'
-};
+// 裝備顯示順序 (未列出的部位會排在最後)
+const SLOT_ORDER = [
+    'weapon', 'head', 'neck', 'cloak', 'armor', 'wrists', 'belt', 'pants', 'boots'
+];
 
 const SLOT_NAMES = {
     'armor': '身穿', 'head': '頭戴', 'neck': '頸掛', 
     'cloak': '背披', 'wrists': '手戴', 'pants': '腿穿', 
     'boots': '腳踏', 'belt': '腰繫'
+};
+
+// 裝備部位映射 (用於 wear 指令)
+const SLOT_MAPPING = {
+    'armor': 'armor', 'head': 'head', 'neck': 'neck', 'necklace': 'neck',
+    'cloak': 'cloak', 'wrists': 'wrists', 'pants': 'pants', 'boots': 'boots', 'belt': 'belt'
 };
 
 async function consumeItem(playerData, userId, itemId, amount = 1) {
@@ -57,12 +55,9 @@ function findNPCInRoom(roomId, npcNameOrId) {
 function findShopkeeperInRoom(roomId) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
-    
     for (const nid of room.npcs) {
         const npc = NPCDB[nid];
-        if (npc && npc.shop) {
-            return npc; 
-        }
+        if (npc && npc.shop) return npc; 
     }
     return null;
 }
@@ -74,56 +69,89 @@ export const InventorySystem = {
         const shopkeeper = findShopkeeperInRoom(p.location);
         const canSell = !!shopkeeper;
 
-        if (!p.inventory || p.inventory.length === 0) h += UI.txt("空空如也。<br>", "#888"); 
-        else {
-            p.inventory.forEach(i => { 
-                const dat = ItemDB[i.id]; 
-                if (!dat) return;
-                let act = ""; 
-                let status = "";
-
-                // 檢查是否已裝備 (遍歷所有欄位)
+        if (!p.inventory || p.inventory.length === 0) {
+            h += UI.txt("空空如也。<br>", "#888"); 
+        } else {
+            // 1. 整理物品狀態
+            const processedItems = p.inventory.map(i => {
+                const dat = ItemDB[i.id];
                 let isEquipped = false;
+                let equipSlot = null;
+                let statusText = "";
+                let actions = "";
+
+                // 檢查是否裝備
                 if (p.equipment) {
                     if (p.equipment.weapon === i.id) {
                         isEquipped = true;
-                        status = UI.txt(" (手持)", "#ff00ff");
-                        act += UI.makeCmd("[卸下]", `unwield`, "cmd-btn");
+                        equipSlot = 'weapon';
+                        statusText = UI.txt(" (手持)", "#ff00ff");
+                        actions += UI.makeCmd("[卸下]", `unwield`, "cmd-btn");
                     } else {
-                        // 檢查防具欄位
                         for (const [slot, equippedId] of Object.entries(p.equipment)) {
                             if (slot !== 'weapon' && equippedId === i.id) {
                                 isEquipped = true;
+                                equipSlot = slot;
                                 const slotName = SLOT_NAMES[slot] || "裝備";
-                                status = UI.txt(` (${slotName})`, "#ff00ff");
-                                act += UI.makeCmd("[脫下]", `unwear ${i.id}`, "cmd-btn");
+                                statusText = UI.txt(` (${slotName})`, "#ff00ff");
+                                actions += UI.makeCmd("[脫下]", `unwear ${i.id}`, "cmd-btn");
                                 break;
                             }
                         }
                     }
                 }
 
-                if (!isEquipped) {
+                // 生成未裝備時的按鈕
+                if (!isEquipped && dat) {
                     const weaponTypes = ['weapon', 'sword', 'blade', 'stick', 'dagger', 'whip', 'throwing', 'lance'];
                     if (weaponTypes.includes(dat.type)) {
-                        act += UI.makeCmd("[裝備]", `wield ${i.id}`, "cmd-btn");
+                        actions += UI.makeCmd("[裝備]", `wield ${i.id}`, "cmd-btn");
                     } else if (SLOT_MAPPING[dat.type]) {
-                        // 如果是防具類 (在 Mapping 表中)
-                        act += UI.makeCmd("[穿戴]", `wear ${i.id}`, "cmd-btn");
+                        actions += UI.makeCmd("[穿戴]", `wear ${i.id}`, "cmd-btn");
                     }
                     
-                    if (dat.type === 'food') act += UI.makeCmd("[吃]", `eat ${i.id}`, "cmd-btn"); 
-                    if (dat.type === 'drink') act += UI.makeCmd("[喝]", `drink ${i.id}`, "cmd-btn"); 
-                    
-                    if (canSell) {
-                        act += UI.makeCmd("[賣]", `sell ${i.id}`, "cmd-btn cmd-btn-buy");
-                    }
-                    
-                    act += UI.makeCmd("[丟]", `drop ${i.id}`, "cmd-btn");
+                    if (dat.type === 'food') actions += UI.makeCmd("[吃]", `eat ${i.id}`, "cmd-btn"); 
+                    if (dat.type === 'drink') actions += UI.makeCmd("[喝]", `drink ${i.id}`, "cmd-btn"); 
+                    if (canSell) actions += UI.makeCmd("[賣]", `sell ${i.id}`, "cmd-btn cmd-btn-buy");
+                    actions += UI.makeCmd("[丟]", `drop ${i.id}`, "cmd-btn");
                 }
                 
-                act += UI.makeCmd("[看]", `look ${i.id}`, "cmd-btn"); 
-                h += `<div>${UI.txt(i.name, "#fff")} (${i.id}) x${i.count}${status} ${act}</div>`; 
+                actions += UI.makeCmd("[看]", `look ${i.id}`, "cmd-btn");
+
+                return { 
+                    item: i, 
+                    data: dat, 
+                    isEquipped, 
+                    equipSlot, 
+                    statusText, 
+                    actions 
+                };
+            });
+
+            // 2. 排序邏輯
+            processedItems.sort((a, b) => {
+                // 優先權 1: 已裝備 > 未裝備
+                if (a.isEquipped && !b.isEquipped) return -1;
+                if (!a.isEquipped && b.isEquipped) return 1;
+
+                // 優先權 2: 若都已裝備，依照部位順序
+                if (a.isEquipped && b.isEquipped) {
+                    const idxA = SLOT_ORDER.indexOf(a.equipSlot);
+                    const idxB = SLOT_ORDER.indexOf(b.equipSlot);
+                    // 沒在列表中的部位排在後面
+                    const safeIdxA = idxA === -1 ? 999 : idxA;
+                    const safeIdxB = idxB === -1 ? 999 : idxB;
+                    return safeIdxA - safeIdxB;
+                }
+
+                // 優先權 3: 未裝備物品維持原本背包順序 (不變動)
+                return 0; 
+            });
+
+            // 3. 輸出 HTML
+            processedItems.forEach(obj => {
+                if (!obj.data) return;
+                h += `<div>${UI.txt(obj.item.name, "#fff")} (${obj.item.id}) x${obj.item.count}${obj.statusText} ${obj.actions}</div>`;
             });
         }
         UI.print(h + UI.titleLine("End"), "chat", true); 
