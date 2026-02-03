@@ -10,7 +10,7 @@ import { MessageSystem } from "./messages.js";
 import { updatePlayer, getCombatStats } from "./player.js";
 
 let combatInterval = null;
-let combatList = []; // [修改] 改為陣列，存放多個 enemyState
+let combatList = []; 
 
 function getUniqueNpcId(roomId, npcId, index) {
     return `${roomId}_${npcId}_${index}`;
@@ -293,7 +293,6 @@ async function handleKillReward(npc, playerData, enemyState, userId) {
     } catch (err) {
         console.error("Handle Kill Reward Error:", err);
     } 
-    // [注意] 這裡不再呼叫 stopCombat，改由上層循環控制
 }
 
 export const CombatSystem = {
@@ -304,7 +303,7 @@ export const CombatSystem = {
             clearInterval(combatInterval);
             combatInterval = null;
         }
-        combatList = []; // [修改] 清空列表
+        combatList = []; 
         if (userId) updatePlayer(userId, { state: 'normal', combatTarget: null });
     },
 
@@ -316,12 +315,10 @@ export const CombatSystem = {
         CombatSystem.startCombat(playerData, args, userId, false);
     },
 
-    // === [新增] 檢查並觸發主動怪 ===
     checkAggro: async (playerData, roomId, userId) => {
         const room = MapSystem.getRoom(roomId);
         if (!room || !room.npcs || room.safe) return;
         
-        // 先讀取已死亡名單，避免死怪攻擊
         const deadRef = collection(db, "dead_npcs");
         const q = query(deadRef, where("roomId", "==", roomId));
         const deadSnaps = await getDocs(q);
@@ -333,11 +330,10 @@ export const CombatSystem = {
 
         const aggroTargets = [];
         for (let i = 0; i < room.npcs.length; i++) {
-            if (deadIndices.has(i)) continue; // 跳過死人
+            if (deadIndices.has(i)) continue; 
             const npcId = room.npcs[i];
             const npcData = NPCDB[npcId];
             if (npcData && npcData.aggro) {
-                // 必須保存 index，確保是特定那隻怪
                 aggroTargets.push({ ...npcData, index: i });
             }
         }
@@ -345,15 +341,12 @@ export const CombatSystem = {
         if (aggroTargets.length > 0) {
             UI.print(UI.txt("你感覺到一股殺氣！周圍的野獸盯上了你！", "#ff0000", true), "system", true);
             
-            // 觸發多重戰鬥，將所有主動怪加入
             for (const t of aggroTargets) {
-                // 主動怪都是下殺手 (isLethal = true)
                 await CombatSystem.startCombat(playerData, [t.id], userId, true, t); 
             }
         }
     },
 
-    // [修改] 支援加入多重戰鬥
     startCombat: async (playerData, args, userId, isLethal, specificNpc = null) => {
         if (args.length === 0 && !specificNpc) { UI.print("你想對誰動手？", "error"); return; }
         
@@ -370,10 +363,8 @@ export const CombatSystem = {
 
         const uniqueId = getUniqueNpcId(playerData.location, npc.id, npc.index);
         
-        // 檢查是否已經在戰鬥列表中
         const alreadyFighting = combatList.find(c => c.uniqueId === uniqueId);
         if (alreadyFighting) {
-            // 如果已經在打，把它移到第一位 (切換目標)
             const idx = combatList.indexOf(alreadyFighting);
             if (idx > 0) {
                 combatList.splice(idx, 1);
@@ -393,7 +384,6 @@ export const CombatSystem = {
                 const killMsg = UI.txt(`你對昏迷中的 ${npc.name} 下了毒手！`, "#ff0000", true);
                 UI.print(killMsg, "system", true);
                 
-                // 暫時構建一個 state 傳給 handleKillReward
                 const tempState = {
                     targetId: npc.id, targetIndex: npc.index, uniqueId: uniqueId,
                     npcHp: 0, maxNpcHp: npc.combat.maxHp, npcName: npc.name, roomId: playerData.location,
@@ -416,7 +406,6 @@ export const CombatSystem = {
              UI.print(startMsg, "system", true);
              MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 對 ${npc.name} ${combatType}，大戰一觸即發！`, color, true));
         } else {
-             // === [修正]：這裡補上了 true，確保 HTML 顏色代碼正確顯示 ===
              UI.print(UI.txt(`${npc.name} 加入了戰團！`, "#ff5555", true), "system", true); 
              MessageSystem.broadcast(playerData.location, UI.txt(`${npc.name} 對 ${playerData.name} 發起了攻擊！`, "#ff5555", true));
         }
@@ -435,10 +424,9 @@ export const CombatSystem = {
             npcIsUnconscious: false,
             isLethal: isLethal,
             diffRatio: diffInfo.ratio,
-            npcObj: npc // 保存原始數據
+            npcObj: npc 
         };
         
-        // 加入列表
         combatList.push(enemyState);
     
         await updatePlayer(userId, { 
@@ -448,11 +436,9 @@ export const CombatSystem = {
     
         if (combatInterval) clearInterval(combatInterval);
         
-        // === 戰鬥迴圈 (Combat Loop) ===
         const combatRound = async () => {
             if (combatList.length === 0) { CombatSystem.stopCombat(userId); return; }
             
-            // 1. 玩家攻擊回合 (攻擊列表第一個敵人)
             const currentTarget = combatList[0];
             
             if (playerData.location !== currentTarget.roomId) { CombatSystem.stopCombat(userId); return; }
@@ -462,7 +448,7 @@ export const CombatSystem = {
             const npcStats = getNPCCombatStats(npc); 
     
             if (!playerData.isUnconscious) {
-                // --- 玩家攻擊邏輯 (保持原樣) ---
+                // --- 玩家攻擊邏輯 (修改 Enforce 威力) ---
                 const enforceLevel = playerData.combat.enforce || 0;
                 let forceBonus = 0;
                 let actualCost = 0; 
@@ -470,15 +456,24 @@ export const CombatSystem = {
                 if (enforceLevel > 0) {
                     const forceSkill = playerData.skills.force || 0;
                     const maxForce = playerData.attributes.maxForce || 10;
-                    const consumptionRate = 0.05; 
+                    
+                    // [修改] 提高消耗率：10成力 = 20% Max Force (5次攻擊耗盡)
+                    const consumptionRate = 0.20; 
+                    
                     let idealCost = Math.floor(maxForce * (enforceLevel / 10) * consumptionRate);
                     if (idealCost < 1) idealCost = 1; 
+                    
                     actualCost = Math.min(playerData.attributes.force, idealCost);
+                    
                     if (actualCost > 0) {
                         playerData.attributes.force -= actualCost; 
+                        
                         const efficiency = 1.0 + (forceSkill / 100);
-                        let multiplier = 0.5; 
-                        if (playerStats.atkType === 'unarmed') multiplier = 0.8; 
+                        
+                        // [修改] 提高轉換倍率，確保傷害顯著
+                        let multiplier = 1.0; // 有武器：1點內力 = 1.0額外傷害
+                        if (playerStats.atkType === 'unarmed') multiplier = 1.5; // 空手：1點內力 = 1.5額外傷害
+                        
                         forceBonus = Math.floor(actualCost * efficiency * multiplier);
                     } else {
                          if(Math.random() < 0.2) UI.print("你內力枯竭，無法運功加力！", "error");
@@ -511,7 +506,7 @@ export const CombatSystem = {
                 if (isHit) {
                     let damage = playerStats.ap - npcStats.dp;
                     damage += ((skillBaseDmg * (playerStats.atkRating || 1.0)) / 2); 
-                    damage += forceBonus;
+                    damage += forceBonus; // 加上大幅提升的內力加成
                     damage = damage * (0.9 + Math.random() * 0.2);
                     if (damage <= 0) damage = Math.random() * 5 + 1;
                     if (!isLethal) damage = damage / 2;
@@ -540,7 +535,6 @@ export const CombatSystem = {
                         MessageSystem.broadcast(playerData.location, statusMsg);
                     }
                     
-                    // 檢查目標死亡
                     if (currentTarget.npcHp <= 0) {
                         currentTarget.npcHp = 0;
                         currentTarget.npcIsUnconscious = true;
@@ -554,17 +548,14 @@ export const CombatSystem = {
                             UI.print(winMsg, "chat", true);
                             MessageSystem.broadcast(playerData.location, winMsg);
                             playerData.combat.potential = (playerData.combat.potential || 0) + 10;
-                            // 移除該敵人
                             combatList.shift();
                         } else {
                              const uncMsg = UI.txt(`${currentTarget.npcName} 搖頭晃腦，咚的一聲倒在地上！`, "#888");
                              UI.print(uncMsg, "system", true);
                              await handleKillReward(npc, playerData, currentTarget, userId);
-                             // 移除該敵人
                              combatList.shift();
                         }
                         
-                        // 自動切換下一個目標
                         if (combatList.length > 0) {
                             UI.print(UI.txt(`你的目標轉向了 ${combatList[0].npcName}！`, "#ffff00"), "system");
                             await updatePlayer(userId, { combatTarget: { id: combatList[0].targetId, index: combatList[0].targetIndex } });
@@ -579,11 +570,9 @@ export const CombatSystem = {
                 UI.print("你現在暈頭轉向，根本無法攻擊！", "error");
             }
             
-            // 2. 怪物回合 (所有活著的怪輪流打)
-            // 使用 for 迴圈避免 async/await 問題，並檢查玩家死活
             for (const enemyState of combatList) {
-                if (playerData.attributes.hp <= 0) break; // 玩家已死，不用再打了
-                if (enemyState.npcIsUnconscious || enemyState.npcHp <= 0) continue; // 怪暈了
+                if (playerData.attributes.hp <= 0) break;
+                if (enemyState.npcIsUnconscious || enemyState.npcHp <= 0) continue; 
 
                 const eNpc = enemyState.npcObj;
                 const eStats = getNPCCombatStats(eNpc);
@@ -639,7 +628,7 @@ export const CombatSystem = {
                     UI.print(dodgeMsg, "chat", true);
                     MessageSystem.broadcast(playerData.location, dodgeMsg);
                 }
-            } // end for loop (enemies)
+            } 
     
             UI.updateHUD(playerData);
             if (combatList.length === 0) CombatSystem.stopCombat(userId);
@@ -650,7 +639,6 @@ export const CombatSystem = {
             });
         };
     
-        // 啟動第一回合
         combatRound();
         combatInterval = setInterval(combatRound, 2000); 
     }

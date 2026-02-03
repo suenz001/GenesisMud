@@ -35,6 +35,9 @@ const barWater = document.getElementById('bar-water');
 const statusWater = document.getElementById('status-water');
 const btnAutoDrink = document.getElementById('btn-auto-drink');
 
+// [新增] 儀表板元素 - 潛能
+const valPotential = document.getElementById('val-potential');
+
 // 儀表板元素 - 內力控制
 const valEnforce = document.getElementById('val-enforce');
 
@@ -119,6 +122,12 @@ export const UI = {
         if(valEnforce) {
             valEnforce.textContent = currentEnforceValue;
             valEnforce.style.color = currentEnforceValue > 0 ? "#ff9800" : "#444";
+        }
+
+        // [新增] 更新潛能顯示
+        if (valPotential) {
+            const pot = (playerData.combat && playerData.combat.potential) ? playerData.combat.potential : 0;
+            valPotential.textContent = pot;
         }
 
         const currentRoom = WorldMap[playerData.location];
@@ -211,45 +220,34 @@ export const UI = {
 
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
     
-    // === 修改：圖片顯示功能 ===
-    // 顯示觀察面板，隱藏屬性與內力群組
+    // 顯示觀察面板
     showInspection: (id, name, type) => {
         const img = document.getElementById('inspect-img');
         const nameLabel = document.getElementById('inspect-name');
         
         if (!panelInspection || !img || !panelStatsGroup) return;
 
-        // 切換面板顯示
         panelStatsGroup.style.display = 'none';
-        panelInspection.style.display = 'flex'; // 使用 flex 確保內容居中
+        panelInspection.style.display = 'flex'; 
         
         if (nameLabel) nameLabel.textContent = name;
         
-        // 重置圖片狀態
         img.classList.remove('loaded');
         
-        // 組合路徑 (type 應該傳入 "items" 或 "npcs")
         const folder = type === 'npc' ? 'npcs' : 'items'; 
         const targetSrc = `assets/images/${folder}/${id}.webp`;
         
-        img.onload = () => {
-            img.classList.add('loaded'); // 載入成功後淡入
-        };
-
+        img.onload = () => { img.classList.add('loaded'); };
         img.onerror = () => {
-            // 如果找不到圖片，載入預設圖
-            if (img.src.includes('placeholder.webp')) return; // 避免無窮迴圈
+            if (img.src.includes('placeholder.webp')) return; 
             img.src = 'assets/images/ui/placeholder.webp';
         };
-
-        // 開始載入
         img.src = targetSrc;
     },
 
-    // 關閉觀察面板，恢復屬性與內力群組
     hideInspection: () => {
         if (panelInspection) panelInspection.style.display = 'none';
-        if (panelStatsGroup) panelStatsGroup.style.display = 'flex'; // 恢復 flex 排版
+        if (panelStatsGroup) panelStatsGroup.style.display = 'flex'; 
     },
 
     onAutoToggle: (callbacks) => {
@@ -259,7 +257,6 @@ export const UI = {
             const icon = btnAutoEat.querySelector('i');
             if(isActive) icon.classList.add('fa-beat-fade'); 
             else icon.classList.remove('fa-beat-fade');
-            
             UI.print(`[系統] 自動進食已${isActive ? '開啟' : '關閉'}。`, "system");
         });
 
@@ -269,17 +266,15 @@ export const UI = {
             const icon = btnAutoDrink.querySelector('i');
             if(isActive) icon.classList.add('fa-beat-fade');
             else icon.classList.remove('fa-beat-fade');
-
             UI.print(`[系統] 自動飲水已${isActive ? '開啟' : '關閉'}。`, "system");
         });
     },
 
     onInput: (callback) => {
-        // === 核心功能：更新輸入框狀態 (填值 + 聚焦 + 全選) ===
         const updateInputState = (text) => {
             input.value = text;
             input.focus();
-            input.select(); // 關鍵：全選文字，方便直接按 Enter 重複或直接打字覆蓋
+            input.select(); 
         };
 
         const sendHandler = () => {
@@ -287,7 +282,6 @@ export const UI = {
             if (val) {
                 UI.print(`> ${val}`);
                 callback(val);
-                // 發送後不再清空，而是全選，方便重複執行
                 updateInputState(val);
             }
         };
@@ -303,12 +297,10 @@ export const UI = {
             if (cmd) {
                 UI.print(`> ${cmd}`);
                 callback(cmd);
-                // 按鈕點擊後，同步更新輸入框並全選
                 updateInputState(cmd);
                 return;
             }
 
-            // 內力控制
             if (btn.classList.contains('btn-step') || btn.classList.contains('btn-step-set')) {
                 let newVal = currentEnforceValue;
 
@@ -328,7 +320,6 @@ export const UI = {
                     const cmdStr = `enforce ${currentEnforceValue}`;
                     UI.print(`> ${cmdStr}`);
                     callback(cmdStr);
-                    // 內力指令也同步到輸入框
                     updateInputState(cmdStr);
                 }
             }
@@ -341,7 +332,6 @@ export const UI = {
                 if (cmd) {
                     UI.print(`> ${cmd}`);
                     callback(cmd);
-                    // 連結點擊後，同步更新輸入框並全選
                     updateInputState(cmd);
                 }
             }
@@ -355,10 +345,8 @@ export const UI = {
     }
 };
 
-// 綁定關閉事件 (直接綁在面板上)
 if (panelInspection) {
     panelInspection.addEventListener('click', (e) => {
-        // 不需要 stopPropagation，因為面板就是我們要監聽的最上層目標
         UI.hideInspection();
     });
 }
