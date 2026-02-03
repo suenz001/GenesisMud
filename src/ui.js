@@ -35,17 +35,17 @@ const barWater = document.getElementById('bar-water');
 const statusWater = document.getElementById('status-water');
 const btnAutoDrink = document.getElementById('btn-auto-drink');
 
-// [新增] 儀表板元素 - 潛能
+// 儀表板元素 - 潛能與財產
 const valPotential = document.getElementById('val-potential');
+const valMoney = document.getElementById('val-money'); // [新增]
 
 // 儀表板元素 - 內力控制
 const valEnforce = document.getElementById('val-enforce');
 
-// 新增：面板切換元素 (移除 btnCloseInspect)
+// 新增：面板切換元素
 const panelInspection = document.getElementById('panel-inspection');
 const panelStatsGroup = document.getElementById('panel-stats-group');
 
-// 暫存目前的內力值
 let currentEnforceValue = 0;
 
 export const UI = {
@@ -60,15 +60,15 @@ export const UI = {
         return `<span style="color:#88bbcc;">${label}：</span><span style="color:#fff; font-weight:bold;">${value}</span> <span style="color:#888;">${unit}</span>`;
     },
     formatMoney: (coins) => {
-        if (!coins) return UI.txt("0", "#ccc") + UI.txt(" 文銅錢", "#888");
+        if (!coins) return UI.txt("0", "#ccc") + UI.txt(" 文", "#888");
         const gold = Math.floor(coins / 1000000);
         const silver = Math.floor((coins % 1000000) / 1000);
         const copper = coins % 1000;
         let str = "";
-        if (gold > 0) str += UI.txt(gold, "#ffd700", true) + UI.txt("兩黃金 ", "#aa8800");
-        if (silver > 0) str += UI.txt(silver, "#e0e0e0", true) + UI.txt("兩白銀 ", "#888");
-        if (copper > 0) str += UI.txt(copper, "#cd7f32", true) + UI.txt("文銅錢", "#885522");
-        return str.trim() || UI.txt("0 文銅錢", "#888");
+        if (gold > 0) str += UI.txt(gold, "#ffd700", true) + UI.txt("兩金 ", "#aa8800"); // 簡化顯示
+        if (silver > 0) str += UI.txt(silver, "#e0e0e0", true) + UI.txt("兩銀 ", "#888");
+        if (copper > 0) str += UI.txt(copper, "#cd7f32", true) + UI.txt("文", "#885522");
+        return str.trim() || UI.txt("0 文", "#888");
     },
     makeCmd: (text, cmd, styleClass = 'cmd-link') => {
         return `<span class="${styleClass}" data-cmd="${cmd}">${text}</span>`;
@@ -93,7 +93,6 @@ export const UI = {
             const safeMax = max || 1;
             const safeCurrent = Math.max(0, current || 0);
             const percent = Math.min(100, (safeCurrent / safeMax) * 100);
-            
             barEl.style.width = `${percent}%`;
             
             if (textEl) {
@@ -101,7 +100,6 @@ export const UI = {
                     if (percent < 20) textEl.textContent = "飢渴";
                     else if (percent < 50) textEl.textContent = "普通";
                     else textEl.textContent = "充盈";
-                    
                     if (percent < 20) textEl.style.color = "#ff5555";
                     else textEl.style.color = "#888";
                 } else {
@@ -124,10 +122,14 @@ export const UI = {
             valEnforce.style.color = currentEnforceValue > 0 ? "#ff9800" : "#444";
         }
 
-        // [新增] 更新潛能顯示
         if (valPotential) {
             const pot = (playerData.combat && playerData.combat.potential) ? playerData.combat.potential : 0;
             valPotential.textContent = pot;
+        }
+
+        // [新增] 更新財產
+        if (valMoney) {
+            valMoney.innerHTML = UI.formatMoney(playerData.money || 0);
         }
 
         const currentRoom = WorldMap[playerData.location];
@@ -220,7 +222,6 @@ export const UI = {
 
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
     
-    // 顯示觀察面板
     showInspection: (id, name, type) => {
         const img = document.getElementById('inspect-img');
         const nameLabel = document.getElementById('inspect-name');
@@ -233,7 +234,6 @@ export const UI = {
         if (nameLabel) nameLabel.textContent = name;
         
         img.classList.remove('loaded');
-        
         const folder = type === 'npc' ? 'npcs' : 'items'; 
         const targetSrc = `assets/images/${folder}/${id}.webp`;
         
@@ -303,15 +303,12 @@ export const UI = {
 
             if (btn.classList.contains('btn-step') || btn.classList.contains('btn-step-set')) {
                 let newVal = currentEnforceValue;
-
                 if (btn.dataset.enforceSet !== undefined) {
                     newVal = parseInt(btn.dataset.enforceSet);
                 } else if (btn.dataset.enforceMod !== undefined) {
                     newVal += parseInt(btn.dataset.enforceMod);
                 }
-
                 newVal = Math.max(0, Math.min(10, newVal));
-
                 if (newVal !== currentEnforceValue) {
                     currentEnforceValue = newVal;
                     valEnforce.textContent = currentEnforceValue;
