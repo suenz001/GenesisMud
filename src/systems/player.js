@@ -114,11 +114,15 @@ export function getCombatStats(entity) {
 
     const baseAp = (str * 2.5) + (effAtkSkill * 5 * atkRating) + (effForce * 2);
     const baseDp = (con * 2.5) + (effForce * 5) + (effDodge * 2 * dodgeRating);
-    const baseHit = (per * 2.5) + (effAtkSkill * 3 * atkRating);
+    
+    // [修改] 命中率公式調整：增加 effDodge 的影響，並提高 effAtkSkill 的權重
+    // 原公式: (per * 2.5) + (effAtkSkill * 3 * atkRating)
+    const baseHit = (per * 2.0) + (effAtkSkill * 5 * atkRating) + (effDodge * 3 * dodgeRating);
+    
     const baseDodge = (per * 2.5) + (effDodge * 4 * dodgeRating) + (effAtkSkill * 1);
 
     const ap = baseAp + weaponDmg;
-    const dp = baseDp + totalDefense; // 使用加總後的防禦力
+    const dp = baseDp + totalDefense; 
     const hit = baseHit + weaponHit;
     const dodge = baseDodge; 
 
@@ -153,16 +157,14 @@ export const PlayerSystem = {
         let updateData = { lastSaved: new Date().toISOString() };
         let msg = "遊戲進度已保存。";
         
-        // 只有在允許存檔的地方才會更新重生點
         if (room && room.allowSave) {
             updateData.savePoint = p.location;
             msg += " (重生點已更新至此處)";
         }
         
-        // 儲存所有關鍵資料，包含新增的 skill_exp
         updateData.attributes = p.attributes;
         updateData.skills = p.skills;
-        updateData.skill_exp = p.skill_exp || {}; // [新增]
+        updateData.skill_exp = p.skill_exp || {}; 
         updateData.inventory = p.inventory;
         updateData.money = p.money;
         updateData.equipment = p.equipment;
@@ -187,7 +189,7 @@ export const PlayerSystem = {
             location: p.location,
             attributes: p.attributes,
             skills: p.skills,
-            skill_exp: p.skill_exp || {}, // [新增]
+            skill_exp: p.skill_exp || {}, 
             inventory: p.inventory,
             money: p.money,
             equipment: p.equipment,

@@ -8,11 +8,11 @@ import { NPCDB } from "../data/npcs.js";
 
 let autoForceInterval = null; 
 
-// === 升級所需經驗值公式 (已調整為簡單模式) ===
+// === 升級所需經驗值公式 (極速升級版) ===
 function calculateMaxExp(level) {
     if (level < 150) {
-        // [修改] 係數從 30 降為 10，大幅降低前期升級難度
-        return Math.pow(level + 1, 2) * 10;
+        // [修改] 係數降為 5，升級速度飛快
+        return Math.pow(level + 1, 2) * 5;
     } else {
         return Math.pow(level + 1, 3);
     }
@@ -97,7 +97,8 @@ export const SkillSystem = {
             const limit = maxVal * 2;
 
             if (curVal >= limit) {
-                UI.print(UI.txt(`你的${typeName}已經運轉至極限，無法再容納更多了。`, "#ffff00"), "system");
+                // [修復] 這裡補上 true，避免 HTML 代碼外洩
+                UI.print(UI.txt(`你的${typeName}已經運轉至極限，無法再容納更多了。`, "#ffff00"), "system", true);
                 return;
             }
 

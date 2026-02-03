@@ -24,9 +24,14 @@ const commandRegistry = {
     'quit': { description: '離開遊戲', execute: PlayerSystem.quit }, 
     'suicide': { description: '自殺刪檔', execute: PlayerSystem.suicide },
     
-    // === 戰鬥指令 ===
+    // === 戰鬥與切磋指令 ===
     'kill': { description: '下殺手', execute: CombatSystem.kill },
     'fight': { description: '切磋', execute: CombatSystem.fight },
+    // [新增] 回應切磋請求
+    'y': { description: '接受', execute: CombatSystem.acceptDuel },
+    'yes': { description: '接受', execute: CombatSystem.acceptDuel },
+    'n': { description: '拒絕', execute: CombatSystem.rejectDuel },
+    'no': { description: '拒絕', execute: CombatSystem.rejectDuel },
 
     // === 物品與交易指令 ===
     'wield': { description: '裝備武器', execute: InventorySystem.wield },
