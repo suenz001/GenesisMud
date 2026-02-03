@@ -77,7 +77,7 @@ export const MapSystem = {
         if (room.safe) UI.print(UI.txt("【 安全區 】", "#00ff00"), "system", true);
         UI.print(room.description);
 
-        // 1. 取得並顯示房間內的其他玩家 (新增切磋按鈕)
+        // 1. 取得並顯示房間內的其他玩家
         let playersInRoom = [];
         try {
             const playersRef = collection(db, "players");
@@ -99,7 +99,6 @@ export const MapSystem = {
                 else if (p.state === 'exercising') status = UI.txt(" (正在運功修練)", "#ffff00"); 
                 if (p.isUnconscious) status += UI.txt(" (昏迷)", "#888");
 
-                // [新增] 查看與切磋連結
                 const lookLink = UI.makeCmd(p.name, `look ${p.id}`, "cmd-link");
                 const fightBtn = UI.makeCmd("[切磋]", `fight ${p.id}`, "cmd-btn");
                 
@@ -138,11 +137,19 @@ export const MapSystem = {
                 });
             } catch (e) {}
 
+            // [新增] 紀錄 NPC 出現次數，用於生成 fight rabbit 2 等指令
+            const npcCounts = {};
+
             let npcListHtml = "";
             room.npcs.forEach((npcId, index) => {
                 if (deadIndices.includes(index)) return;
                 const npc = NPCDB[npcId];
                 if (npc) {
+                    // 計算這是第幾隻同名 NPC
+                    if (!npcCounts[npcId]) npcCounts[npcId] = 0;
+                    npcCounts[npcId]++;
+                    const npcOrder = npcCounts[npcId];
+
                     const uniqueId = getUniqueNpcId(playerData.location, npcId, index);
                     let statusTag = "";
                     let isUnconscious = false;
@@ -155,17 +162,19 @@ export const MapSystem = {
 
                     const diff = CombatSystem.getDifficultyInfo(playerData, npcId);
                     const coloredName = UI.txt(npc.name, diff.color);
+                    
+                    // [修改] 按鈕指令加入序號 (例如 fight rabbit 2)
                     let links = `${coloredName} <span style="color:#aaa">(${npc.id})</span>${statusTag} `;
-                    links += UI.makeCmd("[看]", `look ${npc.id}`, "cmd-btn");
+                    links += UI.makeCmd("[看]", `look ${npc.id} ${npcOrder}`, "cmd-btn");
                     
                     if (isUnconscious) {
-                        links += UI.makeCmd("[殺]", `kill ${npc.id}`, "cmd-btn cmd-btn-buy");
+                        links += UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
                     } else {
                         const isMyMaster = (playerData.family && playerData.family.masterId === npc.id);
-                        if (!isMyMaster && npc.family) links += UI.makeCmd("[拜師]", `apprentice ${npc.id}`, "cmd-btn");
-                        if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id}`, "cmd-btn");
+                        if (!isMyMaster && npc.family) links += UI.makeCmd("[拜師]", `apprentice ${npc.id} ${npcOrder}`, "cmd-btn");
+                        if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id} ${npcOrder}`, "cmd-btn");
                         if (playerData.state !== 'fighting') {
-                            links += UI.makeCmd("[戰鬥]", `fight ${npc.id}`, "cmd-btn") + UI.makeCmd("[殺]", `kill ${npc.id}`, "cmd-btn cmd-btn-buy");
+                            links += UI.makeCmd("[戰鬥]", `fight ${npc.id} ${npcOrder}`, "cmd-btn") + UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
                         }
                     }
                     npcListHtml += `<div style="margin-top:4px;">${links}</div>`;
@@ -201,10 +210,14 @@ export const MapSystem = {
     },
 
     // === 核心功能：觀察特定目標 (Look Target) ===
-    lookTarget: async (playerData, targetIdOrName) => {
+    // [修改] 增加 targetOrder 參數 (預設 1)
+    lookTarget: async (playerData, targetIdOrName, targetOrder = 1) => {
         UI.hideInspection();
+        
+        // 轉型確保是數字
+        if (typeof targetOrder === 'string') targetOrder = parseInt(targetOrder) || 1;
 
-        // 1. 檢查背包
+        // 1. 檢查背包 (暫不支援重名物品索引，通常物品操作用 ID)
         if (playerData.inventory) {
             const item = playerData.inventory.find(i => i.id === targetIdOrName || i.name === targetIdOrName);
             if (item) {
@@ -228,6 +241,7 @@ export const MapSystem = {
             let targetNpcId = null;
             let realIndex = -1;
             
+            // 確認目標 ID
             if (room.npcs.includes(targetIdOrName)) {
                 targetNpcId = targetIdOrName;
             } else {
@@ -242,6 +256,7 @@ export const MapSystem = {
             if (targetNpcId) {
                 const npc = NPCDB[targetNpcId];
                 
+                // 取得已死亡清單
                 let deadIndices = [];
                 try {
                     const deadRef = collection(db, "dead_npcs");
@@ -256,11 +271,19 @@ export const MapSystem = {
                     });
                 } catch(e) { console.error(e); }
 
+                // [修改] 尋找第 N 隻匹配的 NPC
+                let matchCount = 0;
                 for(let i=0; i<room.npcs.length; i++) {
                     if (room.npcs[i] === targetNpcId) {
+                        // 即使是屍體也要算在次數裡，確保索引位置正確 (例如 rabbit 2 死了，rabbit 3 不應該變成 2)
+                        // 但如果是要"觀察"，通常只能觀察活著或昏迷的
+                        // 這裡為了簡單，我們跳過"完全消失"的屍體 (但 dead_npcs 其實還沒消失)
                         if (!deadIndices.includes(i)) {
-                            realIndex = i;
-                            break; 
+                            matchCount++;
+                            if (matchCount === targetOrder) {
+                                realIndex = i;
+                                break;
+                            }
                         }
                     }
                 }
@@ -317,7 +340,7 @@ export const MapSystem = {
             }
         }
 
-        // 3. [修正] 檢查房間內的其他玩家 (補上 true 以正確解析 HTML 標籤)
+        // 3. 檢查房間內的其他玩家
         try {
             const playersRef = collection(db, "players");
             let q = query(playersRef, where("id", "==", targetIdOrName), where("location", "==", playerData.location));
@@ -334,17 +357,17 @@ export const MapSystem = {
                 UI.print(UI.titleLine(targetP.name), "chat", true);
                 
                 UI.print(`一位${targetP.gender || "神秘"}的俠客。`);
-                UI.print(UI.attrLine("門派", targetP.sect || "無門無派"), "chat", true); // [修正] 補上 true
+                UI.print(UI.attrLine("門派", targetP.sect || "無門無派"), "chat", true);
                 
                 let hpPct = targetP.attributes.hp / targetP.attributes.maxHp;
                 let hpColor = "#00ff00";
                 if(hpPct < 0.5) hpColor = "#ffff00";
                 if(hpPct < 0.2) hpColor = "#ff0000";
                 
-                UI.print(UI.attrLine("狀態", targetP.isUnconscious ? UI.txt("昏迷不醒", "#888") : UI.txt("健康", hpColor)), "chat", true); // [修正] 補上 true
+                UI.print(UI.attrLine("狀態", targetP.isUnconscious ? UI.txt("昏迷不醒", "#888") : UI.txt("健康", hpColor)), "chat", true);
 
                 if (targetP.equipment) {
-                    UI.print("<br>" + UI.txt("【 裝備 】", "#00ffff"), "chat", true); // [修正] 補上 true
+                    UI.print("<br>" + UI.txt("【 裝備 】", "#00ffff"), "chat", true);
                     let equipList = "";
                     for (const [slot, itemId] of Object.entries(targetP.equipment)) {
                         const itemInfo = ItemDB[itemId];
@@ -354,13 +377,13 @@ export const MapSystem = {
                         }
                     }
                     if (!equipList) equipList = "<div>全身光溜溜的。</div>";
-                    UI.print(equipList, "chat", true); // [修正] 補上 true
+                    UI.print(equipList, "chat", true);
                 }
                 
                 const actHtml = `<br><div>${UI.makeCmd("[切磋武藝]", `fight ${targetP.id}`, "cmd-btn")}</div>`;
-                UI.print(actHtml, "chat", true); // [修正] 補上 true
+                UI.print(actHtml, "chat", true);
 
-                UI.print(UI.titleLine("End"), "chat", true); // [修正] 補上 true
+                UI.print(UI.titleLine("End"), "chat", true);
                 return;
             }
         } catch(e) {

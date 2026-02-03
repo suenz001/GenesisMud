@@ -185,7 +185,8 @@ function getDodgeMessage(entity, attackerName, entityNameOverride = null) {
     return UI.txt(msg.replace(/\$N/g, finalName).replace(/\$P/g, attackerName), "#aaa");
 }
 
-async function findAliveNPC(roomId, targetId) {
+// [修改] 增加 targetIndex 參數，預設為 1 (第一隻)
+async function findAliveNPC(roomId, targetId, targetIndex = 1) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
 
@@ -204,11 +205,23 @@ async function findAliveNPC(roomId, targetId) {
         }
     });
 
+    let matchCount = 0;
     for (let i = 0; i < room.npcs.length; i++) {
         if (room.npcs[i] === targetId) {
-            if (!deadIndices.includes(i)) {
-                const npcData = NPCDB[targetId];
-                return { ...npcData, index: i, isUnconscious: false }; 
+            // 計算這是第幾隻同名 NPC
+            // 注意：我們不過濾屍體來計算索引，確保 "fight rabbit 2" 永遠是指房間列表中的第 2 隻兔子
+            // 如果第 1 隻死了，指令 "fight rabbit 2" 依然找第 2 隻。
+            // 但如果 "deadIndices" 包含它，則代表它不在場 (重生中)。
+            matchCount++;
+            
+            if (matchCount === targetIndex) {
+                if (!deadIndices.includes(i)) {
+                    const npcData = NPCDB[targetId];
+                    return { ...npcData, index: i, isUnconscious: false }; 
+                } else {
+                    // 目標存在但正在重生中
+                    return null;
+                }
             }
         }
     }
@@ -438,6 +451,8 @@ export const CombatSystem = {
         if (room.safe) { UI.print("這裡是安全區，禁止動武。", "error"); return; }
         
         const targetId = args[0];
+        // [新增] 解析目標索引 (例如 fight rabbit 2)
+        const targetIndex = args.length > 1 ? parseInt(args[1]) : 1;
 
         if (!specificNpc) {
              const playersRef = collection(db, "players");
@@ -460,7 +475,8 @@ export const CombatSystem = {
         }
 
         let npc = specificNpc;
-        if (!npc) npc = await findAliveNPC(playerData.location, targetId);
+        // [修改] 傳入 targetIndex 以鎖定特定目標
+        if (!npc) npc = await findAliveNPC(playerData.location, targetId, targetIndex);
         if (!npc) { UI.print("這裡沒有這個人，或者他已經倒下了。", "error"); return; }
 
         const uniqueId = getUniqueNpcId(playerData.location, npc.id, npc.index);
@@ -559,7 +575,6 @@ export const CombatSystem = {
             // --- 階段 1：玩家攻擊回合 ---
             const currentTarget = combatList[0];
             
-            // [Enforce 計算函式]
             const applyEnforce = (baseDmg, pStats, pData) => {
                 const enforceLvl = pData.combat?.enforce || 0;
                 if (enforceLvl <= 0) return baseDmg;
@@ -567,12 +582,10 @@ export const CombatSystem = {
                 const maxForce = pData.attributes.maxForce || 10;
                 const currentForce = pData.attributes.force || 0;
                 
-                // 基礎消耗：每級 2% 最大內力 (10級=20%)
                 const costPerLvl = maxForce * 0.02;
                 let effectiveLvl = enforceLvl;
                 let requiredForce = Math.floor(costPerLvl * effectiveLvl);
                 
-                // 若內力不足，自動調降等級
                 if (currentForce < requiredForce) {
                     const safeCost = Math.max(1, costPerLvl);
                     effectiveLvl = Math.floor(currentForce / safeCost);
@@ -581,16 +594,14 @@ export const CombatSystem = {
 
                 if (effectiveLvl <= 0) return baseDmg;
 
-                // 扣除內力
                 pData.attributes.force -= requiredForce;
 
-                // 計算倍率
-                let coeff = 0.04; // 預設武器 (劍刀棍槍鞭匕首)
-                if (pStats.atkType === 'unarmed') coeff = 0.12; // 拳腳
-                else if (pStats.atkType === 'throwing') coeff = 0.08; // 暗器
+                let coeff = 0.04; 
+                if (pStats.atkType === 'unarmed') coeff = 0.12; 
+                else if (pStats.atkType === 'throwing') coeff = 0.08; 
                 
                 const multiplier = 1 + (effectiveLvl * coeff);
-                const rawBonus = requiredForce * 0.5; // 真實傷害加成
+                const rawBonus = requiredForce * 0.5; 
 
                 return Math.floor((baseDmg * multiplier) + rawBonus);
             };
@@ -604,7 +615,6 @@ export const CombatSystem = {
                     let dmg = Math.max(1, playerStats.ap - npcStats.dp);
                     dmg = Math.floor(dmg * (0.9 + Math.random() * 0.2));
                     
-                    // [應用加力]
                     dmg = applyEnforce(dmg, playerStats, playerData);
 
                     if (!currentTarget.isLethal) dmg = Math.floor(dmg / 2);
@@ -620,7 +630,6 @@ export const CombatSystem = {
                         currentTarget.npcHp -= dmg;
                         await syncNpcState(currentTarget.uniqueId, currentTarget.npcHp, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, userId, false);
                         
-                        // [傷害顯示黃色]
                         UI.print(UI.txt(`(你對 ${currentTarget.npcName} 造成 ${dmg} 點傷害)`, "#ffff00"), "chat", true);
                         
                         const statusMsg = getStatusDesc(currentTarget.npcName, currentTarget.npcHp, currentTarget.maxNpcHp);
@@ -648,7 +657,6 @@ export const CombatSystem = {
                             }
                         }
                     } else {
-                        // 未命中邏輯
                         const localMsg = getSkillActionMsg(playerData, currentTarget.npcName, true, "你");
                         const publicMsg = getSkillActionMsg(playerData, currentTarget.npcName, true, playerData.name);
                         UI.print(localMsg, "chat", true);
@@ -672,7 +680,6 @@ export const CombatSystem = {
                     let dmg = Math.max(1, playerStats.ap - tStats.dp);
                     dmg = Math.floor(dmg * (0.8 + Math.random() * 0.4)); 
                     
-                    // [應用加力]
                     dmg = applyEnforce(dmg, playerStats, playerData);
                     
                     dmg = Math.floor(dmg / 2); 
@@ -721,7 +728,6 @@ export const CombatSystem = {
          
                          playerData.attributes.hp -= dmg;
                          
-                         // [受傷顯示紅色]
                          UI.print(UI.txt(`(你受到了 ${dmg} 點傷害)`, "#ff0000"), "chat", true);
                          
                          UI.updateHUD(playerData);
@@ -819,7 +825,6 @@ export const CombatSystem = {
     
             UI.updateHUD(playerData);
             if (combatList.length === 0) CombatSystem.stopCombat(userId);
-            // 儲存最新的 HP 和 Force (因為加力會消耗內力)
             await updatePlayer(userId, { 
                 "attributes.hp": playerData.attributes.hp, 
                 "attributes.force": playerData.attributes.force 

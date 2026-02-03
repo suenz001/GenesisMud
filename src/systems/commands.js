@@ -55,7 +55,6 @@ const commandRegistry = {
     'apprentice': { description: '拜師', execute: SkillSystem.apprentice },
     'enable': { description: '激發', execute: SkillSystem.enable },
     'unenable': { description: '解除激發', execute: SkillSystem.unenable },
-    // [新增] 放棄技能
     'abandon': { description: '放棄技能', execute: SkillSystem.abandon },
     
     // === 屬性修練指令 ===
@@ -75,7 +74,8 @@ const commandRegistry = {
         description: '觀察', 
         execute: (p, a) => { 
             if (a.length > 0) {
-                import("./map.js").then(m => m.MapSystem.lookTarget(p, a[0]));
+                // [修正] 傳遞 a[1] 作為索引 (例如 look rabbit 2)
+                import("./map.js").then(m => m.MapSystem.lookTarget(p, a[0], a[1]));
             } else {
                 import("./map.js").then(m => m.MapSystem.look(p));
             }
@@ -96,7 +96,7 @@ const commandRegistry = {
 
 function handleLook(p, a) {
     if (a.length > 0) {
-        import("./map.js").then(m => m.MapSystem.lookTarget(p, a[0]));
+        import("./map.js").then(m => m.MapSystem.lookTarget(p, a[0], a[1]));
     } else {
         MapSystem.look(p);
     }
