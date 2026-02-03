@@ -164,14 +164,21 @@ export const SkillDB = {
 
     "turtle-force": { name: "龜息功", id: "turtle-force", base: "force", type: "force", rating: 1.1, desc: "模仿神龜呼吸的內功。" },
     
-    // === 輕功/閃避技能 (加入 dodge_actions) ===
+// === 輕功/閃避技能 (修正版) ===
     "leaf-steps": { 
         name: "隨風步", id: "leaf-steps", base: "dodge", type: "dodge", rating: 1.3,
         desc: "身形飄忽不定，如落葉隨風。",
         dodge_actions: [
-            "$P身形如一片<span style='color:#90ee90'>落葉</span>般隨風飄起，輕輕巧巧地避開了這一擊。",
-            "$P腳步虛浮，看似要跌倒，卻在<span style='color:#00ff7f'>間不容髮</span>之際閃過了$N的攻擊。",
-            "$P身體隨著對方的拳風擺動，<span style='color:#adff2f'>如影隨形</span>，毫髮無傷地躲開了招式。"
+            // 原本是 $P ... 改為 $N (閃避者)
+            "$N身形如一片<span style='color:#90ee90'>落葉</span>般隨風飄起，輕輕巧巧地避開了這一擊。",
+            
+            // 原本是 $P ... 閃過了 $N 的攻擊
+            // 改為 $N (閃避者) ... 閃過了 $P (攻擊者) 的攻擊
+            "$N腳步虛浮，看似要跌倒，卻在<span style='color:#00ff7f'>間不容髮</span>之際閃過了$P的攻擊。",
+            
+            // 原本是 $P ...
+            // 改為 $N (閃避者)
+            "$N身體隨著對方的拳風擺動，<span style='color:#adff2f'>如影隨形</span>，毫髮無傷地躲開了招式。"
         ]
     }
 };
