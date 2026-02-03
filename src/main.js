@@ -89,6 +89,8 @@ UI.onInput((cmd) => {
 function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
     
+    // [修改] 移除了 tickCount，因為不再需要計算時間扣除飢渴度
+    
     regenInterval = setInterval(async () => {
         if (!localPlayerData || !user) return;
         
@@ -97,7 +99,8 @@ function startRegeneration(user) {
         let changed = false;
 
         // === [修改] 全屬性自然回復邏輯 (每10秒一次) ===
-        // 氣血、精神、神識 (基礎回復 10%)
+        
+        // 1. 基礎屬性 (HP/SP/MP) - 回復 10%
         if (attr.hp < attr.maxHp) {
             const recover = Math.floor(attr.maxHp * 0.1); 
             attr.hp = Math.min(attr.maxHp, attr.hp + recover);
@@ -114,7 +117,8 @@ function startRegeneration(user) {
             changed = true;
         }
 
-        // 內力、靈力、法力 (基礎回復 5%，修練主要靠 exercise，這裡只是輔助回復)
+        // 2. 特殊屬性 (內力/靈力/法力) - 回復 5%
+        // 這讓掛機也能慢慢積攢力量，但效率不如打坐
         if (attr.force < attr.maxForce) {
             const recover = Math.max(1, Math.floor(attr.maxForce * 0.05));
             attr.force = Math.min(attr.maxForce, attr.force + recover);
@@ -131,8 +135,8 @@ function startRegeneration(user) {
             changed = true;
         }
         
-        // === [修改] 移除這裡的自動飢渴扣除 ===
-        // 現在食物和水只會在 MapSystem.move() 移動時扣除
+        // === [重要修改] 已移除自動扣除 food/water 的邏輯 ===
+        // 現在只有在 MapSystem.move 移動時才會扣除 (在 systems/map.js 中實作)
 
         // 自動進食/飲水邏輯 (當移動導致飢餓時，這裡會幫忙補)
         if (localPlayerData.inventory) {
@@ -162,7 +166,7 @@ function startRegeneration(user) {
         }
 
         if (changed) {
-            // 移除回復時的洗版訊息，僅更新 HUD
+            // 僅更新 HUD，不顯示洗版訊息
             UI.updateHUD(localPlayerData);
             try {
                 const playerRef = doc(db, "players", user.uid);
