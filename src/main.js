@@ -89,46 +89,52 @@ UI.onInput((cmd) => {
 function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
     
-    // [修改] 加入計數器，用來降低飢渴消耗頻率
-    let tickCount = 0;
-
     regenInterval = setInterval(async () => {
         if (!localPlayerData || !user) return;
         
-        tickCount++;
-
         const attr = localPlayerData.attributes;
         let msg = [];
         let changed = false;
 
-        // 自然回復邏輯 (HP/MP/SP 每10秒回復一次，維持不變)
+        // === [修改] 全屬性自然回復邏輯 (每10秒一次) ===
+        // 氣血、精神、神識 (基礎回復 10%)
         if (attr.hp < attr.maxHp) {
             const recover = Math.floor(attr.maxHp * 0.1); 
             attr.hp = Math.min(attr.maxHp, attr.hp + recover);
-            msg.push("氣息順暢了許多");
             changed = true;
         }
         if (attr.sp < attr.maxSp) {
             const recover = Math.floor(attr.maxSp * 0.1);
             attr.sp = Math.min(attr.maxSp, attr.sp + recover);
-            msg.push("精神振作了些");
             changed = true;
         }
         if (attr.mp < attr.maxMp) {
             const recover = Math.floor(attr.maxMp * 0.1);
             attr.mp = Math.min(attr.maxMp, attr.mp + recover);
-            msg.push("頭腦清醒了許多");
+            changed = true;
+        }
+
+        // 內力、靈力、法力 (基礎回復 5%，修練主要靠 exercise，這裡只是輔助回復)
+        if (attr.force < attr.maxForce) {
+            const recover = Math.max(1, Math.floor(attr.maxForce * 0.05));
+            attr.force = Math.min(attr.maxForce, attr.force + recover);
+            changed = true;
+        }
+        if (attr.spiritual < attr.maxSpiritual) {
+            const recover = Math.max(1, Math.floor(attr.maxSpiritual * 0.05));
+            attr.spiritual = Math.min(attr.maxSpiritual, attr.spiritual + recover);
+            changed = true;
+        }
+        if (attr.mana < attr.maxMana) {
+            const recover = Math.max(1, Math.floor(attr.maxMana * 0.05));
+            attr.mana = Math.min(attr.maxMana, attr.mana + recover);
             changed = true;
         }
         
-        // [修改] 飢渴消耗：每 6 次循環 (約 60 秒) 才扣 1 點
-        if (tickCount % 6 === 0) {
-            attr.food = Math.max(0, attr.food - 1);
-            attr.water = Math.max(0, attr.water - 1);
-            if (attr.food === 0 || attr.water === 0) changed = true;
-        }
+        // === [修改] 移除這裡的自動飢渴扣除 ===
+        // 現在食物和水只會在 MapSystem.move() 移動時扣除
 
-        // 自動進食/飲水邏輯
+        // 自動進食/飲水邏輯 (當移動導致飢餓時，這裡會幫忙補)
         if (localPlayerData.inventory) {
             if (isAutoEat && attr.food < attr.maxFood * 0.8) {
                 const foodItem = localPlayerData.inventory.find(i => {
@@ -156,7 +162,7 @@ function startRegeneration(user) {
         }
 
         if (changed) {
-            if(msg.length > 0) UI.print("你覺得" + msg.join("，") + "。", "system");
+            // 移除回復時的洗版訊息，僅更新 HUD
             UI.updateHUD(localPlayerData);
             try {
                 const playerRef = doc(db, "players", user.uid);
@@ -166,7 +172,7 @@ function startRegeneration(user) {
             }
         }
 
-    }, 10000); // 循環依然是 10 秒，但飢渴度每 60 秒才扣
+    }, 10000); 
 }
 
 async function handleCreationInput(input) {
