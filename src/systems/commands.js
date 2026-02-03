@@ -5,7 +5,6 @@ import { MessageSystem } from "./messages.js";
 import { ItemDB } from "../data/items.js"; 
 import { NPCDB } from "../data/npcs.js"; 
 
-// 引入拆分後的子系統
 import { CombatSystem } from "./combat.js";
 import { PlayerSystem, updatePlayer } from "./player.js";
 import { InventorySystem } from "./inventory.js";
@@ -22,7 +21,7 @@ const commandRegistry = {
     'help': { description: '查看指令列表', execute: PlayerSystem.help },
     'score': { description: '查看屬性', execute: PlayerSystem.score },
     'save': { description: '存檔', execute: PlayerSystem.save },
-    'quit': { description: '離開遊戲', execute: PlayerSystem.quit }, // [修正] 補上 quit 指令
+    'quit': { description: '離開遊戲', execute: PlayerSystem.quit }, 
     'suicide': { description: '自殺刪檔', execute: PlayerSystem.suicide },
     
     // === 戰鬥指令 ===
@@ -57,6 +56,9 @@ const commandRegistry = {
     'exercise': { description: '運氣', execute: (p,a,u) => SkillSystem.trainStat(p,u,"內力","force","maxForce","hp","氣",a) },
     'respirate': { description: '運精', execute: (p,a,u) => SkillSystem.trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精",a) },
     'meditate': { description: '運神', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神",a) },
+    
+    // === [新增] 內力運用指令 ===
+    'exert': { description: '運功', execute: SkillSystem.exert },
     
     // === 內功加力指令 ===
     'enforce': { description: '加力', execute: PlayerSystem.enforce },

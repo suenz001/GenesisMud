@@ -38,12 +38,11 @@ function findNPCInRoom(roomId, npcNameOrId) {
 }
 
 export const SkillSystem = {
-    // === [修改] 支援 args 參數來決定消耗量，並改善累積邏輯 ===
+    // === 屬性修練 (Exercise/Respirate/Meditate) ===
     trainStat: async (playerData, userId, typeName, attrCur, attrMax, costAttr, costName, args) => {
         const attr = playerData.attributes;
         
-        // 1. 決定消耗量 (Cost)
-        // 預設 10，如果有輸入數字 (例如 exercise 7) 則使用該數字
+        // 1. 決定消耗量 (支援輸入 exercise 50)
         let cost = 10;
         if (args && args.length > 0) {
             const parsed = parseInt(args[0]);
@@ -52,7 +51,7 @@ export const SkillSystem = {
             }
         }
 
-        // 2. 檢查燃料 (氣/HP) 是否足夠
+        // 2. 檢查燃料是否足夠
         if (attr[costAttr] < cost) { 
             UI.print(`你的${costName}不足，無法修練。(需要 ${cost})`, "error"); 
             return; 
@@ -60,9 +59,10 @@ export const SkillSystem = {
     
         const maxVal = attr[attrMax];
         const curVal = attr[attrCur];
+        // 允許累積到上限的 2 倍
         const limit = maxVal * 2; 
     
-        // 3. 內力修練的特殊瓶頸檢查 (只針對內力 force) - 檢查是否超過技能上限
+        // 3. 內力修練的特殊瓶頸檢查
         if (typeName === "內力") {
             const forceSkillLvl = playerData.skills.force || 0;
             const conBonus = playerData.attributes.con || 20;
@@ -70,56 +70,46 @@ export const SkillSystem = {
             const maxCap = (forceSkillLvl + conBonus) * 10;
 
             if (maxVal >= maxCap) {
-                // [修正] 加入 true 參數以正確顯示顏色
                 UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system", true);
                 UI.print(`(內力上限已達 ${maxVal}，需提升基本內功等級或根骨才能突破)`, "system");
                 return;
             }
         }
 
-        // 4. 計算獲得量 (Gain) - 簡單設定：投入多少氣，獲得多少內力 + 技能加成
-        // 例如：cost 10, skill 100 -> gain = 10 + 10 = 20
+        // 4. 計算獲得量
         const gain = cost + Math.floor((playerData.skills?.force || 0) / 10); 
-        
         let improved = false;
         
-        // 5. 執行修練：如果當前值已經到達極限邊緣 (limit - 1)，再練就會觸發上限提升
+        // 5. 執行修練：如果當前值已經到達極限邊緣，再練就會觸發上限提升
         if (curVal >= limit - 1) {
             const pot = playerData.combat?.potential || 0;
             if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
             
-            // 消耗與提升
-            // 這裡只需消耗 1 點氣 (因為 exercise 1) 就可以觸發
+            // 突破瓶頸
             attr[costAttr] -= cost; 
             playerData.combat.potential -= 1;
             attr[attrMax] += 1; // 上限 +1
-            attr[attrCur] = attr[attrMax]; // 當前值重置為新的上限 (從 20/10 變成 11/11)
+            attr[attrCur] = attr[attrMax]; // 重置為新的上限
             
             improved = true;
             let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
             UI.print(msg, "system", true);
 
-            // 易筋洗髓：內力上限提升時，同步提升氣血 (HP)
+            // [平衡修正] 易筋洗髓：內力上限提升時，同步提升氣血 (HP) +3
             if (typeName === "內力") {
-                attr.maxHp = (attr.maxHp || 100) + 1;
-                attr.hp += 1;
-                // [修正] 加入 true 參數以正確顯示顏色
+                attr.maxHp = (attr.maxHp || 100) + 3;
+                attr.hp += 3;
                 UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system", true);
             }
 
         } else {
-            // 一般累積過程
-            // 不再檢查 "curVal >= limit"，因為我們要把球接住，直接加到滿為止
-            
+            // 一般累積
             attr[costAttr] -= cost;
             const newVal = curVal + gain;
-            
-            // 確保不超過 limit
             attr[attrCur] = Math.min(limit, newVal);
             
             let msg = `你運轉周天，消耗 ${cost} 點${costName}，將其轉化為${typeName} ... `;
             if (attr[attrCur] > maxVal) {
-                // 顯示超出的部分 (例如：105/100)
                 msg += `(${attr[attrCur]}/${maxVal} <span style="color:#00ff00">+${attr[attrCur] - maxVal}</span>)`;
                 UI.print(msg + " 真氣在丹田內鼓盪，隨時可能突破。", "system", true);
             } else {
@@ -130,7 +120,6 @@ export const SkillSystem = {
     
         UI.updateHUD(playerData);
     
-        // 存檔資料準備
         let updateData = { 
             [`attributes.${costAttr}`]: attr[costAttr],
             [`attributes.${attrCur}`]: attr[attrCur]
@@ -146,6 +135,80 @@ export const SkillSystem = {
             }
         }
 
+        await updatePlayer(userId, updateData);
+    },
+
+    // === [新增] 內力運用 (Exert) ===
+    exert: async (playerData, args, userId) => {
+        // 1. 戰鬥中限制 (避免無敵)
+        if (playerData.state === 'fighting') {
+            UI.print("戰鬥中運功療傷太危險了！你無法分心。", "error");
+            return;
+        }
+
+        // 2. 解析指令
+        if (args.length === 0) {
+            UI.print("指令格式: exert <regenerate|recover|refresh>", "error");
+            return;
+        }
+        const type = args[0].toLowerCase();
+        let targetCur, targetMax, name;
+
+        if (type === 'recover') { targetCur = 'hp'; targetMax = 'maxHp'; name = '氣'; }
+        else if (type === 'regenerate') { targetCur = 'sp'; targetMax = 'maxSp'; name = '精'; }
+        else if (type === 'refresh') { targetCur = 'mp'; targetMax = 'maxMp'; name = '神'; }
+        else { UI.print("未知的功能。請使用 recover(氣), regenerate(精), refresh(神)。", "error"); return; }
+
+        // 3. 檢查是否需要運功
+        const attr = playerData.attributes;
+        if (attr[targetCur] >= attr[targetMax]) {
+            UI.print(`你的${name}現在很充沛，不需要運功。`, "system");
+            return;
+        }
+
+        // 4. 檢查內力是否足夠
+        const currentForce = attr.force;
+        if (currentForce <= 0) {
+            UI.print("你現在一點內力也沒有。", "error");
+            return;
+        }
+
+        // 5. 計算轉換效率 (Factor)
+        // 公式：1 + (基本內功 / 50)
+        // 0級=1倍, 50級=2倍, 100級=3倍
+        const forceLvl = playerData.skills.force || 0;
+        const factor = 1 + (forceLvl / 50);
+
+        // 6. 計算需求與執行
+        const missing = attr[targetMax] - attr[targetCur];
+        // 需求內力 = 缺損值 / 倍率 (無條件進位)
+        let cost = Math.ceil(missing / factor);
+
+        let actualRecover = 0;
+        let actualCost = 0;
+
+        if (currentForce >= cost) {
+            // 內力足夠補滿
+            actualCost = cost;
+            actualRecover = missing;
+            attr.force -= actualCost;
+            attr[targetCur] = attr[targetMax];
+        } else {
+            // 內力不足，耗盡所有內力
+            actualCost = currentForce;
+            actualRecover = Math.floor(actualCost * factor);
+            attr.force = 0;
+            attr[targetCur] += actualRecover;
+        }
+
+        UI.print(`你運功${name === '氣' ? '療傷' : '提氣'}，消耗 ${actualCost} 點內力，恢復了 ${actualRecover} 點${name}。`, "system");
+        
+        UI.updateHUD(playerData);
+        
+        const updateData = {
+            "attributes.force": attr.force,
+            [`attributes.${targetCur}`]: attr[targetCur]
+        };
         await updatePlayer(userId, updateData);
     },
 
@@ -264,12 +327,10 @@ export const SkillSystem = {
         if(!p.family||p.family.masterId!==npc.id){UI.print("你必須先拜師才能向他請教。","error");return;} 
         if(!npc.skills[sid]){UI.print("師父並不會這招。","chat");return;} 
         
-        // 檢查 1: 不能超過師傅
         if((p.skills[sid]||0)>=npc.skills[sid]){UI.print("這招你已經學滿了，師父沒什麼好教你的了。","chat");return;} 
         
         const skillInfo = SkillDB[sid];
 
-        // 檢查 2: 基礎武學檢查
         if (skillInfo && skillInfo.base) {
             const baseLvl = p.skills[skillInfo.base] || 0;
             const baseName = SkillDB[skillInfo.base] ? SkillDB[skillInfo.base].name : skillInfo.base;
@@ -278,7 +339,6 @@ export const SkillSystem = {
                 UI.print(`你的${baseName}毫無根基，怎麼學得會這高深招式？`, "error");
                 return;
             }
-            // 檢查 3: 進階不能超過基礎
             const currentLvl = p.skills[sid] || 0;
             if (currentLvl >= baseLvl) {
                 UI.print(`你的${baseName}火候不足，無法領悟更高深的${skillInfo.name}。`, "error");
@@ -294,7 +354,6 @@ export const SkillSystem = {
         
         p.attributes.sp-=spC; p.combat.potential-=potC; p.skills[sid]=(p.skills[sid]||0)+1; 
         
-        // === [修正] 顯示消耗數值 ===
         UI.print(`你聽了${npc.name}的指導，消耗了 ${potC} 點潛能、${spC} 點精，${SkillDB[sid].name} 的修為提高了！(${p.skills[sid]}級)`, "system"); 
         
         await updatePlayer(u,{"attributes.sp":p.attributes.sp,"combat.potential":p.combat.potential,"skills":p.skills}); 
