@@ -29,6 +29,7 @@ export function getEffectiveSkillLevel(entity, baseType) {
         advancedLvl = skills[enabledId];
     }
 
+    // 進階武功等級不能超過基礎武功
     if (advancedLvl > baseLvl) {
         advancedLvl = baseLvl;
     }
@@ -182,7 +183,7 @@ export const PlayerSystem = {
         await signOut(auth);
     },
 
-    // [優化] Score 顯示：更緊湊、對齊的 MUD 風格
+    // [優化] Score 顯示：包含食物飲水
     score: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
@@ -211,16 +212,19 @@ export const PlayerSystem = {
         // 第二行：資源
         html += `<span style="color:#aaa">財產：</span><span style="color:#ffd700; display:inline-block; width:100px;">${moneyStr}</span>`;
         html += `<span style="color:#aaa">潛能：</span><span style="color:#ffff00">${potential}</span><br>`;
+
+        // [新增] 第三行：生存狀態
+        html += `<span style="color:#aaa">食物：</span><span style="color:#00ff00; display:inline-block; width:100px;">${attr.food}/${attr.maxFood}</span>`;
+        html += `<span style="color:#aaa">飲水：</span><span style="color:#00bfff">${attr.water}/${attr.maxWater}</span><br>`;
         
         html += `${border}<br>`;
 
-        // 第三行：屬性 (一行顯示)
+        // 第四行：屬性 (一行顯示)
         html += `<span style="color:#88bbcc">膂</span>:${UI.txt(attr.str,"#fff")} <span style="color:#88bbcc">根</span>:${UI.txt(attr.con,"#fff")} <span style="color:#88bbcc">悟</span>:${UI.txt(attr.int,"#fff")} <span style="color:#88bbcc">定</span>:${UI.txt(attr.per,"#fff")} <span style="color:#88bbcc">福</span>:${UI.txt(attr.kar,"#fff")} <span style="color:#88bbcc">靈</span>:${UI.txt(attr.cor,"#fff")}<br>`;
         
         html += `${border}<br>`;
 
-        // 第四行：修練數值 (左右分欄)
-        // 使用 CSS Grid 進行簡單排版
+        // 第五行：修練數值 (Grid)
         html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">`;
         
         // 左欄
@@ -230,18 +234,18 @@ export const PlayerSystem = {
         html += `神：<span style="color:#00bfff">${attr.mp}/${attr.maxMp}</span><br>`;
         html += `</div>`;
 
-        // 右欄 (含按鈕)
+        // 右欄
         html += `<div>`;
         html += `靈力：<span style="color:#eee">${attr.spiritual}/${attr.maxSpiritual}</span> ${UI.makeCmd("[運]", cmdSp, "cmd-btn")}<br>`;
         html += `內力：<span style="color:#eee">${attr.force}/${attr.maxForce}</span> ${UI.makeCmd("[運]", cmdHp, "cmd-btn")}<br>`;
         html += `法力：<span style="color:#eee">${attr.mana}/${attr.maxMana}</span> ${UI.makeCmd("[運]", cmdMp, "cmd-btn")}<br>`;
         html += `</div>`;
         
-        html += `</div>`; // End Grid
+        html += `</div>`; 
 
         html += `${border}<br>`;
         
-        // 第五行：戰鬥參數
+        // 第六行：戰鬥參數
         html += `攻擊：<span style="color:#fff; display:inline-block; width:40px;">${Math.floor(s.ap)}</span> `;
         html += `防禦：<span style="color:#fff; display:inline-block; width:40px;">${Math.floor(s.dp)}</span> `;
         html += `殺氣：<span style="color:#ff0000">${kills}</span><br>`;
@@ -281,17 +285,52 @@ export const PlayerSystem = {
         }
     },
 
+    // [優化] Help 顯示：分類更清晰，補齊遺漏指令
     help: () => {
-        let msg = UI.titleLine("江湖指南");
-        msg += UI.txt(" 系統指令：", "#fff") + "save, quit, suicide\n";
-        msg += UI.txt(" 裝備指令：", "#ff5555") + "wield, unwield, wear, unwear\n";
-        msg += UI.txt(" 基本指令：", "#00ffff") + "score, skills, inventory (i)\n";
-        msg += UI.txt(" 武學指令：", "#ff5555") + "apprentice, learn, enable, unenable, practice\n";
-        msg += UI.txt(" 修練指令：", "#ffff00") + "exercise, respirate, meditate, enforce, autoforce\n";
-        msg += UI.txt(" 戰鬥指令：", "#ff0000") + "kill (殺), fight (切磋)\n";
-        msg += UI.txt(" 生活指令：", "#00ff00") + "eat, drink, drop, get, look\n";
-        msg += UI.txt(" 交易指令：", "#ffcc00") + "list, buy, sell\n";
-        msg += UI.txt(" 移動指令：", "#aaa") + "n, s, e, w, u, d\n";
-        UI.print(msg, 'normal', true);
+        const border = UI.txt("---------------------------------------------------", "#444");
+        let html = `<div style="font-family: 'Courier New', monospace; background: rgba(0,0,0,0.3); padding: 10px; border: 1px solid #333;">`;
+        html += `<div style="text-align:center; color:#00ffff; margin-bottom:5px;">≡ 江湖指南 ≡</div>`;
+        html += `${border}<br>`;
+        
+        // 定義樣式
+        const catStyle = "color:#ff9800; font-weight:bold; display:inline-block; width:60px;";
+        const cmdStyle = "color:#ccc;";
+
+        // 系統
+        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[系統]</span> `;
+        html += `<span style="${cmdStyle}">save, quit, recall, help, suicide</span></div>`;
+
+        // 狀態
+        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[狀態]</span> `;
+        html += `<span style="${cmdStyle}">score, skills, inventory (i)</span></div>`;
+
+        // 物品與裝備
+        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[物品]</span> `;
+        html += `<span style="${cmdStyle}">get, drop, give, eat, drink, list, buy, sell</span><br>`;
+        html += `<span style="display:inline-block; width:60px;"></span> <span style="${cmdStyle}">wear, unwear, wield, unwield</span></div>`;
+
+        // 戰鬥
+        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[戰鬥]</span> `;
+        html += `<span style="${cmdStyle}">kill (殺), fight (切磋)</span></div>`;
+
+        // 武學
+        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[武學]</span> `;
+        html += `<span style="${cmdStyle}">apprentice (拜師), learn (學習), practice (練習)</span><br>`;
+        html += `<span style="display:inline-block; width:60px;"></span> <span style="${cmdStyle}">enable (激發), unenable (取消激發)</span></div>`;
+
+        // 修練
+        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[修練]</span> `;
+        html += `<span style="${cmdStyle}">exercise (運氣), respirate (運精), meditate (運神)</span><br>`;
+        html += `<span style="display:inline-block; width:60px;"></span> <span style="${cmdStyle}">enforce (加力), autoforce (自動修練)</span></div>`;
+        
+        // 行動
+        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[行動]</span> `;
+        html += `<span style="${cmdStyle}">look (l), n, s, e, w, u, d</span></div>`;
+
+        html += `${border}<br>`;
+        html += `<div style="color:#888; font-size:12px;">提示：點擊介面按鈕可直接執行大部分指令。</div>`;
+        html += `</div>`;
+
+        UI.print(html, 'normal', true);
     }
 };

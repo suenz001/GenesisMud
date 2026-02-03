@@ -8,9 +8,10 @@ import { NPCDB } from "../data/npcs.js";
 
 let autoForceInterval = null; 
 
-// === 升級所需經驗值公式 ===
+// === 升級所需經驗值公式 (極速升級版) ===
 function calculateMaxExp(level) {
     if (level < 150) {
+        // [修改] 係數降為 5，升級速度飛快
         return Math.pow(level + 1, 2) * 5;
     } else {
         return Math.pow(level + 1, 3);
@@ -34,12 +35,13 @@ function findNPCInRoom(roomId, npcNameOrId) {
 }
 
 export const SkillSystem = {
-    // ... (autoForce, trainStat, exert 保持不變) ...
+    // === 自動修練內力 (Auto Force) ===
     autoForce: async (p, a, u) => {
+        // 如果已經在修練中，則停止
         if (autoForceInterval || p.state === 'exercising') {
             if (autoForceInterval) clearInterval(autoForceInterval);
             autoForceInterval = null;
-            p.state = 'normal'; 
+            p.state = 'normal'; // 恢復狀態
             await updatePlayer(u, { state: 'normal' });
             UI.print("你停止了自動修練內力。", "system");
             return;
@@ -50,11 +52,13 @@ export const SkillSystem = {
             return;
         }
 
+        // 開始修練，設定狀態
         p.state = 'exercising';
         await updatePlayer(u, { state: 'exercising' });
         UI.print("你開始閉目養神，自動運轉內息... (再次輸入 autoforce 以解除)", "system");
         
         autoForceInterval = setInterval(async () => {
+            // 檢查狀態是否被外部改變 (例如被打進入戰鬥)
             if (p.state !== 'exercising') {
                 clearInterval(autoForceInterval);
                 autoForceInterval = null;
@@ -82,131 +86,133 @@ export const SkillSystem = {
         }, 2000); 
     },
 
+    // === 屬性修練 (Exercise/Respirate/Meditate) ===
     trainStat: async (playerData, userId, typeName, attrCur, attrMax, costAttr, costName, args) => {
-         // ... (保持原樣，篇幅省略，功能無變動) ...
-         const attr = playerData.attributes;
-         let cost = 10;
- 
-         if (args && args[0] === 'double') {
-             const maxVal = attr[attrMax];
-             const curVal = attr[attrCur];
-             const limit = maxVal * 2;
- 
-             if (curVal >= limit) {
-                 UI.print(UI.txt(`你的${typeName}已經運轉至極限，無法再容納更多了。`, "#ffff00"), "system", true);
+        const attr = playerData.attributes;
+        let cost = 10;
+
+        if (args && args[0] === 'double') {
+            const maxVal = attr[attrMax];
+            const curVal = attr[attrCur];
+            const limit = maxVal * 2;
+
+            if (curVal >= limit) {
+                // [修復] 這裡補上 true，避免 HTML 代碼外洩
+                UI.print(UI.txt(`你的${typeName}已經運轉至極限，無法再容納更多了。`, "#ffff00"), "system", true);
+                return;
+            }
+
+            const needed = limit - curVal;
+            const safeAvailable = Math.max(0, attr[costAttr] - 10);
+
+            if (safeAvailable <= 0) {
+                 UI.print(`你的${costName}不足，無法運氣。`, "error");
                  return;
-             }
- 
-             const needed = limit - curVal;
-             const safeAvailable = Math.max(0, attr[costAttr] - 10);
- 
-             if (safeAvailable <= 0) {
-                  UI.print(`你的${costName}不足，無法運氣。`, "error");
-                  return;
-             }
- 
-             cost = Math.min(needed, safeAvailable);
-             if (cost < 1) cost = 10;
- 
-         } else if (args && args.length > 0) {
-             const parsed = parseInt(args[0]);
-             if (!isNaN(parsed) && parsed > 0) cost = parsed;
-         }
- 
-         if (attr[costAttr] < cost) { 
-             UI.print(`你的${costName}不足，無法修練。(需要 ${cost})`, "error"); 
-             return; 
-         }
-     
-         const maxVal = attr[attrMax];
-         const curVal = attr[attrCur];
-         const limit = maxVal * 2; 
-     
-         if (typeName === "內力") {
-             const forceSkillLvl = playerData.skills.force || 0;
-             const conBonus = playerData.attributes.con || 20;
-             const maxCap = (forceSkillLvl + conBonus) * 10;
- 
-             if (maxVal >= maxCap) {
-                 UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system", true);
-                 UI.print(`(內力上限已達 ${maxVal}，需提升基本內功等級或根骨才能突破)`, "system");
-                 
-                 if (autoForceInterval) {
-                     clearInterval(autoForceInterval);
-                     autoForceInterval = null;
-                     playerData.state = 'normal';
-                     await updatePlayer(userId, { state: 'normal' });
-                     UI.print("已達瓶頸，自動修練停止。", "system");
-                 }
-                 return;
-             }
-         }
- 
-         const gain = cost + Math.floor((playerData.skills?.force || 0) / 10); 
-         let improved = false;
-         
-         if (curVal >= limit - 1) {
-             if (typeName !== "內力") {
-                 const pot = playerData.combat?.potential || 0;
-                 if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
-                 playerData.combat.potential -= 1;
-             }
-             
-             attr[costAttr] -= cost; 
-             attr[attrMax] += 1; 
-             attr[attrCur] = attr[attrMax]; 
-             
-             improved = true;
-             let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
-             UI.print(msg, "system", true);
- 
-             if (typeName === "內力") {
-                 attr.maxHp = (attr.maxHp || 100) + 3;
-                 attr.hp += 3;
-                 UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system", true);
-             }
- 
-         } else {
-             attr[costAttr] -= cost;
-             const newVal = curVal + gain;
-             attr[attrCur] = Math.min(limit, newVal);
-             
-             let msg = `你運轉周天，消耗 ${cost} 點${costName}，將其轉化為${typeName} ... `;
-             if (attr[attrCur] > maxVal) {
-                 msg += `(${attr[attrCur]}/${maxVal} <span style="color:#00ff00">+${attr[attrCur] - maxVal}</span>)`;
-                 UI.print(msg + " 真氣在丹田內鼓盪，隨時可能突破。", "system", true);
-             } else {
-                 msg += `(${attr[attrCur]}/${maxVal})`;
-                 UI.print(msg, "system");
-             }
-         }
-     
-         UI.updateHUD(playerData);
-     
-         let updateData = { 
-             [`attributes.${costAttr}`]: attr[costAttr],
-             [`attributes.${attrCur}`]: attr[attrCur]
-         };
- 
-         if (improved) {
-             updateData[`attributes.${attrMax}`] = attr[attrMax];
-             updateData["combat.potential"] = playerData.combat.potential;
-             if (typeName === "內力") {
-                 updateData["attributes.maxHp"] = attr.maxHp;
-                 updateData["attributes.hp"] = attr.hp;
-             }
-         }
- 
-         await updatePlayer(userId, updateData);
+            }
+
+            cost = Math.min(needed, safeAvailable);
+            if (cost < 1) cost = 10;
+
+        } else if (args && args.length > 0) {
+            const parsed = parseInt(args[0]);
+            if (!isNaN(parsed) && parsed > 0) cost = parsed;
+        }
+
+        if (attr[costAttr] < cost) { 
+            UI.print(`你的${costName}不足，無法修練。(需要 ${cost})`, "error"); 
+            return; 
+        }
+    
+        const maxVal = attr[attrMax];
+        const curVal = attr[attrCur];
+        const limit = maxVal * 2; 
+    
+        if (typeName === "內力") {
+            const forceSkillLvl = playerData.skills.force || 0;
+            const conBonus = playerData.attributes.con || 20;
+            const maxCap = (forceSkillLvl + conBonus) * 10;
+
+            if (maxVal >= maxCap) {
+                UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system", true);
+                UI.print(`(內力上限已達 ${maxVal}，需提升基本內功等級或根骨才能突破)`, "system");
+                
+                // 若達到瓶頸，自動停止修練並恢復狀態
+                if (autoForceInterval) {
+                    clearInterval(autoForceInterval);
+                    autoForceInterval = null;
+                    playerData.state = 'normal';
+                    await updatePlayer(userId, { state: 'normal' });
+                    UI.print("已達瓶頸，自動修練停止。", "system");
+                }
+                return;
+            }
+        }
+
+        const gain = cost + Math.floor((playerData.skills?.force || 0) / 10); 
+        let improved = false;
+        
+        if (curVal >= limit - 1) {
+            if (typeName !== "內力") {
+                const pot = playerData.combat?.potential || 0;
+                if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
+                playerData.combat.potential -= 1;
+            }
+            
+            attr[costAttr] -= cost; 
+            attr[attrMax] += 1; 
+            attr[attrCur] = attr[attrMax]; 
+            
+            improved = true;
+            let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
+            UI.print(msg, "system", true);
+
+            if (typeName === "內力") {
+                attr.maxHp = (attr.maxHp || 100) + 3;
+                attr.hp += 3;
+                UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system", true);
+            }
+
+        } else {
+            attr[costAttr] -= cost;
+            const newVal = curVal + gain;
+            attr[attrCur] = Math.min(limit, newVal);
+            
+            let msg = `你運轉周天，消耗 ${cost} 點${costName}，將其轉化為${typeName} ... `;
+            if (attr[attrCur] > maxVal) {
+                msg += `(${attr[attrCur]}/${maxVal} <span style="color:#00ff00">+${attr[attrCur] - maxVal}</span>)`;
+                UI.print(msg + " 真氣在丹田內鼓盪，隨時可能突破。", "system", true);
+            } else {
+                msg += `(${attr[attrCur]}/${maxVal})`;
+                UI.print(msg, "system");
+            }
+        }
+    
+        UI.updateHUD(playerData);
+    
+        let updateData = { 
+            [`attributes.${costAttr}`]: attr[costAttr],
+            [`attributes.${attrCur}`]: attr[attrCur]
+        };
+
+        if (improved) {
+            updateData[`attributes.${attrMax}`] = attr[attrMax];
+            updateData["combat.potential"] = playerData.combat.potential;
+            if (typeName === "內力") {
+                updateData["attributes.maxHp"] = attr.maxHp;
+                updateData["attributes.hp"] = attr.hp;
+            }
+        }
+
+        await updatePlayer(userId, updateData);
     },
 
     exert: async (playerData, args, userId) => {
-         // ... (保持原樣，篇幅省略) ...
-         if (playerData.state === 'fighting') {
+        if (playerData.state === 'fighting') {
             UI.print("戰鬥中運功療傷太危險了！你無法分心。", "error");
             return;
         }
         
+        // 修練狀態檢查
         if (playerData.state === 'exercising') {
             UI.print("你正在專心修練，無法分心運功。(輸入 autoforce 解除)", "error");
             return;
@@ -268,7 +274,6 @@ export const SkillSystem = {
         await updatePlayer(userId, updateData);
     },
 
-    // [優化] Skills 顯示：Grid 對齊，字體統一
     skills: (playerData) => {
         const skills = playerData.skills || {};
         const skillExps = playerData.skill_exp || {}; 
@@ -276,63 +281,41 @@ export const SkillSystem = {
         const skillList = Object.entries(skills);
         if (skillList.length === 0) { UI.print("你目前什麼都不會。", "chat"); return; }
         
-        const border = UI.txt("---------------------------------------------------", "#444");
-        let html = `<div style="font-family: 'Courier New', monospace; background: rgba(0,0,0,0.3); padding: 10px; border: 1px solid #333;">`;
-        html += `<div style="text-align:center; color:#00ffff; margin-bottom:5px;">≡ ${playerData.name} 的武學 ≡</div>`;
-        html += `${border}<br>`;
-        
-        // CSS Grid 表頭
-        html += `<div style="display:grid; grid-template-columns: 3fr 1fr 2fr 1fr; gap:5px; color:#aaa; font-size: 14px; margin-bottom: 5px;">`;
-        html += `<div>名稱(ID)</div><div>等級</div><div>熟練度</div><div>狀態</div>`;
-        html += `</div>`;
-        html += `${border}<br>`;
-
-        // 內容列表
-        html += `<div style="display:grid; grid-template-columns: 3fr 1fr 2fr 1fr; gap:5px; align-items:center; font-size: 14px;">`;
+        let html = UI.titleLine(`${playerData.name} 的武學`);
+        html += `<div style="display:grid; grid-template-columns: 1fr auto auto; gap: 5px; align-items:center;">`;
         
         for (const [id, level] of skillList) {
             const info = SkillDB[id];
             if(id === 'parry') continue; 
             const name = info ? info.name : id;
-            
-            // 狀態 (激發)
+            const desc = getSkillLevelDesc(level);
             let statusMark = "";
-            let btn = "";
-
+            
             if (playerData.enabled_skills) {
                 for (const [slot, equippedId] of Object.entries(playerData.enabled_skills)) {
                     if (equippedId === id) statusMark = UI.txt(`[${slot}]`, "#00ff00");
                 }
             }
 
-            // 按鈕
+            let btn = "";
             if (info && info.base) {
                 const isEnabled = playerData.enabled_skills && playerData.enabled_skills[info.base] === id;
-                btn = UI.makeCmd(isEnabled ? "[卸]" : "[激]", isEnabled ? `unenable ${info.base}` : `enable ${info.base} ${id}`, "cmd-btn");
+                btn = UI.makeCmd(isEnabled ? "[解除]" : "[激發]", isEnabled ? `unenable ${info.base}` : `enable ${info.base} ${id}`, "cmd-btn");
             }
 
             const curExp = skillExps[id] || 0;
             const maxExp = calculateMaxExp(level);
-            // 熟練度百分比
-            const pct = Math.floor((curExp / maxExp) * 100);
-            const expText = `${pct}%`;
+            const expText = `<span style="font-size:0.8em; color:#888;">(${curExp}/${maxExp})</span>`;
 
-            // Row items
-            html += `<div style="color:#fff;">${name} <span style="color:#888; font-size:12px;">(${id})</span></div>`;
-            html += `<div style="color:#00ffff;">${level}</div>`;
-            html += `<div style="color:#888;">${expText}</div>`;
-            html += `<div>${statusMark} ${btn}</div>`;
+            html += `<div style="color:#fff;">${name} <span style="color:#888; font-size:0.8em;">(${id})</span> ${statusMark}</div>`;
+            html += `<div>${UI.txt(level+"級", "#00ffff")} ${expText} <span style="font-size:0.8em;">${desc}</span></div>`;
+            html += `<div>${btn}</div>`;
         }
-        
-        html += `</div>`; // End grid
-        html += `<br>${border}</div>`;
-        
-        UI.print(html, 'normal', true);
+        html += `</div>` + UI.titleLine("End");
+        UI.print(html, 'chat', true);
     },
 
-    // ... (apprentice, enable, unenable, learn, practice 保持不變) ...
     apprentice: async (playerData, args, userId) => {
-        // ... 原有代碼 ...
         if (args.length === 0) { UI.print("你想拜誰為師？", "error"); return; }
         const npc = findNPCInRoom(playerData.location, args[0]);
         if (!npc) { UI.print("這裡沒有這個人。", "error"); return; }
@@ -352,7 +335,6 @@ export const SkillSystem = {
     },
 
     enable: async (playerData, args, userId) => {
-        // ... 原有代碼 ...
         if (!playerData.enabled_skills) playerData.enabled_skills = {};
         if (args.length < 2) {
             let msg = UI.titleLine("激發狀態");
@@ -394,7 +376,6 @@ export const SkillSystem = {
     },
 
     unenable: async (playerData, args, userId) => {
-        // ... 原有代碼 ...
         if (args.length === 0) { UI.print("指令格式：unenable <類型>", "error"); return; }
         const type = args[0];
         if (!playerData.enabled_skills || !playerData.enabled_skills[type]) {
@@ -407,7 +388,6 @@ export const SkillSystem = {
     },
 
     learn: async (p,a,u) => { 
-        // ... 原有代碼 ...
         if(a.length<3||a[1]!=='from'){UI.print("指令格式：learn <技能ID> from <師父ID>","error");return;} 
         const sid=a[0], mid=a[2]; 
         const npc=findNPCInRoom(p.location,mid); 
@@ -434,8 +414,9 @@ export const SkillSystem = {
             }
         }
 
-        const spC = 5 + Math.floor(currentLvl / 5); 
-        const potC = 1; 
+        // [修改] 消耗與收益公式調整
+        const spC = 5 + Math.floor(currentLvl / 5); // 精力消耗降低
+        const potC = 1; // [修改] 潛能固定消耗 1 點
         
         if(p.attributes.sp <= spC){UI.print("你現在精神不濟，無法專心聽講。(需要精: "+spC+")","error");return;} 
         if((p.combat.potential||0) < potC){UI.print("你的潛能不足，無法領悟其中的奧妙。(需要潛能: "+potC+")","error");return;} 
@@ -444,6 +425,9 @@ export const SkillSystem = {
         p.combat.potential -= potC; 
         
         const int = p.attributes.int || 20;
+        
+        // [修改] 大幅提升學習效率：(悟性 x 5~10倍) + (等級加成)
+        // 範例：悟性20，等級10 => (20 * 7) + 20 = 160點經驗 (以前是50點)
         const rndMult = 5 + Math.random() * 5; 
         let gain = Math.floor((int * rndMult) + (currentLvl * 2));
         if (gain < 1) gain = 1;
@@ -475,7 +459,6 @@ export const SkillSystem = {
     },
     
     practice: async (p, a, u) => { 
-        // ... 原有代碼 ...
         if(a.length === 0){ UI.print("指令格式：practice <基本武功> (例如 practice sword)", "error"); return; }
         const baseSkillId = a[0]; 
         
@@ -516,6 +499,8 @@ export const SkillSystem = {
 
         const int = p.attributes.int || 20;
         
+        // [修改] 練習效率低於學習：(悟性 x 2) + (基礎等級加成)
+        // 範例：悟性20，基礎等級10 => 40 + 5 = 45點經驗
         let gain = Math.floor((int * 2) + (baseLvl * 0.5));
         if (gain < 1) gain = 1;
 
