@@ -16,6 +16,7 @@ function getUniqueNpcId(roomId, npcId, index) {
     return `${roomId}_${npcId}_${index}`;
 }
 
+// [修正] 新增 targetId 參數，記錄 NPC 正在攻擊的玩家 ID
 async function syncNpcState(uniqueId, currentHp, maxHp, roomId, npcName, targetId, isUnconscious = false) {
     try {
         const ref = doc(db, "active_npcs", uniqueId);
@@ -24,7 +25,7 @@ async function syncNpcState(uniqueId, currentHp, maxHp, roomId, npcName, targetI
             maxHp: maxHp,
             roomId: roomId,
             npcName: npcName,
-            targetId: targetId, 
+            targetId: targetId, // 新增：目標 ID
             isUnconscious: isUnconscious,
             lastCombatTime: Date.now()
         }, { merge: true });
@@ -395,6 +396,7 @@ export const CombatSystem = {
         MessageSystem.broadcast(playerData.location, `${playerData.name} 拒絕了 ${name} 的切磋請求。`);
     },
 
+    // [修正] 圍毆邏輯：迴圈處理所有主動怪
     checkAggro: async (playerData, roomId, userId) => {
         const room = MapSystem.getRoom(roomId);
         if (!room || !room.npcs || room.safe) return;
@@ -420,6 +422,7 @@ export const CombatSystem = {
 
         if (aggroTargets.length > 0) {
             UI.print(UI.txt("你感覺到一股殺氣！周圍的野獸盯上了你！", "#ff0000", true), "system", true);
+            // 遍歷所有主動怪，全部加入戰鬥
             for (const target of aggroTargets) {
                  await CombatSystem.startCombat(playerData, [target.id], userId, true, target); 
             }
@@ -440,6 +443,7 @@ export const CombatSystem = {
         const targetId = args[0];
 
         if (!specificNpc) {
+             // ... PVP 請求邏輯保持不變 ...
              const playersRef = collection(db, "players");
              const q = query(playersRef, where("id", "==", targetId), where("location", "==", playerData.location));
              const pSnap = await getDocs(q);
@@ -465,13 +469,16 @@ export const CombatSystem = {
 
         const uniqueId = getUniqueNpcId(playerData.location, npc.id, npc.index);
         
+        // 檢查是否已在戰鬥列表
         const alreadyFighting = combatList.find(c => c.uniqueId === uniqueId);
         if (alreadyFighting) {
+            // 如果已在戰鬥中，將其移到第一位 (改變鎖定目標)
             const idx = combatList.indexOf(alreadyFighting);
             if (idx > 0) {
                 combatList.splice(idx, 1);
                 combatList.unshift(alreadyFighting);
                 UI.print(`你將目標轉向了 ${npc.name}！`, "system");
+                // 更新玩家狀態
                 await updatePlayer(userId, { combatTarget: { id: npc.id, index: npc.index } });
             }
             return;
@@ -483,6 +490,7 @@ export const CombatSystem = {
         const diffInfo = getDifficultyInfo(playerData, npc.id);
         
         if (realHp <= 0) {
+            // ... 處理打死屍體 ...
             if (isLethal) {
                 const killMsg = UI.txt(`你對昏迷中的 ${npc.name} 下了毒手！`, "#ff0000", true);
                 UI.print(killMsg, "system", true);
@@ -523,6 +531,7 @@ export const CombatSystem = {
         
         combatList.push(enemyState);
     
+        // [修正] 啟動戰鬥時同步 targetId (玩家 ID)
         await syncNpcState(uniqueId, realHp, npc.combat.maxHp, playerData.location, npc.name, userId, false);
 
         await updatePlayer(userId, { 
@@ -530,6 +539,7 @@ export const CombatSystem = {
             combatTarget: { id: npc.id, index: npc.index } 
         });
     
+        // 如果已經有戰鬥迴圈在跑，就不重複開啟，只加入列表
         if (!combatInterval) {
             CombatSystem.runCombatLoop(playerData, userId);
         }
@@ -578,9 +588,10 @@ export const CombatSystem = {
                         MessageSystem.broadcast(playerData.location, publicMsg);
 
                         currentTarget.npcHp -= dmg;
+                        // 同步血量
                         await syncNpcState(currentTarget.uniqueId, currentTarget.npcHp, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, userId, false);
                         
-                        // [修改] 造成傷害顯示為黃色
+                        // [修正] 玩家造成的傷害顯示為黃色
                         UI.print(UI.txt(`(你對 ${currentTarget.npcName} 造成 ${dmg} 點傷害)`, "#ffff00"), "chat", true);
                         
                         const statusMsg = getStatusDesc(currentTarget.npcName, currentTarget.npcHp, currentTarget.maxNpcHp);
@@ -599,12 +610,12 @@ export const CombatSystem = {
                                 UI.print(winMsg, "chat", true);
                                 MessageSystem.broadcast(playerData.location, winMsg);
                                 playerData.combat.potential = (playerData.combat.potential || 0) + 20;
-                                combatList.shift(); 
+                                combatList.shift(); // 移除戰勝的對手
                             } else {
                                  const uncMsg = UI.txt(`${currentTarget.npcName} 搖頭晃腦，咚的一聲倒在地上！`, "#888");
                                  UI.print(uncMsg, "system", true);
                                  await handleKillReward(npc, playerData, currentTarget, userId);
-                                 combatList.shift(); 
+                                 combatList.shift(); // 移除死亡的對手
                             }
                         }
                     } else {
@@ -620,6 +631,7 @@ export const CombatSystem = {
                     }
                 }
             } else if (currentTarget.type === 'pvp') {
+                // ... PVP 攻擊邏輯
                 const targetId = currentTarget.targetId;
                 const tDoc = await getDoc(doc(db, "players", targetId));
                 if (!tDoc.exists()) { CombatSystem.stopCombat(userId); return; }
@@ -636,7 +648,7 @@ export const CombatSystem = {
                         UI.print(getSkillActionMsg(playerData, tData.name, true, "你"), "chat", true);
                         tData.attributes.hp -= dmg;
                         
-                        // [修改] PVP 造成傷害顯示為黃色
+                        // [修正] PVP 造成的傷害顯示為黃色
                         UI.print(UI.txt(`(你擊中了 ${tData.name}，造成 ${dmg} 點傷害)`, "#ffff00"), "chat", true);
                         
                         await updatePlayer(targetId, { "attributes.hp": tData.attributes.hp });
@@ -655,11 +667,13 @@ export const CombatSystem = {
             }
 
             // --- 階段 2：怪物反擊回合 (所有在列表中的 PVE 敵人都攻擊一次) ---
+            // 使用 for 迴圈遍歷所有敵人
             for (const enemy of combatList) {
                 if (enemy.type === 'pve' && enemy.npcHp > 0) {
                      const npc = enemy.npcObj;
                      const eStats = getNPCCombatStats(npc);
                      
+                     // 每個 NPC 都有機會攻擊
                      const nHitChance = Math.random() * (eStats.hit + playerStats.dodge);
                      const nIsHit = playerData.isUnconscious ? true : (nHitChance < eStats.hit);
          
@@ -676,7 +690,7 @@ export const CombatSystem = {
          
                          playerData.attributes.hp -= dmg;
                          
-                         // [修改] 受到傷害顯示為紅色
+                         // [修正] 受到的傷害顯示為紅色
                          UI.print(UI.txt(`(你受到了 ${dmg} 點傷害)`, "#ff0000"), "chat", true);
                          
                          UI.updateHUD(playerData);
@@ -714,6 +728,7 @@ export const CombatSystem = {
                              }
                          }
                      } else {
+                         // NPC 未命中
                          const localMsg = getSkillActionMsg(npc, "你", false);
                          const publicMsg = getSkillActionMsg(npc, playerData.name, false);
                          UI.print(localMsg, "chat", true);
@@ -742,8 +757,10 @@ export const CombatSystem = {
                          MessageSystem.broadcast(playerData.location, publicMsg);
  
                          playerData.attributes.hp -= tDmg;
-                         // [修改] PVP 受到傷害顯示為紅色 (已有的紅色碼保留)
+                         
+                         // [修正] PVP 受傷顯示紅色
                          UI.print(UI.txt(`${tData.name} 擊中了你，造成 ${tDmg} 點傷害！`, "#ff0000"), "chat", true);
+                         
                          UI.updateHUD(playerData); 
                          
                          if (playerData.attributes.hp <= 0) {
