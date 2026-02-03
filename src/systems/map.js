@@ -96,7 +96,7 @@ export const MapSystem = {
 
                 let status = "";
                 if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
-                else if (p.state === 'exercising') status = UI.txt(" (正在運功修練)", "#ffff00"); // [新增] 顯示修練狀態
+                else if (p.state === 'exercising') status = UI.txt(" (正在運功修練)", "#ffff00"); 
                 if (p.isUnconscious) status += UI.txt(" (昏迷)", "#888");
 
                 // [新增] 查看與切磋連結
@@ -108,7 +108,7 @@ export const MapSystem = {
             if (playerHtml) UI.print(playerHtml, "chat", true);
         }
 
-        // 2. 讀取受傷與死亡 NPC (邏輯維持不變，略為精簡以節省篇幅)
+        // 2. 讀取受傷與死亡 NPC
         const fightingNpcKeys = new Set();
         playersInRoom.forEach(p => {
             if (p.state === 'fighting' && p.combatTarget) {
@@ -317,14 +317,12 @@ export const MapSystem = {
             }
         }
 
-        // 3. [新增] 檢查房間內的其他玩家
+        // 3. [修正] 檢查房間內的其他玩家 (補上 true 以正確解析 HTML 標籤)
         try {
             const playersRef = collection(db, "players");
-            // 優先嘗試 ID
             let q = query(playersRef, where("id", "==", targetIdOrName), where("location", "==", playerData.location));
             let pSnap = await getDocs(q);
             
-            // 如果 ID 找不到，嘗試中文名稱
             if (pSnap.empty) {
                 q = query(playersRef, where("name", "==", targetIdOrName), where("location", "==", playerData.location));
                 pSnap = await getDocs(q);
@@ -332,21 +330,21 @@ export const MapSystem = {
 
             if (!pSnap.empty) {
                 const targetP = pSnap.docs[0].data();
-                UI.showInspection('player', targetP.name, 'item'); // 暫用 item 類型圖示 (若有玩家圖檔可替換)
+                UI.showInspection('player', targetP.name, 'item'); 
                 UI.print(UI.titleLine(targetP.name), "chat", true);
                 
                 UI.print(`一位${targetP.gender || "神秘"}的俠客。`);
-                UI.print(UI.attrLine("門派", targetP.sect || "無門無派"));
+                UI.print(UI.attrLine("門派", targetP.sect || "無門無派"), "chat", true); // [修正] 補上 true
                 
                 let hpPct = targetP.attributes.hp / targetP.attributes.maxHp;
                 let hpColor = "#00ff00";
                 if(hpPct < 0.5) hpColor = "#ffff00";
                 if(hpPct < 0.2) hpColor = "#ff0000";
                 
-                UI.print(UI.attrLine("狀態", targetP.isUnconscious ? UI.txt("昏迷不醒", "#888") : UI.txt("健康", hpColor)));
+                UI.print(UI.attrLine("狀態", targetP.isUnconscious ? UI.txt("昏迷不醒", "#888") : UI.txt("健康", hpColor)), "chat", true); // [修正] 補上 true
 
                 if (targetP.equipment) {
-                    UI.print("<br>" + UI.txt("【 裝備 】", "#00ffff"));
+                    UI.print("<br>" + UI.txt("【 裝備 】", "#00ffff"), "chat", true); // [修正] 補上 true
                     let equipList = "";
                     for (const [slot, itemId] of Object.entries(targetP.equipment)) {
                         const itemInfo = ItemDB[itemId];
@@ -356,14 +354,13 @@ export const MapSystem = {
                         }
                     }
                     if (!equipList) equipList = "<div>全身光溜溜的。</div>";
-                    UI.print(equipList, "chat", true);
+                    UI.print(equipList, "chat", true); // [修正] 補上 true
                 }
                 
-                // 互動按鈕
                 const actHtml = `<br><div>${UI.makeCmd("[切磋武藝]", `fight ${targetP.id}`, "cmd-btn")}</div>`;
-                UI.print(actHtml, "chat", true);
+                UI.print(actHtml, "chat", true); // [修正] 補上 true
 
-                UI.print(UI.titleLine("End"), "chat", true);
+                UI.print(UI.titleLine("End"), "chat", true); // [修正] 補上 true
                 return;
             }
         } catch(e) {
@@ -376,7 +373,6 @@ export const MapSystem = {
     move: async (playerData, direction, userId) => {
         if (!playerData) return;
         
-        // [新增] 檢查修練狀態
         if (playerData.state === 'exercising') {
             UI.print("你正在專心修練，無法移動。(輸入 autoforce 解除)", "error");
             return;
@@ -432,7 +428,6 @@ export const MapSystem = {
     },
 
     teleport: async (playerData, targetRoomId, userId) => {
-        // [新增] 檢查修練狀態
         if (playerData.state === 'exercising') {
             UI.print("你正在專心修練，無法傳送。(輸入 autoforce 解除)", "error");
             return;
