@@ -27,7 +27,6 @@ const commandRegistry = {
     // === 戰鬥與切磋指令 ===
     'kill': { description: '下殺手', execute: CombatSystem.kill },
     'fight': { description: '切磋', execute: CombatSystem.fight },
-    // [新增] 回應切磋請求
     'y': { description: '接受', execute: CombatSystem.acceptDuel },
     'yes': { description: '接受', execute: CombatSystem.acceptDuel },
     'n': { description: '拒絕', execute: CombatSystem.rejectDuel },
@@ -56,6 +55,8 @@ const commandRegistry = {
     'apprentice': { description: '拜師', execute: SkillSystem.apprentice },
     'enable': { description: '激發', execute: SkillSystem.enable },
     'unenable': { description: '解除激發', execute: SkillSystem.unenable },
+    // [新增] 放棄技能
+    'abandon': { description: '放棄技能', execute: SkillSystem.abandon },
     
     // === 屬性修練指令 ===
     'exercise': { description: '運氣', execute: (p,a,u) => SkillSystem.trainStat(p,u,"內力","force","maxForce","hp","氣",a) },

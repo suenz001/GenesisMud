@@ -282,8 +282,7 @@ export const SkillSystem = {
         
         let html = UI.titleLine(`${playerData.name} 的武學`);
         
-        // [修改] 使用 5 欄 Grid 布局，統一排版
-        // 欄位: 名稱(含ID與狀態) | 等級 | 經驗值 | 描述 | 按鈕
+        // 5 欄 Grid 布局
         html += `<div style="display:grid; grid-template-columns: 2fr 0.5fr 1.2fr 0.8fr auto; gap: 5px; align-items:center; font-size: 14px;">`;
         
         for (const [id, level] of skillList) {
@@ -319,7 +318,7 @@ export const SkillSystem = {
             const maxExp = calculateMaxExp(level);
             const expText = `<span style="font-size:0.9em; color:#888;">(${curExp}/${maxExp})</span>`;
 
-            // [排版] 分配欄位內容，按鈕統一放在最後一欄 (靠右)
+            // 分配欄位內容，按鈕統一放在最後一欄 (靠右)
             const rowStyle = "padding: 4px 0; border-bottom: 1px dashed #333;";
             
             html += `<div style="${rowStyle} color:#fff;">${name} <span style="color:#aaa; font-size:0.9em;">(${id})</span> ${statusMark}</div>`;
@@ -404,6 +403,51 @@ export const SkillSystem = {
         await updatePlayer(userId, { enabled_skills: playerData.enabled_skills });
     },
 
+    // [新增] 放棄技能
+    abandon: async (p, a, u) => {
+        if (a.length === 0) { UI.print("放棄什麼? (abandon <skill_id>)", "error"); return; }
+        const skillId = a[0];
+        
+        if (!p.skills || !p.skills[skillId]) { UI.print("你並沒有學會這項技能。", "error"); return; }
+        
+        // 確認機制
+        if (p.tempAbandon !== skillId) {
+            p.tempAbandon = skillId;
+            const sName = SkillDB[skillId] ? SkillDB[skillId].name : skillId;
+            UI.print(UI.txt(`警告！你確定要廢除 ${sName} (${skillId}) 嗎？`, "#ff5555"), "system");
+            UI.print(UI.txt("這將會完全清除該技能的等級，且不可恢復！", "#ff5555"), "system");
+            UI.print("請再次輸入相同的指令以確認。", "system");
+            return;
+        }
+        
+        // 執行放棄
+        const sName = SkillDB[skillId] ? SkillDB[skillId].name : skillId;
+        delete p.skills[skillId];
+        
+        // 清除熟練度
+        if (p.skill_exp && p.skill_exp[skillId]) delete p.skill_exp[skillId];
+        
+        // 清除激發狀態
+        if (p.enabled_skills) {
+            for (const [type, id] of Object.entries(p.enabled_skills)) {
+                if (id === skillId) {
+                    delete p.enabled_skills[type];
+                    UI.print(`由於技能消失，${type} 的激發狀態已解除。`, "system");
+                }
+            }
+        }
+
+        p.tempAbandon = null; // 重置確認狀態
+
+        await updatePlayer(u, { 
+            skills: p.skills, 
+            skill_exp: p.skill_exp, 
+            enabled_skills: p.enabled_skills 
+        });
+        
+        UI.print(UI.txt(`你自廢武功，徹底忘記了 ${sName} 的所有法門。`, "#ffff00"), "system", true);
+    },
+
     learn: async (p,a,u) => { 
         if(a.length<3||a[1]!=='from'){UI.print("指令格式：learn <技能ID> from <師父ID>","error");return;} 
         const sid=a[0], mid=a[2]; 
@@ -413,6 +457,21 @@ export const SkillSystem = {
         if(!npc.skills[sid]){UI.print("師父並不會這招。","chat");return;} 
         
         const currentLvl = p.skills[sid] || 0;
+        
+        // [新增] 檢查技能數量上限 (靈性限制)
+        // 只有當這是一個新技能(目前等級為0或undefined)時才檢查
+        if (!currentLvl || currentLvl <= 0) {
+            const currentSkillCount = Object.keys(p.skills || {}).length;
+            const cor = p.attributes.cor || 20; // 預設 20
+            const maxSkills = Math.floor(cor / 2); // 20點靈性 => 10招
+            
+            if (currentSkillCount >= maxSkills) {
+                UI.print(UI.txt(`你的靈性(${cor})不足以容納更多的武學常識。(上限: ${maxSkills}種)`, "#ff5555"), "error");
+                UI.print("請先嘗試放棄(abandon)一些不常用的技能。", "system");
+                return;
+            }
+        }
+
         if(currentLvl >= npc.skills[sid]){UI.print("這招你已經學滿了，師父沒什麼好教你的了。","chat");return;} 
         
         const skillInfo = SkillDB[sid];
@@ -476,7 +535,6 @@ export const SkillSystem = {
         if(a.length === 0){ UI.print("指令格式：practice <基本武功> (例如 practice sword)", "error"); return; }
         const baseSkillId = a[0]; 
         
-        // [新增] 限制內功不可練習
         if (baseSkillId === 'force') {
             UI.print("內功修為需靠打坐(meditate)或呼吸吐納(exercise/respirate)，無法通過練習提升。", "error");
             return;
@@ -519,9 +577,6 @@ export const SkillSystem = {
 
         const int = p.attributes.int || 20;
         
-        // [修改] 練習效率公式：大幅增加基礎等級的加成
-        // 舊：(int * 2) + (baseLvl * 0.5)
-        // 新：(int * 2) + (baseLvl * 2.5) -> 等級越高練得越快
         let gain = Math.floor((int * 2) + (baseLvl * 2.5));
         if (gain < 1) gain = 1;
 
