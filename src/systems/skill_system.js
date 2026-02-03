@@ -8,28 +8,38 @@ import { NPCDB } from "../data/npcs.js";
 
 let autoForceInterval = null; 
 
-// === [新增] 升級所需經驗值公式 ===
-// 曲線：(等級+1) 的 3 次方 * 2
-// Lv 10 -> 2,662
-// Lv 50 -> 265,302
-// Lv 100 -> 2,060,602 (後期非常陡峭)
+// === 升級所需經驗值公式 ===
+// 設計思路：1-150級平緩 (平方成長)，150後陡峭 (三次方成長)
 function calculateMaxExp(level) {
-    return Math.pow(level + 1, 3) * 2;
+    if (level < 150) {
+        // 前期：(等級+1)^2 * 30
+        // Lv 10: 3,630
+        // Lv 50: 78,030
+        // Lv 100: 306,030
+        // Lv 149: 675,000
+        return Math.pow(level + 1, 2) * 30;
+    } else {
+        // 後期：(等級+1)^3
+        // Lv 150: 3,442,951 (難度瞬間提升約 5 倍)
+        // Lv 180: 5,929,741
+        // Lv 200: 8,120,601
+        return Math.pow(level + 1, 3);
+    }
 }
 
+// === 技能等級描述 (200級為頂峰) ===
 function getSkillLevelDesc(level) {
-    let desc = "初學乍練";
-    let color = "#aaa"; 
-    if (level >= 500) { desc = "深不可測"; color = "#ff00ff"; }
-    else if (level >= 400) { desc = "返璞歸真"; color = "#ff0000"; }
-    else if (level >= 300) { desc = "出神入化"; color = "#ff8800"; }
-    else if (level >= 200) { desc = "登峰造極"; color = "#ffff00"; }
-    else if (level >= 150) { desc = "出類拔萃"; color = "#00ff00"; }
-    else if (level >= 100) { desc = "爐火純青"; color = "#00ffff"; }
-    else if (level >= 60) { desc = "融會貫通"; color = "#0088ff"; }
-    else if (level >= 30) { desc = "駕輕就熟"; color = "#8888ff"; }
-    else if (level >= 10) { desc = "略有小成"; color = "#ffffff"; }
-    return UI.txt(desc, color);
+    if (level >= 200) return UI.txt("返璞歸真", "#ff00ff", true); // 紫色+粗體
+    if (level >= 181) return UI.txt("深不可測", "#ff4500");       // 橙紅色
+    if (level >= 161) return UI.txt("神乎其技", "#ff8800");       // 深橙色
+    if (level >= 141) return UI.txt("出神入化", "#ffd700");       // 金色
+    if (level >= 121) return UI.txt("登峰造極", "#ffff00");       // 黃色
+    if (level >= 101) return UI.txt("一代宗師", "#adff2f");       // 黃綠色
+    if (level >= 81)  return UI.txt("出類拔萃", "#00ff00");       // 綠色
+    if (level >= 61)  return UI.txt("融會貫通", "#00ffff");       // 青色
+    if (level >= 41)  return UI.txt("駕輕就熟", "#00bfff");       // 深青色
+    if (level >= 21)  return UI.txt("粗通皮毛", "#8888ff");       // 藍色
+    return UI.txt("初學乍練", "#cccccc");                         // 灰色
 }
 
 function findNPCInRoom(roomId, npcNameOrId) {
@@ -49,6 +59,7 @@ function findNPCInRoom(roomId, npcNameOrId) {
 }
 
 export const SkillSystem = {
+    // === 自動修練內力 (Auto Force) ===
     autoForce: (p, a, u) => {
         if (autoForceInterval) {
             clearInterval(autoForceInterval);
@@ -72,6 +83,7 @@ export const SkillSystem = {
             const curForce = attr.force;
             const limit = maxForce * 2;
 
+            // 氣血過低時等待回氣
             if (attr.hp < 20) { return; }
 
             if (curForce < limit) {
@@ -87,6 +99,7 @@ export const SkillSystem = {
         }, 2000); 
     },
 
+    // === 屬性修練 (Exercise/Respirate/Meditate) ===
     trainStat: async (playerData, userId, typeName, attrCur, attrMax, costAttr, costName, args) => {
         const attr = playerData.attributes;
         let cost = 10;
@@ -107,6 +120,7 @@ export const SkillSystem = {
         if (typeName === "內力") {
             const forceSkillLvl = playerData.skills.force || 0;
             const conBonus = playerData.attributes.con || 20;
+            // 內力上限公式：(基本內功 + 根骨) * 10
             const maxCap = (forceSkillLvl + conBonus) * 10;
 
             if (maxVal >= maxCap) {
@@ -124,6 +138,7 @@ export const SkillSystem = {
         const gain = cost + Math.floor((playerData.skills?.force || 0) / 10); 
         let improved = false;
         
+        // 判斷是否突破
         if (curVal >= limit - 1) {
             if (typeName !== "內力") {
                 const pot = playerData.combat?.potential || 0;
@@ -137,8 +152,6 @@ export const SkillSystem = {
             
             improved = true;
             let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
-            
-            // [修復] 加上 true 以顯示顏色
             UI.print(msg, "system", true);
 
             if (typeName === "內力") {
@@ -181,6 +194,7 @@ export const SkillSystem = {
         await updatePlayer(userId, updateData);
     },
 
+    // === 內力運用 (Exert) ===
     exert: async (playerData, args, userId) => {
         if (playerData.state === 'fighting') {
             UI.print("戰鬥中運功療傷太危險了！你無法分心。", "error");
@@ -243,10 +257,9 @@ export const SkillSystem = {
         await updatePlayer(userId, updateData);
     },
 
-    // === [修改] 顯示技能列表 (加入 EXP 顯示) ===
+    // === 顯示技能列表 (含經驗值進度) ===
     skills: (playerData) => {
         const skills = playerData.skills || {};
-        // 確保 skill_exp 存在，避免報錯
         const skillExps = playerData.skill_exp || {}; 
         
         const skillList = Object.entries(skills);
@@ -359,7 +372,7 @@ export const SkillSystem = {
         await updatePlayer(userId, { enabled_skills: playerData.enabled_skills });
     },
 
-    // === [修改] 學藝 (Learn) 改為 EXP 制 ===
+    // === 學藝 (Learn) - 消耗潛能與精 ===
     learn: async (p,a,u) => { 
         if(a.length<3||a[1]!=='from'){UI.print("指令格式：learn <技能ID> from <師父ID>","error");return;} 
         const sid=a[0], mid=a[2]; 
@@ -399,8 +412,9 @@ export const SkillSystem = {
         p.attributes.sp -= spC; 
         p.combat.potential -= potC; 
         
-        // 計算 EXP 獲得 (learn 效率較高，受悟性影響)
+        // 計算 EXP 獲得 (learn 受悟性影響大)
         const int = p.attributes.int || 20;
+        // 公式：悟性*2 + 隨機
         let gain = Math.floor(int * 2 + Math.random() * 10 + 10);
         if (gain < 1) gain = 1;
 
@@ -422,20 +436,18 @@ export const SkillSystem = {
             msg = `你聽了${npc.name}的指導，對${SkillDB[sid].name}有了更深的了解。 (EXP +${gain})`;
         }
         
-        // [修復] 加上 true 以顯示顏色
         UI.print(msg, "system", true); 
         
         await updatePlayer(u, {
             "attributes.sp": p.attributes.sp,
             "combat.potential": p.combat.potential,
             "skills": p.skills,
-            "skill_exp": p.skill_exp // 儲存經驗值
+            "skill_exp": p.skill_exp 
         }); 
     },
     
-    // === [修改] 練習 (Practice) 改為 EXP 制 & 以氣練功 ===
+    // === 練習 (Practice) - 消耗氣，獲得 EXP ===
     practice: async (p, a, u) => { 
-        // 1. 指令格式: practice <基本武功>
         if(a.length === 0){ UI.print("指令格式：practice <基本武功> (例如 practice sword)", "error"); return; }
         const baseSkillId = a[0]; 
         
@@ -458,7 +470,6 @@ export const SkillSystem = {
                 UI.print(`你雖然激發了${targetSkillId}，但還沒學會，無法練習。`, "error");
                 return;
             }
-            // 如果目標是基本武功，可以練 (MUD通常允許)
         }
 
         const skillName = SkillDB[targetSkillId] ? SkillDB[targetSkillId].name : targetSkillId;
@@ -473,7 +484,7 @@ export const SkillSystem = {
         }
 
         // 6. 消耗檢查 (只消耗 HP)
-        const cost = 20; // 練習比較耗體力
+        const cost = 20; 
         if (p.attributes.hp <= cost) { 
             UI.print("你氣息不順，需要休息一下。(需要氣: "+cost+")", "error"); 
             return; 
@@ -483,7 +494,7 @@ export const SkillSystem = {
 
         // 7. 計算 EXP 獲得
         // 公式：(基本功等級 * 0.5 + 悟性 * 1.0 + 隨機)
-        // 意義：基本功越好，練進階越快
+        // 核心邏輯：基本功越高，練進階越快
         const int = p.attributes.int || 20;
         let gain = Math.floor(baseLvl * 0.5 + int * 1.0 + Math.random() * 5);
         if (gain < 1) gain = 1;
@@ -506,7 +517,6 @@ export const SkillSystem = {
             msg = `你練習${skillName}，獲得了 ${gain} 點經驗。 (${p.skill_exp[targetSkillId]}/${maxExp})`;
         }
 
-        // [修復] 加上 true 以顯示顏色
         UI.print(msg, "system", true); 
         
         await updatePlayer(u, {
