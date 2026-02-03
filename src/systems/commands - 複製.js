@@ -57,7 +57,7 @@ const commandRegistry = {
     'respirate': { description: '運精', execute: (p,a,u) => SkillSystem.trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精",a) },
     'meditate': { description: '運神', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神",a) },
     
-    // === 內力運用與自動修練指令 ===
+    // === [新增] 內力運用與自動修練指令 ===
     'exert': { description: '運功', execute: SkillSystem.exert },
     'autoforce': { description: '自動修練內力', execute: SkillSystem.autoForce },
     
