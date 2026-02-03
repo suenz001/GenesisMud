@@ -65,7 +65,7 @@ export const UI = {
         const silver = Math.floor((coins % 1000000) / 1000);
         const copper = coins % 1000;
         let str = "";
-        if (gold > 0) str += UI.txt(gold, "#ffd700", true) + UI.txt("兩金 ", "#aa8800"); // 簡化顯示
+        if (gold > 0) str += UI.txt(gold, "#ffd700", true) + UI.txt("兩金 ", "#aa8800"); 
         if (silver > 0) str += UI.txt(silver, "#e0e0e0", true) + UI.txt("兩銀 ", "#888");
         if (copper > 0) str += UI.txt(copper, "#cd7f32", true) + UI.txt("文", "#885522");
         return str.trim() || UI.txt("0 文", "#888");
