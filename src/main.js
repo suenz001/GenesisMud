@@ -16,6 +16,7 @@ import { auth, db } from "./firebase.js";
 let currentUser = null;
 let localPlayerData = null; 
 let regenInterval = null; 
+let autoSaveInterval = null; // [新增] 自動存檔計時器
 
 let gameState = 'INIT'; 
 let tempCreationData = {}; 
@@ -41,6 +42,12 @@ onAuthStateChanged(auth, async (user) => {
             clearInterval(regenInterval);
             regenInterval = null;
         }
+        // [新增] 登出時清除自動存檔
+        if (autoSaveInterval) {
+            clearInterval(autoSaveInterval);
+            autoSaveInterval = null;
+        }
+
         CommandSystem.stopCombat();
         currentUser = null;
         localPlayerData = null;
@@ -88,9 +95,9 @@ UI.onInput((cmd) => {
 
 function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
+    if (autoSaveInterval) clearInterval(autoSaveInterval); // 清除舊的
     
-    // [修改] 移除了 tickCount，因為不再需要計算時間扣除飢渴度
-    
+    // 1. 自然回復邏輯 (每10秒)
     regenInterval = setInterval(async () => {
         if (!localPlayerData || !user) return;
         
@@ -98,9 +105,7 @@ function startRegeneration(user) {
         let msg = [];
         let changed = false;
 
-        // === [修改] 全屬性自然回復邏輯 (每10秒一次) ===
-        
-        // 1. 基礎屬性 (HP/SP/MP) - 回復 10%
+        // 基礎屬性回復
         if (attr.hp < attr.maxHp) {
             const recover = Math.floor(attr.maxHp * 0.1); 
             attr.hp = Math.min(attr.maxHp, attr.hp + recover);
@@ -117,8 +122,6 @@ function startRegeneration(user) {
             changed = true;
         }
 
-        // 2. 特殊屬性 (內力/靈力/法力) - 回復 5%
-        // 這讓掛機也能慢慢積攢力量，但效率不如打坐
         if (attr.force < attr.maxForce) {
             const recover = Math.max(1, Math.floor(attr.maxForce * 0.05));
             attr.force = Math.min(attr.maxForce, attr.force + recover);
@@ -135,10 +138,7 @@ function startRegeneration(user) {
             changed = true;
         }
         
-        // === [重要修改] 已移除自動扣除 food/water 的邏輯 ===
-        // 現在只有在 MapSystem.move 移動時才會扣除 (在 systems/map.js 中實作)
-
-        // 自動進食/飲水邏輯 (當移動導致飢餓時，這裡會幫忙補)
+        // 自動進食飲水
         if (localPlayerData.inventory) {
             if (isAutoEat && attr.food < attr.maxFood * 0.8) {
                 const foodItem = localPlayerData.inventory.find(i => {
@@ -166,7 +166,6 @@ function startRegeneration(user) {
         }
 
         if (changed) {
-            // 僅更新 HUD，不顯示洗版訊息
             UI.updateHUD(localPlayerData);
             try {
                 const playerRef = doc(db, "players", user.uid);
@@ -175,8 +174,34 @@ function startRegeneration(user) {
                 console.error("Auto regen save failed", e);
             }
         }
-
     }, 10000); 
+
+    // === 2. [新增] 10 分鐘自動存檔邏輯 ===
+    autoSaveInterval = setInterval(async () => {
+        if (!localPlayerData || !user) return;
+        
+        try {
+            const playerRef = doc(db, "players", user.uid);
+            
+            // 這裡我們只更新重要的玩家資料，但不更新 'savePoint'
+            // 這樣玩家掛機時屬性練上去了，就算斷線也不會回溯
+            await updateDoc(playerRef, {
+                attributes: localPlayerData.attributes,
+                skills: localPlayerData.skills,
+                inventory: localPlayerData.inventory,
+                money: localPlayerData.money,
+                equipment: localPlayerData.equipment,
+                combat: localPlayerData.combat,
+                location: localPlayerData.location, // 儲存當前位置方便斷線重連
+                // 注意：這裡不更新 savePoint
+                lastSaved: new Date().toISOString()
+            });
+            
+            UI.print("【系統】自動保存了進度。", "system");
+        } catch (e) {
+            console.error("Auto save failed", e);
+        }
+    }, 600000); // 600秒 * 1000 = 10分鐘
 }
 
 async function handleCreationInput(input) {

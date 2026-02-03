@@ -416,7 +416,8 @@ export const CombatSystem = {
              UI.print(startMsg, "system", true);
              MessageSystem.broadcast(playerData.location, UI.txt(`${playerData.name} 對 ${npc.name} ${combatType}，大戰一觸即發！`, color, true));
         } else {
-             UI.print(UI.txt(`${npc.name} 加入了戰團！`, "#ff5555", true), "system");
+             // === [修正]：這裡補上了 true，確保 HTML 顏色代碼正確顯示 ===
+             UI.print(UI.txt(`${npc.name} 加入了戰團！`, "#ff5555", true), "system", true); 
              MessageSystem.broadcast(playerData.location, UI.txt(`${npc.name} 對 ${playerData.name} 發起了攻擊！`, "#ff5555", true));
         }
         
