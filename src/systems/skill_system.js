@@ -3,7 +3,7 @@ import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-
 import { db } from "../firebase.js"; 
 import { UI } from "../ui.js";
 import { SkillDB, getSkillLevelDesc } from "../data/skills.js"; 
-import { updatePlayer, getEffectiveSkillLevel } from "./player.js"; // [新增] 引入有效等級計算
+import { updatePlayer, getEffectiveSkillLevel } from "./player.js"; 
 import { MapSystem } from "./map.js";
 import { MessageSystem } from "./messages.js";
 import { NPCDB } from "../data/npcs.js";
@@ -37,7 +37,7 @@ function findNPCInRoom(roomId, npcNameOrId) {
 }
 
 export const SkillSystem = {
-    // === 自動修練內力 (Auto Force) ===
+    // === 自動修練內力 (Auto Force) - 蓄力爆發版 ===
     autoForce: async (p, a, u) => {
         // 如果已經在修練，則停止
         if (autoForceInterval || p.state === 'exercising') {
@@ -57,8 +57,8 @@ export const SkillSystem = {
 
         p.state = 'exercising';
         await updatePlayer(u, { state: 'exercising' });
-        UI.print("你盤膝而坐，開始運轉內息...", "system");
-        UI.print(UI.txt("【系統】自動循環：蓄氣至兩倍上限 -> 突破上限 -> 休息回氣", "#00ffff"), "system", true);
+        UI.print("你盤膝而坐，閉目凝神，準備衝擊內力瓶頸...", "system");
+        UI.print(UI.txt("【系統】自動循環：積蓄氣血 -> 一次性補滿內力 -> 突破上限", "#00ffff"), "system", true);
         
         // 重置鎖定狀態
         isProcessing = false;
@@ -97,46 +97,50 @@ export const SkillSystem = {
                 const curHp = attr.hp;
                 const limit = maxForce * 2;
                 
-                // 1. 檢查 HP 是否足夠 (緩衝區邏輯)
-                const resumeThreshold = 50; 
-                const stopThreshold = 20;
-
-                // 條件 A: 血量太低，進入等待模式
-                if (curHp <= stopThreshold) {
-                    if (!isWaitingForRegen) {
-                        isWaitingForRegen = true;
-                        UI.print(UI.txt("氣血不足，暫停運功，等待自然回復...", "#888888"), "system", true);
-                        UI.updateHUD(freshP);
-                    }
-                    return;
-                }
-
-                // 條件 B: 正在等待，且血量還沒回到安全線，繼續等
-                if (isWaitingForRegen && curHp < resumeThreshold) {
-                    return;
-                }
-
-                // 條件 C: 血量足夠了，解除等待
-                if (isWaitingForRegen && curHp >= resumeThreshold) {
-                    isWaitingForRegen = false;
-                    UI.print(UI.txt("氣血略有恢復，繼續運轉周天！", "#00ff00"), "system", true);
-                }
-
-                // 2. 執行修練邏輯
-                // 階段 A: 內力未滿兩倍 -> 蓄氣 (Exercise)
+                // === 核心邏輯修改：蓄力爆發 ===
+                
+                // 1. 如果內力還沒滿 2 倍 -> 計算需要多少氣血才能「一次補滿」
                 if (curForce < limit) {
-                    let needed = limit - curForce;
-                    // 保留 10 點 HP 保命
-                    let affordable = Math.max(0, curHp - 10);
-                    let amount = Math.min(needed, affordable, 50); 
+                    const neededForce = limit - curForce;
+                    // exercise 轉換率通常是 1:1 (除非有特殊技能加成，這裡保守估計 1氣換1內力)
+                    // 但我們需要保留至少 10 點氣血保命
+                    const hpCostNeeded = neededForce; 
                     
-                    if (amount > 0) {
-                        await SkillSystem.trainStat(freshP, u, "內力", "force", "maxForce", "hp", "氣", [amount.toString()]);
+                    // 檢查當前氣血是否足夠「一次性」補滿
+                    if (curHp > hpCostNeeded + 10) {
+                        // 氣血足夠，直接執行大額修練
+                        if (isWaitingForRegen) {
+                            isWaitingForRegen = false;
+                            UI.print(UI.txt("氣血充盈，開始衝擊氣脈！", "#00ff00"), "system", true);
+                        }
+                        // 這裡直接傳入需要的總量
+                        await SkillSystem.trainStat(freshP, u, "內力", "force", "maxForce", "hp", "氣", [neededForce.toString()]);
+                    } else {
+                        // 氣血不足，進入等待模式 (完全不修練，純粹等回血)
+                        if (!isWaitingForRegen) {
+                            isWaitingForRegen = true;
+                            const missingHp = hpCostNeeded + 10 - curHp;
+                            UI.print(UI.txt(`氣血不足以一次貫通 (缺 ${missingHp} 氣)，暫停運功積蓄氣血...`, "#888888"), "system", true);
+                            UI.updateHUD(freshP);
+                        }
+                        // 這裡直接 return，什麼都不做，等待下一次循環檢查氣血
                     }
                 } 
-                // 階段 B: 內力已達兩倍 -> 突破 (Exercise 1)
+                // 2. 內力已達 2 倍 -> 執行突破 (Exercise 1)
                 else {
-                    await SkillSystem.trainStat(freshP, u, "內力", "force", "maxForce", "hp", "氣", ["1"]);
+                    // 如果氣血太低連 1 點都練不了，還是要等一下
+                    if (curHp <= 20) {
+                         if (!isWaitingForRegen) {
+                            isWaitingForRegen = true;
+                            UI.print(UI.txt("氣血虛弱，暫停運功調理...", "#888888"), "system", true);
+                            UI.updateHUD(freshP);
+                        }
+                    } else {
+                        if (isWaitingForRegen) {
+                            isWaitingForRegen = false;
+                        }
+                        await SkillSystem.trainStat(freshP, u, "內力", "force", "maxForce", "hp", "氣", ["1"]);
+                    }
                 }
 
             } catch (error) {
@@ -280,10 +284,19 @@ export const SkillSystem = {
             const newVal = curVal + gain;
             attr[attrCur] = Math.min(limit, newVal);
             
-            let msg = `你運轉周天，消耗 ${cost} 點${costName}，將其轉化為${typeName} ... `;
+            // [優化] 當一次性修練大量內力時，顯示更具體的訊息
+            let msg = "";
+            if (cost > 100) {
+                 msg = `你深吸一口氣，將全身 ${cost} 點${costName}盡數化為${typeName}，修為大增！`;
+            } else {
+                 msg = `你運轉周天，消耗 ${cost} 點${costName}，將其轉化為${typeName} ... `;
+            }
+
             if (attr[attrCur] > maxVal) {
                 msg += `(${attr[attrCur]}/${maxVal} <span style="color:#00ff00">+${attr[attrCur] - maxVal}</span>)`;
-                UI.print(msg + " 真氣在丹田內鼓盪，隨時可能突破。", "system", true);
+                if (cost > 100) msg += " 真氣在體內奔騰，勢不可擋！";
+                else msg += " 真氣在丹田內鼓盪，隨時可能突破。";
+                UI.print(msg, "system", true);
             } else {
                 msg += `(${attr[attrCur]}/${maxVal})`;
                 UI.print(msg, "system");
