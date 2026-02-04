@@ -87,9 +87,8 @@ export const MapSystem = {
 
             querySnapshot.forEach(doc => {
                 const p = doc.data();
-                // [修改] 過濾斷線玩家 (5分鐘無心跳)
+                // 過濾斷線玩家
                 if (now - (p.lastActive || 0) > 300000) return;
-                
                 playersInRoom.push(p); 
             });
         } catch (e) { console.error(e); }
@@ -112,14 +111,9 @@ export const MapSystem = {
             if (playerHtml) UI.print(playerHtml, "chat", true);
         }
 
-        // 2. 讀取受傷與死亡 NPC
-        const fightingNpcKeys = new Set();
-        playersInRoom.forEach(p => {
-            if (p.state === 'fighting' && p.combatTarget) {
-                fightingNpcKeys.add(`${p.combatTarget.id}_${p.combatTarget.index}`);
-            }
-        });
-
+        // 2. 讀取與顯示 NPC
+        // [修改] 這裡的邏輯從「看玩家打誰」改為「看怪物打誰」
+        // 我們會讀取 active_npcs (戰鬥中的怪)，如果怪物的 targetId 有值，就代表它在戰鬥中
         const activeNpcMap = new Map();
         try {
             const activeRef = collection(db, "active_npcs");
@@ -156,12 +150,23 @@ export const MapSystem = {
                     const uniqueId = getUniqueNpcId(playerData.location, npcId, index);
                     let statusTag = "";
                     let isUnconscious = false;
+                    
                     if (activeNpcMap.has(uniqueId)) {
                         const activeData = activeNpcMap.get(uniqueId);
                         isUnconscious = activeData.isUnconscious || activeData.currentHp <= 0;
                         statusTag += getNpcStatusText(activeData.currentHp, activeData.maxHp, isUnconscious);
+                        
+                        // [關鍵修改] 判斷戰鬥狀態：只要怪物有目標且還醒著，就是戰鬥中
+                        if (!isUnconscious && activeData.targetId) {
+                            if (activeData.targetId === playerData.id) {
+                                // 怪物正在打我
+                                statusTag += UI.txt(" 【戰鬥中】", "#ff0000", true);
+                            } else {
+                                // 怪物正在打別人
+                                statusTag += UI.txt(" 【激戰中】", "#ff8800", true);
+                            }
+                        }
                     }
-                    if (fightingNpcKeys.has(`${npcId}_${index}`) && !isUnconscious) statusTag += UI.txt(" 【戰鬥中】", "#ff0000", true);
 
                     const diff = CombatSystem.getDifficultyInfo(playerData, npcId);
                     const coloredName = UI.txt(npc.name, diff.color);
@@ -176,7 +181,7 @@ export const MapSystem = {
                         if (!isMyMaster && npc.family) links += UI.makeCmd("[拜師]", `apprentice ${npc.id} ${npcOrder}`, "cmd-btn");
                         if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id} ${npcOrder}`, "cmd-btn");
                         
-                        // [修改] 移除狀態檢查，讓玩家在戰鬥中也能看到按鈕，以便攻擊其他目標
+                        // [保持 Step 2 的修改] 戰鬥中依然顯示按鈕，方便切換/加入目標
                         links += UI.makeCmd("[戰鬥]", `fight ${npc.id} ${npcOrder}`, "cmd-btn");
                         links += UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
                     }
@@ -349,9 +354,8 @@ export const MapSystem = {
             if (!pSnap.empty) {
                 const targetP = pSnap.docs[0].data();
                 
-                // [新增] 檢查該玩家是否已斷線 (心跳檢測)
+                // 檢查該玩家是否已斷線
                 if (Date.now() - (targetP.lastActive || 0) > 300000) {
-                    // 如果已斷線，雖然資料還在，但視為"看不到"
                     UI.print("你看不到 " + targetIdOrName + "。", "error");
                     return;
                 }
@@ -405,6 +409,7 @@ export const MapSystem = {
         }
 
         if (playerData.state === 'fighting') {
+            // [優化] 逃跑時稍微增加難度或提示
             if (Math.random() < 0.5) {
                  UI.print("你被敵人纏住了，無法脫身！", "error");
                  return;
