@@ -185,7 +185,6 @@ function getDodgeMessage(entity, attackerName, entityNameOverride = null) {
     return UI.txt(msg.replace(/\$N/g, finalName).replace(/\$P/g, attackerName), "#aaa");
 }
 
-// [修改] 增加 targetIndex 參數，預設為 1 (第一隻)
 async function findAliveNPC(roomId, targetId, targetIndex = 1) {
     const room = MapSystem.getRoom(roomId);
     if (!room || !room.npcs) return null;
@@ -208,10 +207,6 @@ async function findAliveNPC(roomId, targetId, targetIndex = 1) {
     let matchCount = 0;
     for (let i = 0; i < room.npcs.length; i++) {
         if (room.npcs[i] === targetId) {
-            // 計算這是第幾隻同名 NPC
-            // 注意：我們不過濾屍體來計算索引，確保 "fight rabbit 2" 永遠是指房間列表中的第 2 隻兔子
-            // 如果第 1 隻死了，指令 "fight rabbit 2" 依然找第 2 隻。
-            // 但如果 "deadIndices" 包含它，則代表它不在場 (重生中)。
             matchCount++;
             
             if (matchCount === targetIndex) {
@@ -219,7 +214,6 @@ async function findAliveNPC(roomId, targetId, targetIndex = 1) {
                     const npcData = NPCDB[targetId];
                     return { ...npcData, index: i, isUnconscious: false }; 
                 } else {
-                    // 目標存在但正在重生中
                     return null;
                 }
             }
@@ -451,7 +445,6 @@ export const CombatSystem = {
         if (room.safe) { UI.print("這裡是安全區，禁止動武。", "error"); return; }
         
         const targetId = args[0];
-        // [新增] 解析目標索引 (例如 fight rabbit 2)
         const targetIndex = args.length > 1 ? parseInt(args[1]) : 1;
 
         if (!specificNpc) {
@@ -475,7 +468,6 @@ export const CombatSystem = {
         }
 
         let npc = specificNpc;
-        // [修改] 傳入 targetIndex 以鎖定特定目標
         if (!npc) npc = await findAliveNPC(playerData.location, targetId, targetIndex);
         if (!npc) { UI.print("這裡沒有這個人，或者他已經倒下了。", "error"); return; }
 
@@ -570,6 +562,19 @@ export const CombatSystem = {
         const combatRound = async () => {
             if (combatList.length === 0) { CombatSystem.stopCombat(userId); return; }
             
+            // [新增] 每一回合重新讀取玩家最新的 Enforce 設定
+            try {
+                const playerRef = doc(db, "players", userId);
+                const playerSnap = await getDoc(playerRef);
+                if (playerSnap.exists()) {
+                    const freshData = playerSnap.data();
+                    if (!playerData.combat) playerData.combat = {};
+                    playerData.combat.enforce = freshData.combat?.enforce || 0; 
+                }
+            } catch (e) {
+                console.error("Sync enforce error:", e);
+            }
+
             const playerStats = getCombatStats(playerData);
             
             // --- 階段 1：玩家攻擊回合 ---
@@ -617,7 +622,8 @@ export const CombatSystem = {
                     
                     dmg = applyEnforce(dmg, playerStats, playerData);
 
-                    if (!currentTarget.isLethal) dmg = Math.floor(dmg / 2);
+                    // [修改] 移除切磋傷害減半，保持傷害一致
+                    // if (!currentTarget.isLethal) dmg = Math.floor(dmg / 2);
 
                     const hitRate = playerStats.hit / (playerStats.hit + npcStats.dodge);
                     if (Math.random() < hitRate) {
@@ -682,7 +688,8 @@ export const CombatSystem = {
                     
                     dmg = applyEnforce(dmg, playerStats, playerData);
                     
-                    dmg = Math.floor(dmg / 2); 
+                    // [修改] 移除切磋傷害減半
+                    // dmg = Math.floor(dmg / 2); 
 
                     const hitProb = playerStats.hit / (playerStats.hit + tStats.dodge);
                     if (Math.random() < hitProb) {
@@ -723,7 +730,8 @@ export const CombatSystem = {
  
                          let dmg = eStats.ap - playerStats.dp;
                          if (dmg <= 0) dmg = Math.random() * 3 + 1;
-                         if (!enemy.isLethal) dmg = dmg / 2;
+                         // [修改] 移除 NPC 切磋傷害減半
+                         // if (!enemy.isLethal) dmg = dmg / 2;
                          dmg = Math.round(dmg) || 1;
          
                          playerData.attributes.hp -= dmg;
@@ -782,7 +790,8 @@ export const CombatSystem = {
                      const tStats = getCombatStats(tData);
                      let tDmg = Math.max(1, tStats.ap - playerStats.dp);
                      tDmg = Math.floor(tDmg * (0.8 + Math.random() * 0.4));
-                     tDmg = Math.floor(tDmg / 2);
+                     // [修改] 移除 PVP 切磋傷害減半
+                     // tDmg = Math.floor(tDmg / 2);
  
                      const tHitProb = tStats.hit / (tStats.hit + playerStats.dodge);
                      if (Math.random() < tHitProb) {
