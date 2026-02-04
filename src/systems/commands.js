@@ -9,6 +9,7 @@ import { CombatSystem } from "./combat.js";
 import { PlayerSystem, updatePlayer } from "./player.js";
 import { InventorySystem } from "./inventory.js";
 import { SkillSystem } from "./skill_system.js";
+import { PerformSystem } from "./perform_system.js"; // [新增] 引入絕招系統
 
 const dirMapping = {
     'n': 'north', 's': 'south', 'e': 'east', 'w': 'west',
@@ -23,11 +24,12 @@ const commandRegistry = {
     'save': { description: '存檔', execute: PlayerSystem.save },
     'quit': { description: '離開遊戲', execute: PlayerSystem.quit }, 
     'suicide': { description: '自殺刪檔', execute: PlayerSystem.suicide },
-    'hp': { description: '狀態', execute: (p) => UI.updateHUD(p) }, // 確保有 hp 指令
+    'hp': { description: '狀態', execute: (p) => UI.updateHUD(p) },
     
     // === 戰鬥與切磋指令 ===
     'kill': { description: '下殺手', execute: CombatSystem.kill },
     'fight': { description: '切磋', execute: CombatSystem.fight },
+    'perform': { description: '施展絕招', execute: PerformSystem.execute }, // [新增] 絕招指令
     'y': { description: '接受', execute: CombatSystem.acceptDuel },
     'yes': { description: '接受', execute: CombatSystem.acceptDuel },
     'n': { description: '拒絕', execute: CombatSystem.rejectDuel },
@@ -47,8 +49,6 @@ const commandRegistry = {
     'get': { description: '撿', execute: InventorySystem.get },
     'inventory': { description: '背包', execute: InventorySystem.inventory },
     'i': { description: '背包 (縮寫)', execute: InventorySystem.inventory },
-    
-    // Give 指令
     'give': { description: '給予', execute: InventorySystem.give },
 
     // === 技能與修練指令 ===
@@ -70,8 +70,6 @@ const commandRegistry = {
     // === 內力運用與自動修練指令 ===
     'exert': { description: '運功', execute: SkillSystem.exert },
     'autoforce': { description: '自動修練內力', execute: SkillSystem.autoForce },
-    
-    // === 內功加力指令 ===
     'enforce': { description: '加力', execute: PlayerSystem.enforce },
 
     // === 地圖與社交指令 ===
@@ -85,10 +83,8 @@ const commandRegistry = {
             }
         } 
     },
-    
     'say': { description: '說', execute: (p,a)=>{const m=a.join(" ");UI.print(`你: ${m}`,"chat");MessageSystem.broadcast(p.location,`${p.name} 說: ${m}`);} },
     'emote': { description: '演', execute: (p,a)=>{const m=a.join(" ");UI.print(`${p.name} ${m}`,"system");MessageSystem.broadcast(p.location,`${p.name} ${m}`);} },
-    
     'recall': { 
         description: '回', 
         execute: (p,a,u) => {
@@ -98,6 +94,7 @@ const commandRegistry = {
     }
 };
 
+// 縮寫處理
 function handleLook(p, a) {
     if (a.length > 0) {
         import("./map.js").then(m => m.MapSystem.lookTarget(p, a[0], a[1]));
@@ -133,8 +130,7 @@ export const CommandSystem = {
              return;
         }
 
-        // [新增] 修練狀態 (Exercising) 嚴格攔截
-        // 只允許: look, score, skills, hp, help, autoforce, inventory(i)
+        // 修練狀態過濾
         if (playerData.state === 'exercising') {
             const allowedExercisingCmds = ['autoforce', 'look', 'l', 'score', 'hp', 'skills', 'sk', 'help', 'inventory', 'i'];
             if (!allowedExercisingCmds.includes(cmdName)) {
@@ -148,13 +144,25 @@ export const CommandSystem = {
              if (['n','s','e','w','u','d','north','south','east','west','up','down'].includes(cmdName)) {
                  // 允許戰鬥中嘗試移動 (逃跑)
              } else if (![
-                 'kill', 'fight', 
+                 'kill', 'fight', 'perform', // [新增] 允許戰鬥中使用 perform
                  'look', 'score', 'hp', 'help', 'skills', 'l',
                  'enforce', 'exert', 'inventory', 'i', 'eat', 'drink', 'wield', 'unwield' 
              ].includes(cmdName)) {
                  UI.print("戰鬥中無法分心做這件事！", "error");
                  return;
              }
+        }
+        
+        // [新增] 忙碌狀態 (Busy) 過濾
+        // 如果玩家被定身，大部分指令都不能用
+        if (playerData.busy && Date.now() < playerData.busy) {
+            // 允許查看狀態的指令
+            const allowedBusyCmds = ['look', 'l', 'score', 'hp', 'inventory', 'i', 'help'];
+            if (!allowedBusyCmds.includes(cmdName)) {
+                const remaining = Math.ceil((playerData.busy - Date.now()) / 1000);
+                UI.print(`你現在動彈不得！(剩餘 ${remaining} 秒)`, "error");
+                return;
+            }
         }
         
         if (!playerData) { UI.print("靈魂尚未歸位...", "error"); return; }
