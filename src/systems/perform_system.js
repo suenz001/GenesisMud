@@ -4,10 +4,10 @@ import { UI } from "../ui.js";
 import { MessageSystem } from "./messages.js";
 import { PerformDB } from "../data/performs.js";
 import { ItemDB } from "../data/items.js";
-import { CombatSystem } from "./combat.js";
+import { CombatSystem } from "./combat.js"; // [修正] 靜態引入 CombatSystem
 import { NPCDB } from "../data/npcs.js";
 import { db, auth } from "../firebase.js";
-import { doc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // 用於計算 Enforce 對絕招的加成倍率
 function calculateEnforceMultiplier(enforceLevel) {
@@ -45,6 +45,13 @@ export const PerformSystem = {
             UI.print("你暈倒了，什麼也做不了。", "error");
             return;
         }
+        
+        // [新增] 限制必須在戰鬥中才能使用
+        if (playerData.state !== 'fighting') {
+            UI.print("絕招只能在戰鬥中使用！", "error");
+            return;
+        }
+
         // 檢查被定身狀態 (busy)
         if (playerData.busy && Date.now() < playerData.busy) {
             const remaining = Math.ceil((playerData.busy - Date.now()) / 1000);
@@ -87,9 +94,7 @@ export const PerformSystem = {
         }
         // 特例：如果是基礎武功 (通常絕招綁進階，但以防萬一)
         if (!isEnabled && playerData.skills && playerData.skills[requiredSkill]) {
-            // 這裡假設絕招通常綁定在「激發」的進階武功上，
-            // 如果你希望沒激發也能用，可以改寬鬆一點。
-            // 但依照你的需求，應該是要裝備(激發)才能用。
+            // 寬鬆檢查
         }
 
         if (!isEnabled) {
@@ -130,7 +135,7 @@ export const PerformSystem = {
         // 如果沒指定目標，且正在戰鬥中，自動取當前敵人
         if (!targetId && playerData.state === 'fighting' && playerData.combatTarget) {
             targetId = playerData.combatTarget.id;
-            targetIndex = playerData.combatTarget.index || 1; // 修正：確保有 index
+            targetIndex = playerData.combatTarget.index || 1; 
         }
 
         if (!targetId && performData.type !== 'aoe') {
@@ -138,13 +143,17 @@ export const PerformSystem = {
             return;
         }
 
-        // 8. 執行絕招
-        // 扣除內力
+        // 8. 執行絕招 (先扣內力與設CD，防止出錯後沒扣)
         playerData.attributes.force -= performData.forceCost;
-        
-        // 設定冷卻
         playerData.cooldowns[performId] = now + performData.cooldown;
         playerData.gcd = now + 2000; // 2秒公共冷卻
+
+        // 更新玩家狀態
+        await updatePlayer(userId, { 
+            "attributes.force": playerData.attributes.force,
+            [`cooldowns.${performId}`]: playerData.cooldowns[performId],
+            gcd: playerData.gcd
+        });
 
         // 計算基礎戰鬥數據
         const pStats = getCombatStats(playerData);
@@ -158,62 +167,73 @@ export const PerformSystem = {
             UI.print(msg, "chat", true);
             MessageSystem.broadcast(playerData.location, msg);
 
-            // 取得房間內所有敵人 (這部分需要從 active_npcs 撈取)
+            // 取得房間內所有敵人
             const activeRef = collection(db, "active_npcs");
             const q = query(activeRef, where("roomId", "==", playerData.location));
             const snapshot = await getDocs(q);
             
             let hitCount = 0;
-            snapshot.forEach(async (doc) => {
-                const enemy = doc.data();
+            const updatePromises = [];
+
+            snapshot.forEach((docSnap) => {
+                const enemy = docSnap.data();
+                const enemyId = docSnap.id;
+
                 // 排除已昏迷或死掉的
                 if (enemy.currentHp <= 0 || enemy.isUnconscious) return;
 
                 // 執行傷害計算
-                // AOE 傷害公式：(攻擊力 * 技能倍率 * Enforce倍率) - 防禦力 (簡化版)
+                // AOE 傷害公式：(攻擊力 * 技能倍率 * Enforce倍率)
+                // 這裡做些微浮動
                 let damage = Math.floor(pStats.ap * performData.damageScale * enforceMult);
-                // 扣一點隨機波動
-                damage = Math.floor(damage * (0.9 + Math.random() * 0.2));
+                damage = Math.floor(damage * (0.9 + Math.random() * 0.2)); 
                 
-                // 簡單防禦扣減 (AOE 通常無視部分防禦或傷害較高，這裡簡單處理)
-                // 實際應該讀取怪物防禦，但在這個系統層級可能要讀取 NPCDB，為效能先做簡易版
-                // 這裡假設 AOE 威力巨大，直接造成大傷
-                
+                // 扣血
                 enemy.currentHp -= damage;
                 hitCount++;
 
-                // 更新怪物狀態
-                // 注意：這裡直接寫入資料庫，CombatSystem 會監聽到變化
-                await updatePlayer(userId, { 
-                    "attributes.force": playerData.attributes.force,
-                    [`cooldowns.${performId}`]: playerData.cooldowns[performId],
-                    gcd: playerData.gcd
-                });
-
-                // 使用 CombatSystem 的介面更新怪物 (模擬)
-                // 理想情況是調用 CombatSystem 的共用函式，這裡我們先直接更新 DB
-                // 但要觸發擊殺獎勵比較麻煩，這裡建議在 Step 2 的 combat.js 暴露 helper
-                // 目前先做簡單扣血
-                const enemyRef = doc(db, "active_npcs", doc.id);
+                const enemyRef = doc(db, "active_npcs", enemyId);
+                
                 if (enemy.currentHp <= 0) {
+                     // 擊殺邏輯
                      enemy.currentHp = 0;
                      enemy.isUnconscious = true;
                      UI.print(UI.txt(`${enemy.npcName} 被刀氣掃中，慘叫一聲倒地！`, "#ff5555"), "system", true);
-                     // 這裡暫時無法觸發擊殺獎勵，Step 2 會補強
+                     
+                     // 構造 enemyState 供 handleKillReward 使用
+                     const diffInfo = CombatSystem.getDifficultyInfo(playerData, enemy.targetId || enemy.npcName); 
+                     const enemyState = { 
+                         uniqueId: enemyId, 
+                         diffRatio: diffInfo.ratio,
+                         npcHp: 0, 
+                         maxNpcHp: enemy.maxHp 
+                     };
+                     
+                     // 嘗試從 NPCDB 還原資料，若無則用現有資料填充
+                     const npcData = NPCDB[enemy.targetId] || { name: enemy.npcName, id: enemy.targetId, combat: { maxHp: enemy.maxHp }, drops: [] }; 
+                     
+                     // 呼叫 combat.js 的擊殺處理 (包含掉寶、潛能、刪除active_npc)
+                     updatePromises.push(CombatSystem.handleKillReward(npcData, playerData, enemyState, userId));
+                     
+                     // 標記狀態 (雖然 handleKillReward 會刪除它，但為防萬一先更新)
+                     updatePromises.push(updateDoc(enemyRef, { currentHp: 0, isUnconscious: true }));
+
                 } else {
+                     // 存活邏輯
                      UI.print(UI.txt(`(刀氣對 ${enemy.npcName} 造成 ${damage} 點傷害)`, "#ffff00"), "system", true);
+                     
+                     // [修正] 寫回資料庫，並強制設定目標為玩家 (反擊)
+                     updatePromises.push(updateDoc(enemyRef, { 
+                         currentHp: enemy.currentHp,
+                         targetId: userId 
+                     }));
+                     
+                     // 確保本地也進入戰鬥狀態
+                     CombatSystem.fight(playerData, [enemy.targetId], userId);
                 }
-                
-                await updatePlayer(userId, {}); // Dummy update to allow local refresh
-                
-                // 更新 NPC
-                // 這裡需要像 combat.js 那樣 syncNpcState，Step 2 整合時會更順
-                // 現在先用簡易寫入
-                import("./combat.js").then(mod => {
-                    // 嘗試觸發戰鬥狀態 (如果還沒戰鬥)
-                    mod.CombatSystem.fight(playerData, [enemy.npcName], userId); 
-                });
             });
+
+            await Promise.all(updatePromises);
 
             if (hitCount === 0) {
                 UI.print("四周空蕩蕩的，你的絕招打了個寂寞。", "chat");
@@ -222,40 +242,11 @@ export const PerformSystem = {
         } 
         // === 執行：單體攻擊 / 連擊 / Debuff ===
         else {
-            // 為了簡化，Step 1 我們先處理 "找目標" 的邏輯
-            // 這裡我們需要一個方式取得 NPC 物件，類似 combat.js 的 findAliveNPC
-            // 由於邏輯重複，我們暫時先用簡易版，Step 2 會將 findAliveNPC 導出
-            
-            // 假設已經鎖定目標，且目標在 active_npcs (若是戰鬥中)
-            // 這裡我們發送一個特殊的 combat event 給 CombatSystem 處理可能更好
-            // 但為了獨立性，我們先寫邏輯
-            
-            // **重要**：為了避免重複代碼，真正的「造成傷害」與「狀態應用」
-            // 我們會在 Step 2 修改 combat.js 時，提供一個 `CombatSystem.applyDamage` 
-            // 供這裡呼叫。
-            
-            // 現在我們先做 "確認目標存在" 與 "計算傷害數值"
-            
+            // 計算傷害基數
             const damageBase = pStats.ap * performData.damageScale * enforceMult;
             
-            // 呼叫 CombatSystem 處理實際打擊 (這是 Step 2 的預告)
-            // 為了讓這段代碼現在能跑，我們先用簡單的 console log 或 UI print 模擬
-            // 實際上，這需要引入 combat.js 的功能。
-            
-            // 暫時解決方案：把指令轉發給 CombatSystem 的新函數 (Step 2 實作)
-            // 或者，我們在這裡引用 combat.js
-            
-            import("./combat.js").then(async (mod) => {
-                // 呼叫我們將在 Step 2 實作的函數
-                await mod.CombatSystem.handlePerformHit(playerData, userId, targetId, targetIndex, performData, damageBase);
-            });
+            // 呼叫 CombatSystem 處理實際打擊 (包含找目標、扣血、擊殺)
+            await CombatSystem.handlePerformHit(playerData, userId, targetId, targetIndex, performData, damageBase);
         }
-        
-        // 更新玩家狀態 (內力扣除、CD 更新)
-        await updatePlayer(userId, { 
-            "attributes.force": playerData.attributes.force,
-            [`cooldowns.${performId}`]: playerData.cooldowns[performId],
-            gcd: playerData.gcd
-        });
     }
 };
