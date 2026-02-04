@@ -7,7 +7,7 @@ export const NPCDB = {
         name: "店小二",
         description: "一位勤快的店小二。",
         attributes: { str: 15, con: 15, per: 15, kar: 15, int: 15, cor: 15 },
-        combat: { hp: 100, maxHp: 100, attack: 10, defense: 5, xp: 0 },
+        combat: { hp: 300, maxHp: 300, attack: 10, defense: 5, xp: 0 },
         shop: { "rice": 10, "dumpling": 15, "bread": 5, "roast_chicken": 50, "waterskin": 20, "tea": 10, "wine": 80 }
     },
     "blacksmith": {
@@ -15,7 +15,7 @@ export const NPCDB = {
         name: "鐵匠",
         description: "一位肌肉虯結的壯漢，正揮舞著大鐵鎚打造兵器。",
         attributes: { str: 40, con: 40, per: 20, kar: 20, int: 20, cor: 20 },
-        combat: { hp: 500, maxHp: 500, attack: 50, defense: 30, xp: 0 },
+        combat: { hp: 800, maxHp: 800, attack: 50, defense: 30, xp: 0 },
         shop: { 
             // --- 武器 (新手特價區) ---
             "stone": 10,           // 飛蝗石
@@ -52,7 +52,7 @@ export const NPCDB = {
         description: "他身材魁梧，滿臉橫肉，一看就是練硬氣功的行家。專精於大開大闔的剛猛功夫。",
         family: "common_gym",
         attributes: { str: 50, con: 50, per: 30, kar: 30, int: 30, cor: 30 }, // 力量體質較高
-        combat: { hp: 3000, maxHp: 3000, attack: 80, defense: 80, xp: 0 },
+        combat: { hp: 5000, maxHp: 5000, attack: 80, defense: 80, xp: 0 },
         skills: { 
             // 基礎內輕
             "force": 80, "dodge": 80,
@@ -77,7 +77,7 @@ export const NPCDB = {
         description: "他身形瘦削，目光如電，雖然不壯碩，但太陽穴高高鼓起，顯然內功深厚，擅長靈巧多變的武功。",
         family: "common_gym",
         attributes: { str: 30, con: 30, per: 50, kar: 30, int: 50, cor: 40 }, // 悟性靈性較高
-        combat: { hp: 2500, maxHp: 2500, attack: 90, defense: 70, xp: 0 },
+        combat: { hp: 3500, maxHp: 3500, attack: 90, defense: 70, xp: 0 },
         skills: { 
             // 基礎內輕
             "force": 80, "dodge": 80,
@@ -114,7 +114,7 @@ export const NPCDB = {
         name: "野兔",
         description: "一隻可愛的小野兔，正在吃草。",
         attributes: { str: 5, con: 5, per: 25, kar: 20, int: 10, cor: 10 },
-        combat: { hp: 50, maxHp: 50, attack: 10, defense: 0, xp: 10 }, 
+        combat: { hp: 150, maxHp: 150, attack: 10, defense: 0, xp: 10 }, 
         skills: { "dodge": 20, "unarmed": 10 }, 
         drops: [{ id: "rabbit_meat", rate: 1.0 }, { id: "rabbit_skin", rate: 0.5 }]
     },
@@ -123,7 +123,7 @@ export const NPCDB = {
         name: "野雞",
         description: "一隻色彩斑斕的野雞，在草叢中覓食。",
         attributes: { str: 8, con: 5, per: 25, kar: 15, int: 10, cor: 10 },
-        combat: { hp: 60, maxHp: 60, attack: 15, defense: 5, xp: 20 }, 
+        combat: { hp: 160, maxHp: 160, attack: 15, defense: 5, xp: 20 }, 
         skills: { "dodge": 25, "unarmed": 15 },
         drops: [{ id: "pheasant_meat", rate: 1.0 }, { id: "pheasant_feather", rate: 0.6 }]
     },
@@ -134,7 +134,7 @@ export const NPCDB = {
         name: "猴子",
         description: "一隻調皮的猴子，手裡拿著不知道哪來的果子。",
         attributes: { str: 10, con: 10, per: 40, kar: 15, int: 20, cor: 10 },
-        combat: { hp: 80, maxHp: 80, attack: 20, defense: 10, xp: 35 }, 
+        combat: { hp: 280, maxHp: 280, attack: 20, defense: 10, xp: 35 }, 
         skills: { "dodge": 40, "unarmed": 25 },
         drops: [{ id: "wild_fruit", rate: 0.8 }]
     },
@@ -144,7 +144,7 @@ export const NPCDB = {
         aggro: true, 
         description: "一條盤踞在樹枝上的蟒蛇，吐著信子。",
         attributes: { str: 15, con: 10, per: 20, kar: 10, int: 10, cor: 10 },
-        combat: { hp: 90, maxHp: 90, attack: 28, defense: 5, xp: 45 }, 
+        combat: { hp: 290, maxHp: 290, attack: 28, defense: 5, xp: 45 }, 
         skills: { "dodge": 30, "unarmed": 35 },
         drops: [{ id: "snake_gall", rate: 0.2 }, { id: "snake_skin", rate: 0.5 }]
     },
@@ -155,7 +155,7 @@ export const NPCDB = {
         name: "山貓",
         description: "行動敏捷的山貓，眼神銳利。",
         attributes: { str: 18, con: 15, per: 35, kar: 10, int: 15, cor: 10 },
-        combat: { hp: 110, maxHp: 110, attack: 32, defense: 15, xp: 55 }, 
+        combat: { hp: 410, maxHp: 410, attack: 32, defense: 15, xp: 55 }, 
         skills: { "dodge": 50, "unarmed": 40 },
         drops: [{ id: "bobcat_skin", rate: 0.4 }]
     },
@@ -164,7 +164,7 @@ export const NPCDB = {
         name: "野豬",
         description: "一隻兇猛的野豬，皮糙肉厚。",
         attributes: { str: 25, con: 25, per: 10, kar: 10, int: 5, cor: 5 },
-        combat: { hp: 150, maxHp: 150, attack: 40, defense: 25, xp: 70 }, 
+        combat: { hp: 450, maxHp: 450, attack: 40, defense: 25, xp: 70 }, 
         skills: { "dodge": 40, "unarmed": 50 },
         drops: [{ id: "boar_meat", rate: 1.0 }, { id: "boar_tooth", rate: 0.3 }]
     },
@@ -176,7 +176,7 @@ export const NPCDB = {
         aggro: true, 
         description: "眼神兇惡的野狼，成群結隊。",
         attributes: { str: 30, con: 20, per: 30, kar: 10, int: 15, cor: 10 },
-        combat: { hp: 200, maxHp: 200, attack: 50, defense: 20, xp: 100 },
+        combat: { hp: 600, maxHp: 600, attack: 50, defense: 20, xp: 100 },
         skills: { "dodge": 60, "unarmed": 60 },
         drops: [{ id: "wolf_skin", rate: 0.4 }]
     },
@@ -186,7 +186,7 @@ export const NPCDB = {
         aggro: true, 
         description: "一頭巨大的黑熊，站起來像一座小山。",
         attributes: { str: 40, con: 40, per: 15, kar: 10, int: 10, cor: 10 },
-        combat: { hp: 800, maxHp: 800, attack: 90, defense: 60, xp: 300 },
+        combat: { hp: 1800, maxHp: 1800, attack: 90, defense: 60, xp: 300 },
         skills: { "dodge": 30, "unarmed": 70, "force": 50 },
         drops: [{ id: "bear_skin", rate: 1.0 }, { id: "bear_paw", rate: 0.2 }]
     }
