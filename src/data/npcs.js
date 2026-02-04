@@ -41,25 +41,74 @@ export const NPCDB = {
             "leather_boots": 250
         }
     },
+    
+    // === 武館 NPC (重構) ===
+    
+    // 1. 王教頭 (力量/剛猛型)
     "gym_master": {
         id: "gym_master",
         name: "王教頭",
-        description: "飛龍武館的總教頭，精通十八般武藝，但似乎都不算頂尖。",
-        title: "飛龍武館館主",
+        title: "飛龍武館總教頭",
+        description: "他身材魁梧，滿臉橫肉，一看就是練硬氣功的行家。專精於大開大闔的剛猛功夫。",
         family: "common_gym",
-        attributes: { str: 60, con: 60, per: 50, kar: 30, int: 40, cor: 30 },
-        combat: { hp: 2000, maxHp: 2000, attack: 100, defense: 80, xp: 0 },
+        attributes: { str: 50, con: 50, per: 30, kar: 30, int: 30, cor: 30 }, // 力量體質較高
+        combat: { hp: 3000, maxHp: 3000, attack: 80, defense: 80, xp: 0 },
         skills: { 
-            "unarmed": 100, "sword": 100, "blade": 100, "stick": 100, 
-            "dagger": 100, "whip": 100, "throwing": 100, "lance": 100,
-            "force": 100, "dodge": 100, 
-            "iron-palm": 80, "swift-sword": 80, "eight-trigram-blade": 70, 
-            "arhat-stick": 75, "shadow-dagger": 65, "cloud-whip": 60,
-            "golden-dart": 70, "yang-spear": 75, "turtle-force": 80, "leaf-steps": 80 
+            // 基礎內輕
+            "force": 80, "dodge": 80,
+            "turtle-force": 80, "leaf-steps": 80,
+            
+            // 專精外功 (刀、棍、槍、拳)
+            "unarmed": 80, "blade": 80, "stick": 80, "lance": 80,
+            
+            // 進階外功
+            "iron-palm": 80,           // 鐵砂掌
+            "eight-trigram-blade": 80, // 八卦刀
+            "arhat-stick": 80,         // 羅漢棍
+            "yang-spear": 80           // 楊家槍
         }
     },
 
-    // === 森林生物 (Tier 1: 新手村門口) ===
+    // 2. 李教頭 (技巧/靈敏型) [新增]
+    "gym_master_li": {
+        id: "gym_master_li",
+        name: "李教頭",
+        title: "飛龍武館副教頭",
+        description: "他身形瘦削，目光如電，雖然不壯碩，但太陽穴高高鼓起，顯然內功深厚，擅長靈巧多變的武功。",
+        family: "common_gym",
+        attributes: { str: 30, con: 30, per: 50, kar: 30, int: 50, cor: 40 }, // 悟性靈性較高
+        combat: { hp: 2500, maxHp: 2500, attack: 90, defense: 70, xp: 0 },
+        skills: { 
+            // 基礎內輕
+            "force": 80, "dodge": 80,
+            "turtle-force": 80, "leaf-steps": 80,
+            
+            // 專精外功 (劍、短兵、鞭、暗器) - 無 Unarmed
+            "sword": 80, "dagger": 80, "whip": 80, "throwing": 80,
+            
+            // 進階外功
+            "swift-sword": 80,    // 疾風劍法
+            "shadow-dagger": 80,  // 如影隨形刺
+            "cloud-whip": 80,     // 流雲鞭
+            "golden-dart": 80     // 金錢鏢
+        }
+    },
+
+    // 3. 木頭人 (傷害測試) [新增]
+    "wooden_dummy": {
+        id: "wooden_dummy",
+        name: "木頭人",
+        description: "一個包著銅皮的巨大木樁，上面佈滿了刀痕和拳印。它不會還手，是測試武功的絕佳對象。",
+        attributes: { str: 10, con: 100, per: 0, kar: 0, int: 0, cor: 0 },
+        combat: { 
+            hp: 50000, maxHp: 50000, // 高血量
+            attack: 0, defense: 0,   // 零攻零防，真實傷害測試
+            xp: 0                    // 無經驗值
+        },
+        skills: {} // 無技能
+    },
+
+    // === 森林生物 (Tier 1: 森林邊緣) ===
     "rabbit": {
         id: "rabbit",
         name: "野兔",
@@ -79,7 +128,7 @@ export const NPCDB = {
         drops: [{ id: "pheasant_meat", rate: 1.0 }, { id: "pheasant_feather", rate: 0.6 }]
     },
 
-    // === 森林生物 (Tier 2: 森林外圍/空地) ===
+    // === 森林生物 (Tier 2: 森林外圍) ===
     "monkey": {
         id: "monkey",
         name: "猴子",

@@ -26,53 +26,110 @@ export const WorldMap = {
     "street_e1": { title: "長安東街", description: "客棧東邊的街道。", x: 1, y: 0, z: 0, region: ["world"] },
     "market_sq": { title: "熱鬧市集", description: "這裡是城裡最熱鬧的市集。", x: 2, y: 0, z: 0, walls: ["north"], region: ["world"] },
     "bank": { title: "宏源錢莊", description: "金字招牌的錢莊。", safe: true, x: 3, y: 0, z: 0, region: ["world"] },
-    "street_ne1": { title: "青龍街", description: "街道兩旁種滿了柳樹。北邊傳來陣陣喝采聲，似乎有間武館。", x: 1, y: 1, z: 0, region: ["world"] },
-    "gym_hall": {
-        title: "飛龍武館",
-        description: "一間寬敞的武館。場地中央豎著幾根木樁。\n【這裡可以拜師 (apprentice) 和學藝 (learn)】",
-        x: 1, y: 2, z: 0, safe: true, region: ["world"], npcs: ["gym_master"], allowSave: true
+    
+    "street_ne1": { 
+        title: "青龍街", 
+        description: "街道兩旁種滿了柳樹。往北是飛龍武館的大門。", 
+        x: 1, y: 1, z: 0, 
+        region: ["world"] 
     },
     "weapon_shop": {
         title: "神鋒武器鋪",
-        description: "叮叮噹噹的打鐵聲，牆上掛滿了各式兵器。中間有一個巨大的火爐。",
-        x: 2, y: 1, z: 0, walls: ["south"], region: ["world"], npcs: ["blacksmith"]
+        description: "叮叮噹噹的打鐵聲，牆上掛滿了各式兵器。往北可以通往武館的練武場。",
+        x: 2, y: 1, z: 0, 
+        // 移除 walls: ["north"]，讓它可以連通到北邊的練武場 (2,2)
+        region: ["world"], npcs: ["blacksmith"]
     },
 
-    // ================== 北方：新手森林 (Forest) ==================
-    "forest_entry": {
+    // ================== 飛龍武館區域 (Gym Complex) ==================
+    "gym_gate": {
+        title: "武館大門",
+        description: "氣派的朱紅大門，兩旁蹲著石獅子。上方懸掛著『飛龍武館』的金字招牌。往東是練武場，往北是一條幽靜的小徑。",
+        x: 1, y: 2, z: 0, 
+        safe: true, region: ["world", "gym"], allowSave: true
+    },
+    "gym_yard": {
+        title: "練武場",
+        description: "寬敞的露天廣場，地上鋪著整齊的青磚。弟子們在此處蹲馬步、練拳。往北是王教頭的房間，往東是李教頭的房間，往南是武器鋪。",
+        x: 2, y: 2, z: 0, 
+        safe: true, region: ["gym"],
+    },
+    "gym_room_wang": {
+        title: "王教頭廳",
+        description: "房間裡擺滿了刀槍棍棒，充滿陽剛之氣。王教頭正端坐在太師椅上喝茶。\n【這裡可以向 王教頭 學習刀、棍、槍與拳腳功夫】",
+        x: 2, y: 3, z: 0, 
+        safe: true, region: ["gym"], npcs: ["gym_master"], allowSave: true
+    },
+    "gym_room_li": {
+        title: "李教頭廳",
+        description: "牆上掛著各式劍器與長鞭，佈置雅致。李教頭正閉目養神。\n【這裡可以向 李教頭 學習劍、鞭、短兵與暗器功夫】",
+        x: 3, y: 2, z: 0, 
+        safe: true, region: ["gym"], npcs: ["gym_master_li"], allowSave: true
+    },
+    "gym_training": {
+        title: "木人房",
+        description: "這裡只有一個巨大的銅皮木人，是專門用來測試招式威力的。",
+        x: 3, y: 3, z: 0, 
+        safe: true, region: ["gym"], npcs: ["wooden_dummy"]
+    },
+
+    // ================== 北方：森林區域 (3x3 Map) ==================
+    // 連接通道
+    "gym_path": {
+        title: "武館後徑",
+        description: "一條連接武館與森林的小徑，兩旁雜草叢生。",
+        x: 1, y: 3, z: 0, region: ["world"]
+    },
+
+    // Row 4 (入口層 - Tier 1)
+    "forest_entry": { // (1,4)
         title: "森林入口",
-        description: "揚州城北門外的森林入口，光線變得有些昏暗。這裡比較安全，偶爾有小動物出沒。",
-        x: 1, y: 3, z: 0, region: ["world", "forest"], npcs: ["rabbit", "rabbit"]
+        description: "踏入森林，光線變得有些昏暗。這裡比較安全，偶爾有小動物出沒。",
+        x: 1, y: 4, z: 0, region: ["world", "forest"], npcs: ["rabbit", "rabbit", "pheasant"]
     },
-    "forest_path": {
-        title: "林間小道",
-        description: "一條蜿蜒的小路，兩旁草叢中傳來窸窸窣窣的聲音。",
-        x: 1, y: 4, z: 0, region: ["forest"], npcs: ["rabbit", "pheasant"]
+    "forest_w1": { // (0,4)
+        title: "森林邊緣(西)",
+        description: "森林的邊緣地帶，草叢很深。",
+        x: 0, y: 4, z: 0, region: ["forest"], npcs: ["rabbit", "pheasant"]
     },
-    "forest_clearing": {
-        title: "林間空地",
-        description: "樹木在這裡比較稀疏，陽光灑落在草地上。樹上常有猴子在嬉戲。",
-        x: 2, y: 4, z: 0, region: ["forest"], npcs: ["monkey", "pheasant"]
+    "forest_e1": { // (2,4)
+        title: "森林邊緣(東)",
+        description: "這裡生長著一些野果樹，常有小動物來覓食。",
+        x: 2, y: 4, z: 0, region: ["forest"], npcs: ["rabbit", "monkey"]
     },
-    "forest_thicket": {
-        title: "茂密灌木叢",
-        description: "這裡的植被非常茂密，寸步難行。空氣中有一股潮濕腐敗的味道，小心毒蛇。",
-        x: 0, y: 4, z: 0, region: ["forest"], npcs: ["snake", "snake"]
+
+    // Row 5 (中層 - Tier 2/3)
+    "forest_mid": { // (1,5)
+        title: "森林中部",
+        description: "樹木變得更加茂密，空氣中瀰漫著一股腐葉的味道。",
+        x: 1, y: 5, z: 0, region: ["forest"], npcs: ["monkey", "monkey", "snake"]
     },
-    "forest_deep": {
-        title: "森林深處",
-        description: "古樹參天，遮蔽了陽光。這裡已經人跡罕至，地上有巨大的蹄印。",
-        x: 1, y: 5, z: 0, region: ["forest"], npcs: ["boar", "bobcat"]
-    },
-    "dark_grove": {
+    "forest_mid_w": { // (0,5)
         title: "陰暗樹林",
-        description: "四周一片漆黑，陰風陣陣。樹影婆娑，彷彿有無數雙眼睛在盯著你。",
-        x: 0, y: 5, z: 0, region: ["forest"], npcs: ["snake", "bobcat"]
+        description: "四周一片漆黑，陰風陣陣，小心毒蛇出沒。",
+        x: 0, y: 5, z: 0, region: ["forest"], npcs: ["snake", "snake", "boar"]
     },
-    "beast_nest": {
+    "forest_mid_e": { // (2,5)
+        title: "灌木叢",
+        description: "茂密的灌木叢阻擋了視線，似乎有什麼東西在注視著你。",
+        x: 2, y: 5, z: 0, region: ["forest"], npcs: ["monkey", "bobcat"]
+    },
+
+    // Row 6 (深層 - Tier 3/4)
+    "forest_deep": { // (1,6)
+        title: "森林深處",
+        description: "古樹參天，遮蔽了陽光。這裡人跡罕至，充滿了危險的氣息。",
+        x: 1, y: 6, z: 0, region: ["forest"], npcs: ["boar", "wolf"]
+    },
+    "forest_deep_w": { // (0,6)
         title: "野獸巢穴",
-        description: "一個巨大的岩石洞穴，周圍散落著各種動物的白骨，令人不寒而慄。",
-        x: 2, y: 5, z: 0, region: ["forest"], npcs: ["bear", "wolf"]
+        description: "一個巨大的岩石洞穴，周圍散落著白骨。",
+        x: 0, y: 6, z: 0, region: ["forest"], npcs: ["wolf", "wolf", "bear"]
+    },
+    "forest_deep_e": { // (2,6)
+        title: "迷霧林地",
+        description: "濃霧瀰漫，稍不留神就會迷失方向。強大的野獸隱藏在霧中。",
+        x: 2, y: 6, z: 0, region: ["forest"], npcs: ["bobcat", "wolf"]
     },
 
     // ================== 南方：茅山路徑 (Maoshan Path) ==================
@@ -197,8 +254,7 @@ export const WorldMap = {
     "silk_road_1": {
         title: "黃土高坡",
         description: "放眼望去，滿目黃土。風沙很大，吹得人睜不開眼。",
-        x: -4, y: -1, z: 0, walls: ["east"], // 這裡用 walls 防止直接走回武當山腳，需要繞路 (邏輯上)
-        // 為了簡化，我們先讓它可以連通
+        x: -4, y: -1, z: 0, walls: ["east"], 
         region: ["world"]
     },
     "silk_road_2": {
