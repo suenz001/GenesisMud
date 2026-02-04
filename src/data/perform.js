@@ -1,5 +1,5 @@
 // src/data/performs.js
-import { UI } from "../ui.js";
+import { UI } from "src/ui.js";
 
 // 絕招資料庫
 export const PerformDB = {
