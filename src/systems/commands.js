@@ -56,6 +56,7 @@ const commandRegistry = {
     'learn': { description: '學藝', execute: SkillSystem.learn },
     'practice': { description: '練習', execute: SkillSystem.practice },
     'apprentice': { description: '拜師', execute: SkillSystem.apprentice },
+    'betray': { description: '叛出師門', execute: SkillSystem.betray }, // [新增] 叛師指令
     'enable': { description: '激發', execute: SkillSystem.enable },
     'unenable': { description: '解除激發', execute: SkillSystem.unenable },
     'abandon': { description: '放棄技能', execute: SkillSystem.abandon },
