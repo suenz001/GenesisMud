@@ -70,7 +70,7 @@ export const WorldMap = {
         title: "木人房",
         description: "這裡只有一個巨大的銅皮木人，是專門用來測試招式威力的。",
         x: 3, y: 3, z: 0, 
-        safe: true, region: ["gym"], npcs: ["wooden_dummy"]
+        safe: false, region: ["gym"], npcs: ["wooden_dummy"]
     },
 
     // ================== 北方：森林區域 (3x3 Map) ==================
