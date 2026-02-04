@@ -4,7 +4,7 @@ import { UI } from "../ui.js";
 import { MessageSystem } from "./messages.js";
 import { PerformDB } from "../data/performs.js";
 import { ItemDB } from "../data/items.js";
-import { CombatSystem } from "./combat.js"; // [修正] 靜態引入 CombatSystem
+import { CombatSystem } from "./combat.js"; 
 import { NPCDB } from "../data/npcs.js";
 import { db, auth } from "../firebase.js";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -46,7 +46,7 @@ export const PerformSystem = {
             return;
         }
         
-        // [新增] 限制必須在戰鬥中才能使用
+        // 限制必須在戰鬥中才能使用
         if (playerData.state !== 'fighting') {
             UI.print("絕招只能在戰鬥中使用！", "error");
             return;
@@ -92,7 +92,7 @@ export const PerformSystem = {
                 }
             }
         }
-        // 特例：如果是基礎武功 (通常絕招綁進階，但以防萬一)
+        
         if (!isEnabled && playerData.skills && playerData.skills[requiredSkill]) {
             // 寬鬆檢查
         }
@@ -143,7 +143,7 @@ export const PerformSystem = {
             return;
         }
 
-        // 8. 執行絕招 (先扣內力與設CD，防止出錯後沒扣)
+        // 8. 執行絕招 (先扣內力與設CD)
         playerData.attributes.force -= performData.forceCost;
         playerData.cooldowns[performId] = now + performData.cooldown;
         playerData.gcd = now + 2000; // 2秒公共冷卻
@@ -173,18 +173,16 @@ export const PerformSystem = {
             const snapshot = await getDocs(q);
             
             let hitCount = 0;
-            const updatePromises = [];
-
-            snapshot.forEach((docSnap) => {
+            
+            // [修正] 使用 for...of 迴圈以支援 await，確保順序執行
+            for (const docSnap of snapshot.docs) {
                 const enemy = docSnap.data();
                 const enemyId = docSnap.id;
 
                 // 排除已昏迷或死掉的
-                if (enemy.currentHp <= 0 || enemy.isUnconscious) return;
+                if (enemy.currentHp <= 0 || enemy.isUnconscious) continue;
 
                 // 執行傷害計算
-                // AOE 傷害公式：(攻擊力 * 技能倍率 * Enforce倍率)
-                // 這裡做些微浮動
                 let damage = Math.floor(pStats.ap * performData.damageScale * enforceMult);
                 damage = Math.floor(damage * (0.9 + Math.random() * 0.2)); 
                 
@@ -200,8 +198,8 @@ export const PerformSystem = {
                      enemy.isUnconscious = true;
                      UI.print(UI.txt(`${enemy.npcName} 被刀氣掃中，慘叫一聲倒地！`, "#ff5555"), "system", true);
                      
-                     // 構造 enemyState 供 handleKillReward 使用
-                     const diffInfo = CombatSystem.getDifficultyInfo(playerData, enemy.targetId || enemy.npcName); 
+                     // 處理擊殺獎勵
+                     const diffInfo = CombatSystem.getDifficultyInfo(playerData, enemy.npcId || enemy.targetId || enemy.npcName); 
                      const enemyState = { 
                          uniqueId: enemyId, 
                          diffRatio: diffInfo.ratio,
@@ -209,31 +207,49 @@ export const PerformSystem = {
                          maxNpcHp: enemy.maxHp 
                      };
                      
-                     // 嘗試從 NPCDB 還原資料，若無則用現有資料填充
-                     const npcData = NPCDB[enemy.targetId] || { name: enemy.npcName, id: enemy.targetId, combat: { maxHp: enemy.maxHp }, drops: [] }; 
+                     // 嘗試還原 NPC 資料
+                     const npcData = NPCDB[enemy.npcId || enemy.targetId] || { name: enemy.npcName, id: enemy.targetId, combat: { maxHp: enemy.maxHp }, drops: [] }; 
                      
-                     // 呼叫 combat.js 的擊殺處理 (包含掉寶、潛能、刪除active_npc)
-                     updatePromises.push(CombatSystem.handleKillReward(npcData, playerData, enemyState, userId));
+                     // [修正] 確保擊殺處理完成
+                     await CombatSystem.handleKillReward(npcData, playerData, enemyState, userId);
                      
-                     // 標記狀態 (雖然 handleKillReward 會刪除它，但為防萬一先更新)
-                     updatePromises.push(updateDoc(enemyRef, { currentHp: 0, isUnconscious: true }));
+                     // 雙重保險更新狀態
+                     await updateDoc(enemyRef, { currentHp: 0, isUnconscious: true });
 
                 } else {
                      // 存活邏輯
                      UI.print(UI.txt(`(刀氣對 ${enemy.npcName} 造成 ${damage} 點傷害)`, "#ffff00"), "system", true);
                      
-                     // [修正] 寫回資料庫，並強制設定目標為玩家 (反擊)
-                     updatePromises.push(updateDoc(enemyRef, { 
+                     // [關鍵修正] 
+                     // 1. 先等待資料庫更新完成 (解決 Race Condition 問題)
+                     await updateDoc(enemyRef, { 
                          currentHp: enemy.currentHp,
-                         targetId: userId 
-                     }));
+                         targetId: userId // 強制設定目標為玩家
+                     });
                      
-                     // 確保本地也進入戰鬥狀態
-                     CombatSystem.fight(playerData, [enemy.targetId], userId);
-                }
-            });
+                     // 2. 解析出正確的 npcId 和 index (解決 "這裡沒有這個人" 問題)
+                     // 假設 ID 格式為: roomId_npcId_index
+                     // 因為 roomId 可能包含底線 (例如 inn_start)，我們需要從後面解析
+                     let realNpcId = enemy.npcId; // 如果 combat.js 更新後有存 npcId 最好
+                     let realIndex = 1;
 
-            await Promise.all(updatePromises);
+                     if (!realNpcId) {
+                         // Fallback 解析邏輯
+                         // 移除 roomId 前綴 (加1是因為還有一個底線)
+                         const suffix = enemyId.substring(playerData.location.length + 1); 
+                         const lastUnderscore = suffix.lastIndexOf('_');
+                         if (lastUnderscore !== -1) {
+                             realNpcId = suffix.substring(0, lastUnderscore);
+                             realIndex = parseInt(suffix.substring(lastUnderscore + 1));
+                         }
+                     }
+
+                     if (realNpcId) {
+                         // 3. 最後才呼叫 fight，此時資料庫已更新，且 ID 正確
+                         CombatSystem.fight(playerData, [realNpcId, realIndex], userId);
+                     }
+                }
+            }
 
             if (hitCount === 0) {
                 UI.print("四周空蕩蕩的，你的絕招打了個寂寞。", "chat");
@@ -242,10 +258,7 @@ export const PerformSystem = {
         } 
         // === 執行：單體攻擊 / 連擊 / Debuff ===
         else {
-            // 計算傷害基數
             const damageBase = pStats.ap * performData.damageScale * enforceMult;
-            
-            // 呼叫 CombatSystem 處理實際打擊 (包含找目標、扣血、擊殺)
             await CombatSystem.handlePerformHit(playerData, userId, targetId, targetIndex, performData, damageBase);
         }
     }

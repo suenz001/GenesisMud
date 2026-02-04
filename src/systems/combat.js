@@ -16,64 +16,29 @@ function getUniqueNpcId(roomId, npcId, index) {
     return `${roomId}_${npcId}_${index}`;
 }
 
-// [修改] 導出此函數，讓 PerformSystem 也能使用
-export async function findAliveNPC(roomId, targetId, targetIndex = 1) {
-    const room = MapSystem.getRoom(roomId);
-    if (!room || !room.npcs) return null;
-
-    const deadRef = collection(db, "dead_npcs");
-    const q = query(deadRef, where("roomId", "==", roomId));
-    const snapshot = await getDocs(q);
-    
-    const deadIndices = [];
-    const now = Date.now();
-    snapshot.forEach(doc => {
-        const data = doc.data();
-        if (now < data.respawnTime) {
-            if (data.npcId === targetId) deadIndices.push(data.index);
-        } else {
-            deleteDoc(doc.ref);
-        }
-    });
-
-    let matchCount = 0;
-    for (let i = 0; i < room.npcs.length; i++) {
-        if (room.npcs[i] === targetId) {
-            matchCount++;
-            
-            if (matchCount === targetIndex) {
-                if (!deadIndices.includes(i)) {
-                    const npcData = NPCDB[targetId];
-                    return { ...npcData, index: i, isUnconscious: false }; 
-                } else {
-                    return null;
-                }
-            }
-        }
-    }
-    return null;
-}
-
-// [修改] 同步 NPC 狀態 (新增 busy 參數)
-async function syncNpcState(uniqueId, currentHp, maxHp, roomId, npcName, targetId, isUnconscious = false, busyTime = 0) {
+// [修正] 增加 npcId 參數，確保資料庫存有原始 ID，這對 AOE 鎖定目標至關重要
+async function syncNpcState(uniqueId, currentHp, maxHp, roomId, npcName, targetId, isUnconscious = false, busyTime = 0, npcId = null) {
     try {
         const ref = doc(db, "active_npcs", uniqueId);
-        await setDoc(ref, {
+        const data = {
             currentHp: currentHp,
             maxHp: maxHp,
             roomId: roomId,
             npcName: npcName,
             targetId: targetId, 
             isUnconscious: isUnconscious,
-            busy: busyTime, // [新增] 同步 busy 狀態
+            busy: busyTime,
             lastCombatTime: Date.now()
-        }, { merge: true });
+        };
+        // 如果有傳入 npcId 就存進去，方便後續查找
+        if (npcId) data.npcId = npcId;
+
+        await setDoc(ref, data, { merge: true });
     } catch (e) {
         console.error("同步 NPC 狀態失敗", e);
     }
 }
 
-// [修改] 讀取 NPC 狀態 (返回物件包含 hp 和 busy)
 async function fetchNpcState(uniqueId, defaultMaxHp) {
     try {
         const ref = doc(db, "active_npcs", uniqueId);
@@ -288,6 +253,44 @@ async function handlePlayerDeath(playerData, userId) {
     }, 180000);
 }
 
+// [修改] 導出此函數，讓 PerformSystem 也能使用
+export async function findAliveNPC(roomId, targetId, targetIndex = 1) {
+    const room = MapSystem.getRoom(roomId);
+    if (!room || !room.npcs) return null;
+
+    const deadRef = collection(db, "dead_npcs");
+    const q = query(deadRef, where("roomId", "==", roomId));
+    const snapshot = await getDocs(q);
+    
+    const deadIndices = [];
+    const now = Date.now();
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        if (now < data.respawnTime) {
+            if (data.npcId === targetId) deadIndices.push(data.index);
+        } else {
+            deleteDoc(doc.ref);
+        }
+    });
+
+    let matchCount = 0;
+    for (let i = 0; i < room.npcs.length; i++) {
+        if (room.npcs[i] === targetId) {
+            matchCount++;
+            
+            if (matchCount === targetIndex) {
+                if (!deadIndices.includes(i)) {
+                    const npcData = NPCDB[targetId];
+                    return { ...npcData, index: i, isUnconscious: false }; 
+                } else {
+                    return null;
+                }
+            }
+        }
+    }
+    return null;
+}
+
 // [修改] 處理擊殺獎勵 (導出以供 perform 使用)
 export async function handleKillReward(npc, playerData, enemyState, userId) {
     try {
@@ -405,7 +408,8 @@ export const CombatSystem = {
             // 死亡判定
             if (npc.combat.hp <= 0) {
                 npc.combat.hp = 0;
-                await syncNpcState(uniqueId, 0, npc.combat.maxHp, playerData.location, npc.name, null, true, 0);
+                // [修正] 擊殺時同時寫入 npcId
+                await syncNpcState(uniqueId, 0, npc.combat.maxHp, playerData.location, npc.name, null, true, 0, npc.id);
                 
                 // 觸發獎勵
                 const diffInfo = getDifficultyInfo(playerData, npc.id);
@@ -426,8 +430,8 @@ export const CombatSystem = {
         }
 
         // 更新 NPC 最終狀態 (血量 + Busy)
-        // 這裡設定 targetId 為玩家，確保怪物會反擊 (如果沒死且沒被定身)
-        await syncNpcState(uniqueId, npc.combat.hp, npc.combat.maxHp, playerData.location, npc.name, userId, false, busyTime);
+        // [修正] 確保寫入 npcId
+        await syncNpcState(uniqueId, npc.combat.hp, npc.combat.maxHp, playerData.location, npc.name, userId, false, busyTime, npc.id);
 
         // 自動觸發戰鬥狀態 (如果還沒開始)
         CombatSystem.fight(playerData, [npc.id, targetIndex], userId);
@@ -443,7 +447,8 @@ export const CombatSystem = {
         if (combatList.length > 0) {
             const cleanupPromises = combatList.map(async (enemy) => {
                 if (enemy.type === 'pve' && enemy.uniqueId) {
-                    await syncNpcState(enemy.uniqueId, enemy.npcHp, enemy.maxNpcHp, enemy.roomId, enemy.npcName, null, enemy.npcIsUnconscious, 0);
+                    // [修正] 清除目標時保留 npcId
+                    await syncNpcState(enemy.uniqueId, enemy.npcHp, enemy.maxNpcHp, enemy.roomId, enemy.npcName, null, enemy.npcIsUnconscious, 0, enemy.targetId);
                 }
             });
             try { await Promise.all(cleanupPromises); } catch(e) {}
@@ -627,7 +632,8 @@ export const CombatSystem = {
         
         combatList.push(enemyState);
     
-        await syncNpcState(uniqueId, realHp, npc.combat.maxHp, playerData.location, npc.name, userId, false, npcState.busy);
+        // [修正] 傳入 npc.id
+        await syncNpcState(uniqueId, realHp, npc.combat.maxHp, playerData.location, npc.name, userId, false, npcState.busy, npc.id);
 
         await updatePlayer(userId, { 
             state: 'fighting', 
@@ -750,7 +756,8 @@ export const CombatSystem = {
                                 MessageSystem.broadcast(playerData.location, publicMsg);
 
                                 currentTarget.npcHp -= dmg;
-                                await syncNpcState(currentTarget.uniqueId, currentTarget.npcHp, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, userId, false, currentTarget.busy);
+                                // [修正] 傳入 npcId
+                                await syncNpcState(currentTarget.uniqueId, currentTarget.npcHp, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, userId, false, currentTarget.busy, currentTarget.targetId);
                                 
                                 UI.print(UI.txt(`(你對 ${currentTarget.npcName} 造成 ${dmg} 點傷害)`, "#ffff00"), "chat", true);
                                 
@@ -763,7 +770,8 @@ export const CombatSystem = {
                                 if (currentTarget.npcHp <= 0) {
                                     currentTarget.npcHp = 0;
                                     currentTarget.npcIsUnconscious = true;
-                                    await syncNpcState(currentTarget.uniqueId, 0, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, null, true, 0);
+                                    // [修正] 擊殺時也傳入 npcId
+                                    await syncNpcState(currentTarget.uniqueId, 0, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, null, true, 0, currentTarget.targetId);
 
                                     const removeIndex = combatList.indexOf(currentTarget);
 
