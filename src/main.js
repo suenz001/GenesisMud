@@ -5,7 +5,8 @@ import {
     createUserWithEmailAndPassword, 
     signInAnonymously 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+// [修改] 引入 onSnapshot
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { UI } from "./ui.js";
 import { CommandSystem } from "./systems/commands.js"; 
@@ -16,7 +17,9 @@ import { auth, db } from "./firebase.js";
 let currentUser = null;
 let localPlayerData = null; 
 let regenInterval = null; 
-let autoSaveInterval = null; // [新增] 自動存檔計時器
+let autoSaveInterval = null; 
+// [新增] 監聽器取消函數
+let playerUnsubscribe = null;
 
 let gameState = 'INIT'; 
 let tempCreationData = {}; 
@@ -38,17 +41,7 @@ onAuthStateChanged(auth, async (user) => {
         UI.enableGameInput(true);
         await checkAndLoadPlayer(user);
     } else {
-        if (regenInterval) {
-            clearInterval(regenInterval);
-            regenInterval = null;
-        }
-        // [新增] 登出時清除自動存檔
-        if (autoSaveInterval) {
-            clearInterval(autoSaveInterval);
-            autoSaveInterval = null;
-        }
-
-        CommandSystem.stopCombat();
+        cleanupGameSession(); // [修改] 統一清理邏輯
         currentUser = null;
         localPlayerData = null;
         gameState = 'INIT';
@@ -58,6 +51,83 @@ onAuthStateChanged(auth, async (user) => {
         UI.enableGameInput(false);
     }
 });
+
+// [新增] 清理遊戲工作階段 (登出時呼叫)
+function cleanupGameSession() {
+    if (regenInterval) {
+        clearInterval(regenInterval);
+        regenInterval = null;
+    }
+    if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+        autoSaveInterval = null;
+    }
+    if (playerUnsubscribe) {
+        playerUnsubscribe(); // 停止監聽 Firestore
+        playerUnsubscribe = null;
+    }
+    CommandSystem.stopCombat();
+}
+
+// [新增] 設定玩家資料即時監聽
+function setupPlayerListener(user, isFirstLoad = false) {
+    if (playerUnsubscribe) playerUnsubscribe(); // 防止重複監聽
+
+    const playerRef = doc(db, "players", user.uid);
+    
+    playerUnsubscribe = onSnapshot(playerRef, (docSnap) => {
+        if (docSnap.exists()) {
+            localPlayerData = docSnap.data();
+            
+            // 每次資料變動 (包含收到物品、自動回血存檔) 都更新介面
+            UI.updateHUD(localPlayerData);
+
+            // 如果這是初次載入 (或重新連線)，執行初始化邏輯
+            if (isFirstLoad) {
+                isFirstLoad = false; // 確保只執行一次
+                
+                UI.print("讀取檔案成功... 你的江湖與你同在。", "system");
+                
+                // 處理鬼門關邏輯
+                if (localPlayerData.location === 'ghost_gate') {
+                    const deathTime = localPlayerData.deathTime || 0;
+                    const now = Date.now();
+                    const diff = now - deathTime;
+                    const waitTime = 180000; 
+
+                    if (diff >= waitTime) {
+                        UI.print("你在鬼門關徘徊已久，是時候還陽了。", "system");
+                        const respawnPoint = localPlayerData.savePoint || "inn_start";
+                        localPlayerData.location = respawnPoint;
+                        updateDoc(playerRef, { location: respawnPoint });
+                        CommandSystem.handle('look', localPlayerData, user.uid);
+                    } else {
+                        const remaining = Math.ceil((waitTime - diff) / 1000);
+                        UI.print(`你還需要在鬼門關反省 ${remaining} 秒...`, "system");
+                        
+                        setTimeout(async () => {
+                             const pSnap2 = await getDoc(playerRef);
+                             if (pSnap2.data().location === 'ghost_gate') {
+                                 UI.print("一道金光閃過，你還陽了！", "system");
+                                 const respawnPoint = localPlayerData.savePoint || "inn_start";
+                                 localPlayerData.location = respawnPoint;
+                                 await updateDoc(playerRef, { location: respawnPoint });
+                                 MapSystem.look(localPlayerData);
+                             }
+                        }, waitTime - diff);
+                        
+                        CommandSystem.handle('look', localPlayerData, user.uid);
+                    }
+                } else {
+                    CommandSystem.handle('look', localPlayerData, user.uid);
+                }
+
+                gameState = 'PLAYING'; 
+                startRegeneration(user);
+            }
+        }
+    });
+}
 
 UI.onAuthAction({
     onLogin: (email, pwd) => {
@@ -84,6 +154,7 @@ UI.onInput((cmd) => {
 
     if (gameState === 'PLAYING') {
         CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
+        // 現在 onSnapshot 會負責更新 UI，但為了保持操作手感，本地也更新一次
         if (localPlayerData) {
             UI.updateHUD(localPlayerData); 
         }
@@ -95,9 +166,8 @@ UI.onInput((cmd) => {
 
 function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
-    if (autoSaveInterval) clearInterval(autoSaveInterval); // 清除舊的
+    if (autoSaveInterval) clearInterval(autoSaveInterval);
     
-    // 1. 自然回復邏輯 (每10秒)
     regenInterval = setInterval(async () => {
         if (!localPlayerData || !user) return;
         
@@ -105,7 +175,6 @@ function startRegeneration(user) {
         let msg = [];
         let changed = false;
 
-        // 基礎屬性回復
         if (attr.hp < attr.maxHp) {
             const recover = Math.floor(attr.maxHp * 0.1); 
             attr.hp = Math.min(attr.maxHp, attr.hp + recover);
@@ -138,7 +207,6 @@ function startRegeneration(user) {
             changed = true;
         }
         
-        // 自動進食飲水
         if (localPlayerData.inventory) {
             if (isAutoEat && attr.food < attr.maxFood * 0.8) {
                 const foodItem = localPlayerData.inventory.find(i => {
@@ -166,6 +234,7 @@ function startRegeneration(user) {
         }
 
         if (changed) {
+            // 本地先更新一次 UI
             UI.updateHUD(localPlayerData);
             try {
                 const playerRef = doc(db, "players", user.uid);
@@ -176,15 +245,11 @@ function startRegeneration(user) {
         }
     }, 10000); 
 
-    // === 2. [新增] 10 分鐘自動存檔邏輯 ===
     autoSaveInterval = setInterval(async () => {
         if (!localPlayerData || !user) return;
         
         try {
             const playerRef = doc(db, "players", user.uid);
-            
-            // 這裡我們只更新重要的玩家資料，但不更新 'savePoint'
-            // 這樣玩家掛機時屬性練上去了，就算斷線也不會回溯
             await updateDoc(playerRef, {
                 attributes: localPlayerData.attributes,
                 skills: localPlayerData.skills,
@@ -192,16 +257,14 @@ function startRegeneration(user) {
                 money: localPlayerData.money,
                 equipment: localPlayerData.equipment,
                 combat: localPlayerData.combat,
-                location: localPlayerData.location, // 儲存當前位置方便斷線重連
-                // 注意：這裡不更新 savePoint
+                location: localPlayerData.location,
                 lastSaved: new Date().toISOString()
             });
-            
             UI.print("【系統】自動保存了進度。", "system");
         } catch (e) {
             console.error("Auto save failed", e);
         }
-    }, 600000); // 600秒 * 1000 = 10分鐘
+    }, 600000); 
 }
 
 async function handleCreationInput(input) {
@@ -280,47 +343,12 @@ function getErrMsg(code) {
 async function checkAndLoadPlayer(user) {
     const playerRef = doc(db, "players", user.uid);
     try {
+        // 先檢查檔案是否存在 (決定要載入還是新建)
         const docSnap = await getDoc(playerRef);
 
         if (docSnap.exists()) {
-            UI.print("讀取檔案成功... 你的江湖與你同在。", "system");
-            localPlayerData = docSnap.data();
-            
-            if (localPlayerData.location === 'ghost_gate') {
-                const deathTime = localPlayerData.deathTime || 0;
-                const now = Date.now();
-                const diff = now - deathTime;
-                const waitTime = 180000; 
-
-                if (diff >= waitTime) {
-                    UI.print("你在鬼門關徘徊已久，是時候還陽了。", "system");
-                    const respawnPoint = localPlayerData.savePoint || "inn_start";
-                    localPlayerData.location = respawnPoint;
-                    await updateDoc(playerRef, { location: respawnPoint });
-                    CommandSystem.handle('look', localPlayerData, user.uid);
-                } else {
-                    const remaining = Math.ceil((waitTime - diff) / 1000);
-                    UI.print(`你還需要在鬼門關反省 ${remaining} 秒...`, "system");
-                    
-                    setTimeout(async () => {
-                         const pSnap2 = await getDoc(playerRef);
-                         if (pSnap2.data().location === 'ghost_gate') {
-                             UI.print("一道金光閃過，你還陽了！", "system");
-                             const respawnPoint = localPlayerData.savePoint || "inn_start";
-                             localPlayerData.location = respawnPoint;
-                             await updateDoc(playerRef, { location: respawnPoint });
-                             MapSystem.look(localPlayerData);
-                         }
-                    }, waitTime - diff);
-                    
-                    CommandSystem.handle('look', localPlayerData, user.uid);
-                }
-            } else {
-                CommandSystem.handle('look', localPlayerData, user.uid);
-            }
-
-            gameState = 'PLAYING'; 
-            startRegeneration(user);
+            // 檔案存在，設定監聽器並載入
+            setupPlayerListener(user, true);
         } else {
             UI.print("檢測到新面孔...", "system");
             UI.print("請輸入您想使用的【英文 ID】(純英文字母，不可重複)：");
@@ -369,6 +397,9 @@ async function createNewCharacter(user, data) {
 
     try {
         await setDoc(playerRef, initialData);
+        // [新增] 創建完成後，也需要啟動監聽器
+        setupPlayerListener(user, false); 
+        
         localPlayerData = initialData;
         gameState = 'PLAYING';
         UI.print(`角色【${data.name}(${data.id})】建立完成！`, "system");

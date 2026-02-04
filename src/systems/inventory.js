@@ -66,7 +66,7 @@ function findShopkeeperInRoom(roomId) {
 async function findPlayerInRoom(roomId, targetNameOrId, selfId) {
     const playersRef = collection(db, "players");
     
-    // 先找 ID
+    // 先找 ID (精確匹配)
     let q = query(playersRef, where("location", "==", roomId), where("id", "==", targetNameOrId));
     let snap = await getDocs(q);
     
@@ -78,8 +78,10 @@ async function findPlayerInRoom(roomId, targetNameOrId, selfId) {
 
     if (snap.empty) return null;
     
-    const targetDoc = snap.docs[0];
-    if (targetDoc.id === selfId) return null; // 不能給自己
+    // 過濾掉自己 (雖然 query 可能包含自己如果名字一樣，但在 ID 唯一的情況下通常沒問題，這裡是雙重保險)
+    const targetDoc = snap.docs.find(d => d.id !== selfId);
+    
+    if (!targetDoc) return null;
 
     return { id: targetDoc.id, data: targetDoc.data() };
 }
@@ -415,7 +417,7 @@ export const InventorySystem = {
         UI.print(h,"",true); 
     },
 
-    // === [新增] Give 指令 ===
+    // === Give 指令 ===
     give: async (p, a, u) => {
         // 解析: give <item> [amount] to <target>
         if (a.length < 3) { UI.print("指令格式: give <物品ID> [數量] to <對象ID>", "error"); return; }
@@ -446,7 +448,7 @@ export const InventorySystem = {
         if (invIndex === -1) { UI.print("你身上沒有這樣東西。", "error"); return; }
         
         const myItem = p.inventory[invIndex];
-        const realItemId = myItem.id; // 修正為真實 ID
+        const realItemId = myItem.id; 
         const itemInfo = ItemDB[realItemId];
 
         if (myItem.count < amount) { UI.print("你身上的數量不夠。", "error"); return; }
@@ -464,20 +466,18 @@ export const InventorySystem = {
         if (isEquipped) { UI.print(`你必須先卸下 ${itemInfo.name} 才能送人。`, "error"); return; }
 
         // 2. 搜尋目標 (優先找玩家，再找 NPC)
-        let targetPlayer = await findPlayerInRoom(p.location, targetId, p.id); // p.id (uid) or id field? p.id is 'admin' style or uid? main.js sends currentUser.uid as u, but p is doc data. p.id is display ID.
-        // wait, updatePlayer uses 'u' (userId/UID). The player data 'p' has 'id' (display ID).
-        // findPlayerInRoom needs to handle filtering by p.id (display ID) or u (uid). The function uses doc.id (uid) comparison.
+        let targetPlayer = await findPlayerInRoom(p.location, targetId, u);
         
         // 3. 處理目標是 NPC 的情況
         if (!targetPlayer) {
             const npc = findNPCInRoom(p.location, targetId);
             if (npc) {
-                // [NPC 拒絕邏輯]
-                // 這裡未來可以加入 Quest 檢查： if (npc.questItem === realItemId) { ... }
-                // 目前全部拒絕
                 UI.print(`你拿出 ${itemInfo.name} 遞給 ${npc.name}。`, "system");
                 const rejectMsg = `${npc.name} 說道：「無功不受祿，這${itemInfo.name}您還是收回去吧。」`;
-                UI.print(UI.txt(rejectMsg, "#ffff00"), "chat");
+                
+                // [修正] 加上 true 參數，啟用 HTML 渲染
+                UI.print(UI.txt(rejectMsg, "#ffff00"), "chat", true);
+                
                 MessageSystem.broadcast(p.location, `${p.name} 想給 ${npc.name} ${itemInfo.name}，但是被拒絕了。`);
                 return;
             }
@@ -506,20 +506,15 @@ export const InventorySystem = {
         }
 
         // 同步更新雙方資料庫
-        // 注意：這裡應該用 Transaction 比較好，但為了保持代碼一致性先分別更新
         try {
             await updatePlayer(u, { inventory: p.inventory });
             await updatePlayer(targetUid, { inventory: targetData.inventory });
 
             UI.print(`你給了 ${targetData.name} ${amount} ${itemInfo.name}。`, "system");
             MessageSystem.broadcast(p.location, `${p.name} 給了 ${targetData.name} 一些 ${itemInfo.name}。`);
-            
-            // 如果對方在線上，理論上 broadcast 會通知，但可以更明確
-            // 這裡不做額外通知，依賴 world log
         } catch (e) {
             console.error("Give item failed", e);
             UI.print("給予物品時發生錯誤，操作已取消。", "error");
-            // 簡易回滾 (僅 client 端顯示，實際 DB 可能部分更新，這裡簡化處理)
         }
     }
 };
