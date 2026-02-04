@@ -562,7 +562,7 @@ export const CombatSystem = {
         const combatRound = async () => {
             if (combatList.length === 0) { CombatSystem.stopCombat(userId); return; }
             
-            // [新增] 每一回合重新讀取玩家最新的 Enforce 設定
+            // [同步 Enforce] 每一回合從資料庫獲取最新的 enforce 設定，防止數值跳回舊狀態
             try {
                 const playerRef = doc(db, "players", userId);
                 const playerSnap = await getDoc(playerRef);
@@ -587,17 +587,15 @@ export const CombatSystem = {
                 const maxForce = pData.attributes.maxForce || 10;
                 const currentForce = pData.attributes.force || 0;
                 
-                const costPerLvl = maxForce * 0.02;
-                let effectiveLvl = enforceLvl;
-                let requiredForce = Math.floor(costPerLvl * effectiveLvl);
+                const costPerLvl = maxForce * 0.02; 
+                // [修改] 直接計算設定層數所需的內力，不降級
+                let requiredForce = Math.floor(costPerLvl * enforceLvl);
                 
+                // [新增] 嚴格判斷：如果內力不足以支付"設定的層數"，則完全不加力，也不扣內力
+                // 這樣玩家可以調回 0 或等待內力自然回復，而不會被吸乾
                 if (currentForce < requiredForce) {
-                    const safeCost = Math.max(1, costPerLvl);
-                    effectiveLvl = Math.floor(currentForce / safeCost);
-                    requiredForce = Math.floor(safeCost * effectiveLvl);
+                    return baseDmg;
                 }
-
-                if (effectiveLvl <= 0) return baseDmg;
 
                 pData.attributes.force -= requiredForce;
 
@@ -605,7 +603,7 @@ export const CombatSystem = {
                 if (pStats.atkType === 'unarmed') coeff = 0.12; 
                 else if (pStats.atkType === 'throwing') coeff = 0.08; 
                 
-                const multiplier = 1 + (effectiveLvl * coeff);
+                const multiplier = 1 + (enforceLvl * coeff);
                 const rawBonus = requiredForce * 0.5; 
 
                 return Math.floor((baseDmg * multiplier) + rawBonus);
@@ -622,7 +620,7 @@ export const CombatSystem = {
                     
                     dmg = applyEnforce(dmg, playerStats, playerData);
 
-                    // [修改] 移除切磋傷害減半，保持傷害一致
+                    // [修正] fight 與 kill 傷害完全一致，移除減半邏輯
                     // if (!currentTarget.isLethal) dmg = Math.floor(dmg / 2);
 
                     const hitRate = playerStats.hit / (playerStats.hit + npcStats.dodge);
@@ -688,7 +686,7 @@ export const CombatSystem = {
                     
                     dmg = applyEnforce(dmg, playerStats, playerData);
                     
-                    // [修改] 移除切磋傷害減半
+                    // [修正] PVP 切磋傷害完全一致，移除減半邏輯
                     // dmg = Math.floor(dmg / 2); 
 
                     const hitProb = playerStats.hit / (playerStats.hit + tStats.dodge);
@@ -730,7 +728,7 @@ export const CombatSystem = {
  
                          let dmg = eStats.ap - playerStats.dp;
                          if (dmg <= 0) dmg = Math.random() * 3 + 1;
-                         // [修改] 移除 NPC 切磋傷害減半
+                         // [修正] NPC 反擊傷害完全一致，移除減半邏輯
                          // if (!enemy.isLethal) dmg = dmg / 2;
                          dmg = Math.round(dmg) || 1;
          
@@ -790,7 +788,7 @@ export const CombatSystem = {
                      const tStats = getCombatStats(tData);
                      let tDmg = Math.max(1, tStats.ap - playerStats.dp);
                      tDmg = Math.floor(tDmg * (0.8 + Math.random() * 0.4));
-                     // [修改] 移除 PVP 切磋傷害減半
+                     // [修正] PVP 反擊傷害完全一致，移除減半邏輯
                      // tDmg = Math.floor(tDmg / 2);
  
                      const tHitProb = tStats.hit / (tStats.hit + playerStats.dodge);
