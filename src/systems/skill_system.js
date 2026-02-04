@@ -465,6 +465,12 @@ export const SkillSystem = {
     },
 
     learn: async (p,a,u) => { 
+        // [新增] 檢查修練狀態
+        if (p.state === 'exercising') {
+            UI.print("你正在專心修練內力，無法分心學習。(輸入 autoforce 解除)", "error");
+            return;
+        }
+
         // [修改] 支援 learn <skill> <count> from <master>
         let sid, mid, count = 1;
 
@@ -594,6 +600,12 @@ export const SkillSystem = {
     },
     
     practice: async (p, a, u) => { 
+        // [新增] 檢查修練狀態
+        if (p.state === 'exercising') {
+            UI.print("你正在專心修練內力，無法分心練習。(輸入 autoforce 解除)", "error");
+            return;
+        }
+
         // [修改] 支援 practice <skill> <count>
         if (a.length === 0) { UI.print("指令格式：practice <基本武功> [次數]", "error"); return; }
         
