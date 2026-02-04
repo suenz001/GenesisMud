@@ -19,12 +19,13 @@ function getUniqueNpcId(roomId, npcId, index) {
 async function syncNpcState(uniqueId, currentHp, maxHp, roomId, npcName, targetId, isUnconscious = false) {
     try {
         const ref = doc(db, "active_npcs", uniqueId);
+        // 如果傳入的 targetId 是 null，代表戰鬥結束或沒有目標，我們在資料庫更新為 null
         await setDoc(ref, {
             currentHp: currentHp,
             maxHp: maxHp,
             roomId: roomId,
             npcName: npcName,
-            targetId: targetId,
+            targetId: targetId, 
             isUnconscious: isUnconscious,
             lastCombatTime: Date.now()
         }, { merge: true });
@@ -345,11 +346,25 @@ async function handleKillReward(npc, playerData, enemyState, userId) {
 export const CombatSystem = {
     getDifficultyInfo, 
 
-    stopCombat: (userId) => {
+    // [修改] 停止戰鬥時，必須清除怪物身上的目標標記，否則牠們會一直顯示「戰鬥中」
+    stopCombat: async (userId) => {
         if (combatInterval) {
             clearInterval(combatInterval);
             combatInterval = null;
         }
+
+        // 遍歷當前戰鬥列表，解除所有 NPC 的鎖定狀態
+        if (combatList.length > 0) {
+            const cleanupPromises = combatList.map(async (enemy) => {
+                if (enemy.type === 'pve' && enemy.uniqueId) {
+                    // 將 targetId 設為 null，表示脫戰
+                    await syncNpcState(enemy.uniqueId, enemy.npcHp, enemy.maxNpcHp, enemy.roomId, enemy.npcName, null, enemy.npcIsUnconscious);
+                }
+            });
+            // 盡力執行清理，但不阻塞主流程太久 (Fire and forget 也可以，但稍微 await 一下比較保險)
+            try { await Promise.all(cleanupPromises); } catch(e) {}
+        }
+
         combatList = []; 
         if (userId) updatePlayer(userId, { state: 'normal', combatTarget: null });
     },
@@ -473,11 +488,9 @@ export const CombatSystem = {
 
         const uniqueId = getUniqueNpcId(playerData.location, npc.id, npc.index);
         
-        // [修改] 檢查是否已經在戰鬥清單中
         const alreadyFighting = combatList.find(c => c.uniqueId === uniqueId);
         if (alreadyFighting) {
             UI.print(`你已經在和 ${npc.name} 戰鬥了！`, "system");
-            // [修改] 僅更新目標 UI 狀態，不再將其移到第一位，因為現在是隨機攻擊
             await updatePlayer(userId, { combatTarget: { id: npc.id, index: npc.index } });
             return;
         }
@@ -559,7 +572,6 @@ export const CombatSystem = {
         const combatRound = async () => {
             if (combatList.length === 0) { CombatSystem.stopCombat(userId); return; }
             
-            // [同步狀態] 讀取 Enforce、屬性、裝備與技能
             try {
                 const playerRef = doc(db, "players", userId);
                 const playerSnap = await getDoc(playerRef);
@@ -570,7 +582,6 @@ export const CombatSystem = {
                     
                     if (freshData.attributes) playerData.attributes = freshData.attributes;
                     
-                    // 同步裝備與技能
                     if (freshData.equipment) playerData.equipment = freshData.equipment;
                     if (freshData.skills) playerData.skills = freshData.skills;
                     if (freshData.enabled_skills) playerData.enabled_skills = freshData.enabled_skills;
@@ -582,16 +593,14 @@ export const CombatSystem = {
 
             const playerStats = getCombatStats(playerData);
             
-            // --- 階段 1：玩家攻擊回合 (隨機選擇目標) ---
+            // --- 階段 1：玩家攻擊回合 ---
             
-            // [新增] 篩選有效目標 (還沒暈倒的敵人)
             const validTargets = combatList.filter(e => {
                 if (e.type === 'pve') return e.npcHp > 0 && !e.npcIsUnconscious;
                 if (e.type === 'pvp') return e.targetData.attributes.hp > 0 && !e.targetData.isUnconscious;
                 return false;
             });
 
-            // [新增] 如果有醒著的敵人，隨機挑一個；如果都暈了，打列表裡的第一個
             let currentTarget = null;
             if (validTargets.length > 0) {
                 const rndIndex = Math.floor(Math.random() * validTargets.length);
@@ -659,9 +668,9 @@ export const CombatSystem = {
                         if (currentTarget.npcHp <= 0) {
                             currentTarget.npcHp = 0;
                             currentTarget.npcIsUnconscious = true;
-                            await syncNpcState(currentTarget.uniqueId, 0, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, userId, true);
+                            // 擊倒後，同時設定 targetId 為 null
+                            await syncNpcState(currentTarget.uniqueId, 0, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, null, true);
 
-                            // [新增] 找到該敵人在 combatList 中的位置並移除
                             const removeIndex = combatList.indexOf(currentTarget);
 
                             if (!currentTarget.isLethal) {
@@ -727,8 +736,7 @@ export const CombatSystem = {
                 }
             }
 
-            // --- 階段 2：怪物反擊回合 (所有怪物圍毆) ---
-            // [注意] 為了避免在迴圈中修改陣列導致錯誤，這邊建議使用複製的陣列或小心處理移除
+            // --- 階段 2：怪物反擊回合 ---
             for (const enemy of [...combatList]) {
                 if (enemy.type === 'pve' && enemy.npcHp > 0) {
                      const npc = enemy.npcObj;
