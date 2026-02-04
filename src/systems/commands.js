@@ -132,7 +132,7 @@ export const CommandSystem = {
                  // 允許戰鬥中嘗試移動 (逃跑)
              } else if (![
                  'kill', 'fight', 'look', 'score', 'hp', 'help', 'skills', 'l',
-                 'enforce', 'exert', 'inventory', 'i', 'eat', 'drink' // [新增] 允許戰鬥中使用 enforce 和 exert
+                 'enforce', 'exert', 'inventory', 'i', 'eat', 'drink', 'wield', 'unwield' // [新增] 允許戰鬥中使用 enforce 和 exert
              ].includes(cmd)) {
                  UI.print("戰鬥中無法分心做這件事！", "error");
                  return;
