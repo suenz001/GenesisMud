@@ -117,7 +117,7 @@ export const CommandSystem = {
         if (!inputStr) return;
         
         // 暈倒檢測
-        if (playerData.isUnconscious && playerData.attributes.hp > 0) {
+        if (playerData.isUnconscious && playerData.attributes.hp > 50) {
             playerData.isUnconscious = false;
             UI.print("你慢慢清醒了過來。", "system");
             updatePlayer(userId, { isUnconscious: false });
@@ -132,7 +132,7 @@ export const CommandSystem = {
                  // 允許戰鬥中嘗試移動 (逃跑)
              } else if (![
                  'kill', 'fight', 'look', 'score', 'hp', 'help', 'skills', 'l',
-                 'enforce', 'exert' // [新增] 允許戰鬥中使用 enforce 和 exert
+                 'enforce', 'exert', 'inventory', 'i', 'eat', 'drink' // [新增] 允許戰鬥中使用 enforce 和 exert
              ].includes(cmd)) {
                  UI.print("戰鬥中無法分心做這件事！", "error");
                  return;

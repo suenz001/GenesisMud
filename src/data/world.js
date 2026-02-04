@@ -67,10 +67,10 @@ export const WorldMap = {
         safe: true, region: ["gym"], npcs: ["gym_master_li"], allowSave: true
     },
     "gym_training": {
-        title: "木人房",
-        description: "這裡只有一個巨大的銅皮木人，是專門用來測試招式威力的。",
+        title: "機關木人房",
+        description: "這裡只有一個巨大的銅皮機關木人，是專門用來測試招式威力的。",
         x: 3, y: 3, z: 0, 
-        safe: false, region: ["gym"], npcs: ["wooden_dummy"]
+        safe: false, region: ["gym"], npcs: ["wooden_dummy", "wooden_dummy", "wooden_dummy"]
     },
 
     // ================== 北方：森林區域 (3x3 Map) ==================
@@ -292,7 +292,7 @@ export const WorldMap = {
     // ================== 特殊區域 ==================
     "ghost_gate": {
         title: "鬼門關",
-        description: "四周陰風慘慘，鬼哭神號。濃霧之中隱約可見無數亡魂在排隊，等著孟婆湯...",
+        description: "四周陰風慘慘，鬼哭神號。濃霧之中隱約可見無數亡魂在排隊，等著孟婆湯...請在這邊待滿3分鐘",
         safe: true,
         x: 9999, y: 9999, z: -9999, 
         region: ["underworld"]
