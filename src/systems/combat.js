@@ -669,14 +669,19 @@ export const CombatSystem = {
             busy: npcState.busy 
         };
         
+        // [修正] 先加入本地列表，再執行非同步操作，防止 race condition 導致連續 AOE 時遺漏目標
         combatList.push(enemyState);
     
         await syncNpcState(uniqueId, realHp, npc.combat.maxHp, playerData.location, npc.name, userId, false, npcState.busy, npc.id);
 
-        await updatePlayer(userId, { 
-            state: 'fighting', 
-            combatTarget: { id: npc.id, index: npc.index } 
-        });
+        try {
+            await updatePlayer(userId, { 
+                state: 'fighting', 
+                combatTarget: { id: npc.id, index: npc.index } 
+            });
+        } catch(e) {
+            console.error("更新玩家戰鬥狀態失敗", e);
+        }
     
         if (!combatInterval) {
             CombatSystem.runCombatLoop(playerData, userId);

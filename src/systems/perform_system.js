@@ -158,30 +158,36 @@ export const PerformSystem = {
                 let damage = Math.floor(pStats.ap * performData.damageScale * enforceMult);
                 damage = Math.floor(damage * (0.9 + Math.random() * 0.2)); 
                 
-                // 構造 NPC 物件，以便 CombatSystem 正確識別
                 let realNpcId = enemy.npcId;
                 let realIndex = 1;
 
-                if (!realNpcId) {
-                     // 嘗試從 ID 解析: roomId_npcId_index
-                     // 移除 roomId 前綴 (roomId 加上一個底線的長度)
-                     const suffix = enemyId.substring(playerData.location.length + 1); 
-                     const lastUnderscore = suffix.lastIndexOf('_');
-                     if (lastUnderscore !== -1) {
-                         realNpcId = suffix.substring(0, lastUnderscore);
-                         // 解析出來的是 0-based array index，戰鬥系統通常吃 1-based index 參數
-                         // 但如果是直接傳 object 給 applyDamage/fight，index 用 0-based 即可 (因為是內部的 list index)
-                         realIndex = parseInt(suffix.substring(lastUnderscore + 1));
-                     }
+                // [修正] 即使資料庫有 npcId，也要強制解析 Index，否則預設 1 會導致第三隻怪(index 2)被誤判為第二隻
+                const suffix = enemyId.substring(playerData.location.length + 1); 
+                const lastUnderscore = suffix.lastIndexOf('_');
+                
+                if (lastUnderscore !== -1) {
+                    const parsedId = suffix.substring(0, lastUnderscore);
+                    const parsedIndex = parseInt(suffix.substring(lastUnderscore + 1));
+                    
+                    if (!isNaN(parsedIndex)) {
+                        realIndex = parsedIndex;
+                    }
+                    if (!realNpcId) {
+                        realNpcId = parsedId;
+                    }
                 }
+
+                // 防呆：如果還是沒解析出來，跳過避免錯誤
+                if (!realNpcId) continue;
                 
                 // 從 DB 獲取完整數據
                 const npcDbData = NPCDB[realNpcId] || { name: enemy.npcName, id: realNpcId, combat: { maxHp: enemy.maxHp }, drops: [] };
+                
                 const npcObj = {
                     ...npcDbData,
                     id: realNpcId,
-                    index: realIndex, 
-                    combat: { ...npcDbData.combat, maxHp: enemy.maxHp } // 確保 maxHp 正確
+                    index: realIndex, // 正確的 Index (0, 1, 2...)
+                    combat: { ...npcDbData.combat, maxHp: enemy.maxHp }
                 };
 
                 // 呼叫 applyDamage
@@ -189,7 +195,6 @@ export const PerformSystem = {
                 
                 // 如果 applyDamage 說需要啟動戰鬥 (shouldStart)，則呼叫 fight
                 if (result.shouldStart) {
-                     // 這裡直接傳入具備正確 index 的 npcObj，fight 就不需要再呼叫 findAliveNPC 去猜了
                      await CombatSystem.fight(playerData, [], userId, false, npcObj);
                 }
 
