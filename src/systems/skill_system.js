@@ -89,6 +89,12 @@ export const SkillSystem = {
 
     // === 屬性修練 (Exercise/Respirate/Meditate) ===
     trainStat: async (playerData, userId, typeName, attrCur, attrMax, costAttr, costName, args) => {
+        // [新增] 戰鬥中禁止修練 (確保 commands.js 過濾後雙重保險)
+        if (playerData.state === 'fighting') {
+            UI.print("戰鬥中無法修練！", "error");
+            return;
+        }
+
         const attr = playerData.attributes;
         let cost = 10;
 
@@ -133,7 +139,7 @@ export const SkillSystem = {
             return; 
         }
 
-        // [修正] 判斷是否達到技能瓶頸，但不阻擋修練，只阻擋「提升上限」
+        // 判斷是否達到技能瓶頸
         let isCapReached = false;
         let maxCap = 999999;
     
@@ -221,10 +227,7 @@ export const SkillSystem = {
     },
 
     exert: async (playerData, args, userId) => {
-        if (playerData.state === 'fighting') {
-            UI.print("戰鬥中運功療傷太危險了！你無法分心。", "error");
-            return;
-        }
+        // [修改] 允許戰鬥中運功 (移除戰鬥檢查)
         
         // 修練狀態檢查
         if (playerData.state === 'exercising') {

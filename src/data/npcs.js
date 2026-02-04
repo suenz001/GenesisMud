@@ -94,11 +94,11 @@ export const NPCDB = {
         }
     },
 
-    // 3. 木頭人 (傷害測試) [新增]
+    // 3. 機關人 (傷害測試) [新增]
     "wooden_dummy": {
         id: "wooden_dummy",
-        name: "木頭人",
-        description: "一個包著銅皮的巨大木樁，上面佈滿了刀痕和拳印。它不會還手，是測試武功的絕佳對象。",
+        name: "機關人",
+        description: "一個包著銅皮的巨大木樁，上面佈滿了刀痕和拳印，雖然觸動機關後它會還手，但不會對你造成傷害，是測試武功的絕佳對象。",
         attributes: { str: 10, con: 100, per: 0, kar: 0, int: 0, cor: 0 },
         combat: { 
             hp: 50000, maxHp: 50000, // 高血量

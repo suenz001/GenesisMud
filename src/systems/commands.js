@@ -47,7 +47,7 @@ const commandRegistry = {
     'inventory': { description: '背包', execute: InventorySystem.inventory },
     'i': { description: '背包 (縮寫)', execute: InventorySystem.inventory },
     
-    // [新增] Give 指令
+    // Give 指令
     'give': { description: '給予', execute: InventorySystem.give },
 
     // === 技能與修練指令 ===
@@ -116,18 +116,24 @@ export const CommandSystem = {
     handle: (inputStr, playerData, userId) => {
         if (!inputStr) return;
         
+        // 暈倒檢測
         if (playerData.isUnconscious && playerData.attributes.hp > 0) {
             playerData.isUnconscious = false;
             UI.print("你慢慢清醒了過來。", "system");
             updatePlayer(userId, { isUnconscious: false });
         }
         
+        // 戰鬥狀態指令過濾
         if (playerData.state === 'fighting') {
              const args = inputStr.trim().split(/\s+/);
              const cmd = args[0].toLowerCase();
+             
              if (['n','s','e','w','u','d','north','south','east','west','up','down'].includes(cmd)) {
-                 // 允許逃跑
-             } else if (!['kill', 'fight', 'look', 'score', 'hp', 'help', 'skills', 'l'].includes(cmd)) {
+                 // 允許戰鬥中嘗試移動 (逃跑)
+             } else if (![
+                 'kill', 'fight', 'look', 'score', 'hp', 'help', 'skills', 'l',
+                 'enforce', 'exert' // [新增] 允許戰鬥中使用 enforce 和 exert
+             ].includes(cmd)) {
                  UI.print("戰鬥中無法分心做這件事！", "error");
                  return;
              }
@@ -142,6 +148,7 @@ export const CommandSystem = {
         const args = inputStr.trim().split(/\s+/);
         const cmdName = args.shift().toLowerCase();
         
+        // 防止重複輸入戰鬥指令
         if ((cmdName === 'kill' || cmdName === 'fight') && playerData.state === 'fighting') {
              UI.print("戰鬥正在進行中...", "system");
              return;
