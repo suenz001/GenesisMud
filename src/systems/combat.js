@@ -473,15 +473,12 @@ export const CombatSystem = {
 
         const uniqueId = getUniqueNpcId(playerData.location, npc.id, npc.index);
         
+        // [修改] 檢查是否已經在戰鬥清單中
         const alreadyFighting = combatList.find(c => c.uniqueId === uniqueId);
         if (alreadyFighting) {
-            const idx = combatList.indexOf(alreadyFighting);
-            if (idx > 0) {
-                combatList.splice(idx, 1);
-                combatList.unshift(alreadyFighting);
-                UI.print(`你將目標轉向了 ${npc.name}！`, "system");
-                await updatePlayer(userId, { combatTarget: { id: npc.id, index: npc.index } });
-            }
+            UI.print(`你已經在和 ${npc.name} 戰鬥了！`, "system");
+            // [修改] 僅更新目標 UI 狀態，不再將其移到第一位，因為現在是隨機攻擊
+            await updatePlayer(userId, { combatTarget: { id: npc.id, index: npc.index } });
             return;
         }
 
@@ -573,7 +570,7 @@ export const CombatSystem = {
                     
                     if (freshData.attributes) playerData.attributes = freshData.attributes;
                     
-                    // [新增] 同步裝備與技能，支援戰鬥中換裝
+                    // 同步裝備與技能
                     if (freshData.equipment) playerData.equipment = freshData.equipment;
                     if (freshData.skills) playerData.skills = freshData.skills;
                     if (freshData.enabled_skills) playerData.enabled_skills = freshData.enabled_skills;
@@ -585,8 +582,23 @@ export const CombatSystem = {
 
             const playerStats = getCombatStats(playerData);
             
-            // --- 階段 1：玩家攻擊回合 ---
-            const currentTarget = combatList[0];
+            // --- 階段 1：玩家攻擊回合 (隨機選擇目標) ---
+            
+            // [新增] 篩選有效目標 (還沒暈倒的敵人)
+            const validTargets = combatList.filter(e => {
+                if (e.type === 'pve') return e.npcHp > 0 && !e.npcIsUnconscious;
+                if (e.type === 'pvp') return e.targetData.attributes.hp > 0 && !e.targetData.isUnconscious;
+                return false;
+            });
+
+            // [新增] 如果有醒著的敵人，隨機挑一個；如果都暈了，打列表裡的第一個
+            let currentTarget = null;
+            if (validTargets.length > 0) {
+                const rndIndex = Math.floor(Math.random() * validTargets.length);
+                currentTarget = validTargets[rndIndex];
+            } else {
+                currentTarget = combatList[0];
+            }
             
             const applyEnforce = (baseDmg, pStats, pData) => {
                 const enforceLvl = pData.combat?.enforce || 0;
@@ -649,17 +661,22 @@ export const CombatSystem = {
                             currentTarget.npcIsUnconscious = true;
                             await syncNpcState(currentTarget.uniqueId, 0, currentTarget.maxNpcHp, currentTarget.roomId, currentTarget.npcName, userId, true);
 
+                            // [新增] 找到該敵人在 combatList 中的位置並移除
+                            const removeIndex = combatList.indexOf(currentTarget);
+
                             if (!currentTarget.isLethal) {
                                 const winMsg = UI.txt(`${currentTarget.npcName} 拱手說道：「佩服佩服，是在下輸了。」`, "#00ff00", true);
                                 UI.print(winMsg, "chat", true);
                                 MessageSystem.broadcast(playerData.location, winMsg);
                                 playerData.combat.potential = (playerData.combat.potential || 0) + 20;
-                                combatList.shift(); 
+                                
+                                if (removeIndex > -1) combatList.splice(removeIndex, 1);
                             } else {
                                  const uncMsg = UI.txt(`${currentTarget.npcName} 搖頭晃腦，咚的一聲倒在地上！`, "#888");
                                  UI.print(uncMsg, "system", true);
                                  await handleKillReward(npc, playerData, currentTarget, userId);
-                                 combatList.shift(); 
+                                 
+                                 if (removeIndex > -1) combatList.splice(removeIndex, 1);
                             }
                         }
                     } else {
@@ -710,8 +727,9 @@ export const CombatSystem = {
                 }
             }
 
-            // --- 階段 2：怪物反擊回合 ---
-            for (const enemy of combatList) {
+            // --- 階段 2：怪物反擊回合 (所有怪物圍毆) ---
+            // [注意] 為了避免在迴圈中修改陣列導致錯誤，這邊建議使用複製的陣列或小心處理移除
+            for (const enemy of [...combatList]) {
                 if (enemy.type === 'pve' && enemy.npcHp > 0) {
                      const npc = enemy.npcObj;
                      const eStats = getNPCCombatStats(npc);

@@ -175,11 +175,10 @@ export const MapSystem = {
                         const isMyMaster = (playerData.family && playerData.family.masterId === npc.id);
                         if (!isMyMaster && npc.family) links += UI.makeCmd("[拜師]", `apprentice ${npc.id} ${npcOrder}`, "cmd-btn");
                         if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id} ${npcOrder}`, "cmd-btn");
-                        if (playerData.state !== 'fighting') {
-                            links += UI.makeCmd("[戰鬥]", `fight ${npc.id} ${npcOrder}`, "cmd-btn");
-                            // [調整] 木頭人通常不殺，或者殺了沒獎勵，但為了測試方便保留殺指令
-                            links += UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
-                        }
+                        
+                        // [修改] 移除狀態檢查，讓玩家在戰鬥中也能看到按鈕，以便攻擊其他目標
+                        links += UI.makeCmd("[戰鬥]", `fight ${npc.id} ${npcOrder}`, "cmd-btn");
+                        links += UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
                     }
                     npcListHtml += `<div style="margin-top:4px;">${links}</div>`;
                 }
