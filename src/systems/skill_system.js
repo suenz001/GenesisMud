@@ -1,9 +1,9 @@
 // src/systems/skill_system.js
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"; // [新增] 需要讀取最新數據
-import { db } from "../firebase.js"; // [新增] 需要 db 實例
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"; 
+import { db } from "../firebase.js"; 
 import { UI } from "../ui.js";
 import { SkillDB, getSkillLevelDesc } from "../data/skills.js"; 
-import { updatePlayer } from "./player.js";
+import { updatePlayer, getEffectiveSkillLevel } from "./player.js"; // [新增] 引入有效等級計算
 import { MapSystem } from "./map.js";
 import { MessageSystem } from "./messages.js";
 import { NPCDB } from "../data/npcs.js";
@@ -73,12 +73,10 @@ export const SkillSystem = {
 
             try {
                 // [關鍵修復] 每次循環都從資料庫抓取「最新」的玩家狀態
-                // 這樣才能讀取到自然回復後的 HP 數值
                 const playerRef = doc(db, "players", u);
                 const playerSnap = await getDoc(playerRef);
 
                 if (!playerSnap.exists()) {
-                    // 玩家資料不存在（可能登出了），強制停止
                     clearInterval(autoForceInterval);
                     autoForceInterval = null;
                     return;
@@ -99,8 +97,7 @@ export const SkillSystem = {
                 const curHp = attr.hp;
                 const limit = maxForce * 2;
                 
-                // 1. 檢查 HP 是否足夠
-                // 設定緩衝區：等待回復直到 HP > 50 才繼續
+                // 1. 檢查 HP 是否足夠 (緩衝區邏輯)
                 const resumeThreshold = 50; 
                 const stopThreshold = 20;
 
@@ -109,16 +106,13 @@ export const SkillSystem = {
                     if (!isWaitingForRegen) {
                         isWaitingForRegen = true;
                         UI.print(UI.txt("氣血不足，暫停運功，等待自然回復...", "#888888"), "system", true);
-                        // 強制更新一次前端 HUD，確保玩家看到當前數值
                         UI.updateHUD(freshP);
                     }
-                    // 直接結束這一回合，等待下一次 setInterval 抓取新的數據
                     return;
                 }
 
                 // 條件 B: 正在等待，且血量還沒回到安全線，繼續等
                 if (isWaitingForRegen && curHp < resumeThreshold) {
-                    // 這裡可以選擇不印訊息，避免洗頻，或者每隔幾次印一次
                     return;
                 }
 
@@ -137,7 +131,6 @@ export const SkillSystem = {
                     let amount = Math.min(needed, affordable, 50); 
                     
                     if (amount > 0) {
-                        // 使用最新的 freshP 進行修練
                         await SkillSystem.trainStat(freshP, u, "內力", "force", "maxForce", "hp", "氣", [amount.toString()]);
                     }
                 } 
@@ -205,6 +198,7 @@ export const SkillSystem = {
 
         // 檢查消耗是否足夠
         if (attr[costAttr] < cost) { 
+            // 如果是自動修練中，不顯示錯誤訊息，避免洗頻
             if (!autoForceInterval) {
                 UI.print(`你的${costName}不足，無法修練。(需要 ${cost})`, "error"); 
             }
@@ -226,10 +220,12 @@ export const SkillSystem = {
 
         const gain = cost + Math.floor((playerData.skills?.force || 0) / 10); 
         let improved = false;
+        let autoStopped = false; // 標記是否因為瓶頸而停止
         
         // 判斷是否超過當前上限 (limit)
         if (curVal + gain >= limit) {
             if (isDoubleMode) {
+                // 只是填滿，不突破
                 attr[costAttr] -= cost;
                 attr[attrCur] = limit;
                 let msg = `你運轉周天，消耗 ${cost} 點${costName}，將${typeName}積蓄到了極限 (${limit})。`;
@@ -246,9 +242,21 @@ export const SkillSystem = {
 
                 if (isCapReached) {
                     attr[attrCur] = limit;
-                    if (!autoForceInterval) {
-                        UI.print(UI.txt(`你的內力修為受限(${maxCap})，只能積蓄內力至 ${limit}，無法提升上限。`, "#ffaa00"), "system", true);
+                    
+                    // [修改] 顯示明確的瓶頸訊息
+                    const capMsg = `你的內力修為受限(${maxCap})，只能積蓄內力至 ${limit}，無法提升上限。`;
+                    UI.print(UI.txt(capMsg, "#ffaa00"), "system", true);
+
+                    // [修改] 如果是自動修練，遇到瓶頸自動停止
+                    if (autoForceInterval) {
+                        clearInterval(autoForceInterval);
+                        autoForceInterval = null;
+                        isProcessing = false;
+                        playerData.state = 'normal';
+                        autoStopped = true;
+                        UI.print("由於達到瓶頸，自動修練已停止。", "system");
                     }
+
                 } else {
                     attr[attrMax] += 1; 
                     attr[attrCur] = attr[attrMax]; 
@@ -258,8 +266,9 @@ export const SkillSystem = {
                     UI.print(msg, "system", true);
 
                     if (typeName === "內力") {
-                        attr.maxHp = (attr.maxHp || 100) + 3;
-                        attr.hp += 3;
+                        // [修改] 內力提升時，氣血增益由 +3 改為 +2
+                        attr.maxHp = (attr.maxHp || 100) + 2;
+                        attr.hp += 2;
                         UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system", true);
                     }
                 }
@@ -297,6 +306,11 @@ export const SkillSystem = {
             }
         }
 
+        // [新增] 如果是因為 Cap 導致 autoforce 停止，確保資料庫狀態更新為 normal
+        if (autoStopped) {
+             updateData["state"] = "normal";
+        }
+
         await updatePlayer(userId, updateData);
     },
 
@@ -330,8 +344,13 @@ export const SkillSystem = {
             return;
         }
 
-        const forceLvl = playerData.skills.force || 0;
-        const factor = 1 + (forceLvl / 50);
+        // [修改] 計算有效內功等級 (基礎 + 激發)，並調整轉換效率
+        // 公式：0.5 + (effectiveLevel / 100)
+        // 40級: 0.9 (虧損)
+        // 60級: 1.1 (微利)
+        // 120級 (60+60): 1.7 (高效)
+        const forceLvl = getEffectiveSkillLevel(playerData, 'force');
+        const factor = 0.5 + (forceLvl / 100);
 
         const missing = attr[targetMax] - attr[targetCur];
         let cost = Math.ceil(missing / factor);
@@ -346,6 +365,7 @@ export const SkillSystem = {
             attr[targetCur] = attr[targetMax];
         } else {
             actualCost = currentForce;
+            // 如果內力不足全補，則能補多少算多少
             actualRecover = Math.floor(actualCost * factor);
             attr.force = 0;
             attr[targetCur] += actualRecover;
@@ -423,21 +443,14 @@ export const SkillSystem = {
         if (!npc) { UI.print("這裡沒有這個人。", "error"); return; }
         if (!npc.family) { UI.print(`${npc.name} 說道：「我只是一介平民，不懂收徒。」`, "chat"); return; }
         
-        // [修改] 允許同門換師父，但僅提示獲得指導，不更換資料庫中的師父 ID
         if (playerData.family) {
-            // 如果是同一個人，提示已經拜師
             if (playerData.family.masterId === npc.id) { 
                 UI.print(`你已經是 ${npc.name} 的徒弟了。`, "error"); 
                 return; 
             }
-            // 如果是同門派（例如都是 'common_gym'）
             if (playerData.family.sect === npc.family) {
                 UI.print(`${npc.name} 點點頭道：「既然是同門師兄弟，那我就指點你一二吧。」`, "chat");
-                
-                // [修改] 修正 HTML 顯示錯誤 (加入第三個參數 true)，且不變更師父 ID
                 UI.print(UI.txt(`你獲得了 ${npc.name} 的指導。`, "#00ff00"), "system", true);
-                
-                // 這裡我們不執行 updatePlayer，因為師父還是原來的
                 return;
             }
             
@@ -457,7 +470,6 @@ export const SkillSystem = {
         await updatePlayer(userId, { family: playerData.family, sect: playerData.sect });
     },
 
-    // [新增] 叛師指令
     betray: async (p, a, u) => {
         if (!p.family) {
             UI.print("你現在無門無派，何來叛師之說？", "error");
@@ -466,7 +478,6 @@ export const SkillSystem = {
 
         const familyName = p.sect || p.family.sect;
         
-        // 飛龍武館：無懲罰
         if (p.family.sect === 'common_gym') {
             UI.print(`你決定離開${familyName}，去外面的世界闖一闖。`, "system");
             UI.print("因為飛龍武館只是基礎武館，並沒有人阻攔你。", "chat");
@@ -479,11 +490,9 @@ export const SkillSystem = {
             return;
         }
 
-        // 其他門派預留 (未來可加入扣屬性、追殺等)
         UI.print(`${p.family.masterName} 怒喝道：「欺師滅祖之徒，今日我便清理門戶！」`, "error");
         UI.print(UI.txt("（系統提示：目前版本尚未實裝其他門派的叛師懲罰，但未來可能會導致嚴重後果。）", "#ffff00"), "system", true);
         
-        // 暫時給予離開功能
         if (a[0] === 'confirm') {
              await updatePlayer(u, { family: null, sect: "none" });
              UI.print(`你咬牙背叛了 ${familyName}，從此成為江湖浪人。`, "system");
@@ -612,7 +621,6 @@ export const SkillSystem = {
         const npc = findNPCInRoom(p.location, mid); 
         if(!npc){UI.print("這裡沒有這個人。","error");return;} 
         
-        // [修改] 允許向同門派的任何師父學習 (判斷 sect/family)
         const isMaster = p.family && p.family.masterId === npc.id;
         const isSameSect = p.family && p.family.sect === npc.family;
 
