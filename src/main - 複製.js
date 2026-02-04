@@ -5,6 +5,7 @@ import {
     createUserWithEmailAndPassword, 
     signInAnonymously 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+// [修改] 引入 onSnapshot
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { UI } from "./ui.js";
@@ -17,6 +18,7 @@ let currentUser = null;
 let localPlayerData = null; 
 let regenInterval = null; 
 let autoSaveInterval = null; 
+// [新增] 監聽器取消函數
 let playerUnsubscribe = null;
 
 let gameState = 'INIT'; 
@@ -32,33 +34,6 @@ UI.onAutoToggle({
     toggleDrink: () => { isAutoDrink = !isAutoDrink; return isAutoDrink; }
 });
 
-// [新增] 監聽 UI 的巨集更新事件，並儲存到 Firebase
-UI.onMacroUpdate(async (id, macroData) => {
-    if (!currentUser || !localPlayerData) return;
-    
-    if (!localPlayerData.macros) localPlayerData.macros = {};
-    
-    // 如果指令為空，則刪除該設定
-    if (!macroData.cmd) {
-        delete localPlayerData.macros[id];
-        UI.print(`已清除快捷鍵 ${id} 的設定。`, "system");
-    } else {
-        localPlayerData.macros[id] = macroData;
-        UI.print(`快捷鍵 ${id} 已設定為: [${macroData.name}] ${macroData.cmd}`, "system");
-    }
-
-    // 更新 UI (雖然 onSnapshot 會觸發，但為了即時回饋先做一次)
-    UI.updateMacroButtons(localPlayerData.macros);
-
-    try {
-        const playerRef = doc(db, "players", currentUser.uid);
-        await updateDoc(playerRef, { macros: localPlayerData.macros });
-    } catch (e) {
-        console.error("儲存巨集失敗", e);
-        UI.print("設定儲存失敗，請檢查網路。", "error");
-    }
-});
-
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
@@ -66,7 +41,7 @@ onAuthStateChanged(auth, async (user) => {
         UI.enableGameInput(true);
         await checkAndLoadPlayer(user);
     } else {
-        cleanupGameSession(); 
+        cleanupGameSession(); // [修改] 統一清理邏輯
         currentUser = null;
         localPlayerData = null;
         gameState = 'INIT';
@@ -77,6 +52,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+// [新增] 清理遊戲工作階段 (登出時呼叫)
 function cleanupGameSession() {
     if (regenInterval) {
         clearInterval(regenInterval);
@@ -87,14 +63,15 @@ function cleanupGameSession() {
         autoSaveInterval = null;
     }
     if (playerUnsubscribe) {
-        playerUnsubscribe(); 
+        playerUnsubscribe(); // 停止監聽 Firestore
         playerUnsubscribe = null;
     }
     CommandSystem.stopCombat();
 }
 
+// [新增] 設定玩家資料即時監聽
 function setupPlayerListener(user, isFirstLoad = false) {
-    if (playerUnsubscribe) playerUnsubscribe(); 
+    if (playerUnsubscribe) playerUnsubscribe(); // 防止重複監聽
 
     const playerRef = doc(db, "players", user.uid);
     
@@ -102,20 +79,16 @@ function setupPlayerListener(user, isFirstLoad = false) {
         if (docSnap.exists()) {
             localPlayerData = docSnap.data();
             
+            // 每次資料變動 (包含收到物品、自動回血存檔) 都更新介面
             UI.updateHUD(localPlayerData);
-            
-            // [新增] 當資料更新時，同步更新巨集按鈕
-            if (localPlayerData.macros) {
-                UI.updateMacroButtons(localPlayerData.macros);
-            } else {
-                UI.updateMacroButtons({});
-            }
 
+            // 如果這是初次載入 (或重新連線)，執行初始化邏輯
             if (isFirstLoad) {
-                isFirstLoad = false; 
+                isFirstLoad = false; // 確保只執行一次
                 
                 UI.print("讀取檔案成功... 你的江湖與你同在。", "system");
                 
+                // 處理鬼門關邏輯
                 if (localPlayerData.location === 'ghost_gate') {
                     const deathTime = localPlayerData.deathTime || 0;
                     const now = Date.now();
@@ -181,6 +154,7 @@ UI.onInput((cmd) => {
 
     if (gameState === 'PLAYING') {
         CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
+        // 現在 onSnapshot 會負責更新 UI，但為了保持操作手感，本地也更新一次
         if (localPlayerData) {
             UI.updateHUD(localPlayerData); 
         }
@@ -260,6 +234,7 @@ function startRegeneration(user) {
         }
 
         if (changed) {
+            // 本地先更新一次 UI
             UI.updateHUD(localPlayerData);
             try {
                 const playerRef = doc(db, "players", user.uid);
@@ -283,8 +258,6 @@ function startRegeneration(user) {
                 equipment: localPlayerData.equipment,
                 combat: localPlayerData.combat,
                 location: localPlayerData.location,
-                // [新增] 自動存檔也包含 macros
-                macros: localPlayerData.macros || {},
                 lastSaved: new Date().toISOString()
             });
             UI.print("【系統】自動保存了進度。", "system");
@@ -370,9 +343,11 @@ function getErrMsg(code) {
 async function checkAndLoadPlayer(user) {
     const playerRef = doc(db, "players", user.uid);
     try {
+        // 先檢查檔案是否存在 (決定要載入還是新建)
         const docSnap = await getDoc(playerRef);
 
         if (docSnap.exists()) {
+            // 檔案存在，設定監聽器並載入
             setupPlayerListener(user, true);
         } else {
             UI.print("檢測到新面孔...", "system");
@@ -417,13 +392,12 @@ async function createNewCharacter(user, data) {
         equipment: { weapon: null, armor: null },
         sect: "none",
         createdAt: new Date().toISOString(),
-        enabled_skills: {},
-        // [新增] 初始巨集為空
-        macros: {} 
+        enabled_skills: {}
     };
 
     try {
         await setDoc(playerRef, initialData);
+        // [新增] 創建完成後，也需要啟動監聽器
         setupPlayerListener(user, false); 
         
         localPlayerData = initialData;

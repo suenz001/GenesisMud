@@ -507,7 +507,7 @@ body {
 .move-shortcuts {
     display: grid;
     grid-template-columns: 1fr 1fr; /* 兩欄 */
-    gap: 4px; /* [修改] 縮小間距，確保 10 顆按鈕塞得下 */
+    gap: 5px;
     flex: 1; /* 佔據左側空間 */
 }
 
@@ -516,7 +516,7 @@ body {
     background: #222;
     border: 1px solid #444;
     color: #ccc;
-    padding: 5px 2px; /* [修改] 縮小 Padding */
+    padding: 6px 2px;
     font-size: 11px;
     border-radius: 4px;
     cursor: pointer;
@@ -527,24 +527,6 @@ body {
     border-color: var(--accent-green);
     color: #fff;
     background: #333;
-}
-
-/* [新增] 自定義按鈕專屬樣式 */
-.btn-macro {
-    border-color: #555; 
-    color: #888;
-    border-style: dashed;
-}
-.btn-macro.set {
-    border-color: var(--accent-purple);
-    color: var(--accent-purple);
-    border-style: solid;
-}
-.btn-macro:hover {
-    background: #2a2a2a;
-    color: #fff;
-    border-color: var(--accent-green);
-    border-style: solid;
 }
 
 /* [修改] 右側移動控制區 */

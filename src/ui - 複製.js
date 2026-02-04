@@ -37,20 +37,16 @@ const btnAutoDrink = document.getElementById('btn-auto-drink');
 
 // 儀表板元素 - 潛能與財產
 const valPotential = document.getElementById('val-potential');
-const valMoney = document.getElementById('val-money'); 
+const valMoney = document.getElementById('val-money'); // [新增]
 
 // 儀表板元素 - 內力控制
 const valEnforce = document.getElementById('val-enforce');
 
-// 面板切換元素
+// 新增：面板切換元素
 const panelInspection = document.getElementById('panel-inspection');
 const panelStatsGroup = document.getElementById('panel-stats-group');
 
 let currentEnforceValue = 0;
-
-// [新增] 巨集相關變數
-let localMacros = {}; 
-let onMacroSaveCallback = null;
 
 export const UI = {
     txt: (text, color = '#ccc', bold = false) => {
@@ -88,31 +84,6 @@ export const UI = {
         output.scrollTop = output.scrollHeight;
     },
     
-    // [新增] 更新巨集按鈕顯示
-    updateMacroButtons: (macros) => {
-        localMacros = macros || {};
-        for (let i = 1; i <= 4; i++) {
-            const btn = document.getElementById(`btn-macro-${i}`);
-            if (btn) {
-                const setting = localMacros[i];
-                if (setting && setting.name && setting.cmd) {
-                    btn.textContent = setting.name;
-                    btn.title = `指令: ${setting.cmd} (右鍵點擊修改)`;
-                    btn.classList.add('set');
-                } else {
-                    btn.textContent = "自定義";
-                    btn.title = "點擊設定快捷鍵";
-                    btn.classList.remove('set');
-                }
-            }
-        }
-    },
-
-    // [新增] 註冊巨集儲存回調
-    onMacroUpdate: (callback) => {
-        onMacroSaveCallback = callback;
-    },
-
     updateHUD: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
@@ -156,6 +127,7 @@ export const UI = {
             valPotential.textContent = pot;
         }
 
+        // [新增] 更新財產
         if (valMoney) {
             valMoney.innerHTML = UI.formatMoney(playerData.money || 0);
         }
@@ -314,55 +286,13 @@ export const UI = {
             }
         };
 
-        // [新增] 處理巨集設定的輔助函式
-        const handleMacroConfig = (id) => {
-            const currentName = (localMacros[id] && localMacros[id].name) || "";
-            const currentCmd = (localMacros[id] && localMacros[id].cmd) || "";
-            
-            const newName = prompt(`請輸入按鈕 ${id} 的名稱 (最多4字):`, currentName);
-            if (newName === null) return; 
-            
-            const newCmd = prompt(`請輸入對應的指令 (例如 eat dumpling):`, currentCmd);
-            if (newCmd === null) return;
-
-            const finalName = newName.substring(0, 4) || "自定義";
-            const finalCmd = newCmd.trim();
-
-            if (onMacroSaveCallback) {
-                onMacroSaveCallback(id, { name: finalName, cmd: finalCmd });
-            }
-        };
-
         sendBtn.addEventListener('click', sendHandler);
         input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendHandler(); });
-
-        // [新增] 右鍵監聽 (Context Menu) 用於設定巨集
-        document.body.addEventListener('contextmenu', (e) => {
-            const btn = e.target.closest('.btn-macro');
-            if (btn) {
-                e.preventDefault(); // 阻止預設右鍵選單
-                const id = btn.dataset.macroId;
-                handleMacroConfig(id);
-            }
-        });
 
         document.body.addEventListener('click', (e) => {
             const btn = e.target.closest('button');
             if (!btn) return;
             
-            // [新增] 巨集按鈕左鍵邏輯
-            if (btn.classList.contains('btn-macro')) {
-                const id = btn.dataset.macroId;
-                const setting = localMacros[id];
-                if (setting && setting.cmd) {
-                    UI.print(`> ${setting.cmd}`);
-                    callback(setting.cmd); // 執行指令
-                } else {
-                    handleMacroConfig(id); // 若無設定，點擊直接彈出設定
-                }
-                return;
-            }
-
             const cmd = btn.dataset.cmd || btn.dataset.dir;
             if (cmd) {
                 UI.print(`> ${cmd}`);
