@@ -11,7 +11,6 @@ let autoForceInterval = null;
 // === 升級所需經驗值公式 (極速升級版) ===
 function calculateMaxExp(level) {
     if (level < 150) {
-        // [修改] 係數降為 5，升級速度飛快
         return Math.pow(level + 1, 2) * 5;
     } else {
         return Math.pow(level + 1, 3);
@@ -73,14 +72,16 @@ export const SkillSystem = {
 
             if (attr.hp < 20) { return; }
 
+            // 只要沒滿兩倍，就繼續練
             if (curForce < limit) {
                 const needed = limit - curForce;
-                const affordable = attr.hp - 10;
+                const affordable = attr.hp - 10; // 保留 10 點氣
                 if (affordable > 0) {
                     let amount = Math.min(needed, affordable, 100); 
                     await SkillSystem.trainStat(p, u, "內力", "force", "maxForce", "hp", "氣", [amount.toString()]);
                 }
             } else {
+                // 滿了就維持，或者顯示已滿
                 await SkillSystem.trainStat(p, u, "內力", "force", "maxForce", "hp", "氣", ["1"]);
             }
         }, 2000); 
@@ -91,13 +92,23 @@ export const SkillSystem = {
         const attr = playerData.attributes;
         let cost = 10;
 
-        if (args && args[0] === 'double') {
-            const maxVal = attr[attrMax];
-            const curVal = attr[attrCur];
-            const limit = maxVal * 2;
+        // 計算兩倍上限
+        const maxVal = attr[attrMax];
+        const curVal = attr[attrCur];
+        const limit = maxVal * 2; 
 
+        if (args && args[0] === 'double') {
             if (curVal >= limit) {
-                UI.print(UI.txt(`你的${typeName}已經運轉至極限，無法再容納更多了。`, "#ffff00"), "system", true);
+                UI.print(UI.txt(`你的${typeName}已經運轉至極限(${limit})，無法再容納更多了。`, "#ffff00"), "system", true);
+                
+                // 如果滿了且正在自動修練，停止它
+                if (autoForceInterval) {
+                    clearInterval(autoForceInterval);
+                    autoForceInterval = null;
+                    playerData.state = 'normal';
+                    await updatePlayer(userId, { state: 'normal' });
+                    UI.print("內力已蓄滿，自動修練停止。", "system");
+                }
                 return;
             }
 
@@ -121,57 +132,61 @@ export const SkillSystem = {
             UI.print(`你的${costName}不足，無法修練。(需要 ${cost})`, "error"); 
             return; 
         }
-    
-        const maxVal = attr[attrMax];
-        const curVal = attr[attrCur];
-        const limit = maxVal * 2; 
+
+        // [修正] 判斷是否達到技能瓶頸，但不阻擋修練，只阻擋「提升上限」
+        let isCapReached = false;
+        let maxCap = 999999;
     
         if (typeName === "內力") {
             const forceSkillLvl = playerData.skills.force || 0;
             const conBonus = playerData.attributes.con || 20;
-            const maxCap = (forceSkillLvl + conBonus) * 10;
+            maxCap = (forceSkillLvl + conBonus) * 10;
 
             if (maxVal >= maxCap) {
-                UI.print(UI.txt(`你的基本內功修為限制了你的成就！`, "#ff5555"), "system", true);
-                UI.print(`(內力上限已達 ${maxVal}，需提升基本內功等級或根骨才能突破)`, "system");
-                
-                // 若達到瓶頸，自動停止修練並恢復狀態
-                if (autoForceInterval) {
-                    clearInterval(autoForceInterval);
-                    autoForceInterval = null;
-                    playerData.state = 'normal';
-                    await updatePlayer(userId, { state: 'normal' });
-                    UI.print("已達瓶頸，自動修練停止。", "system");
-                }
-                return;
+                isCapReached = true;
             }
         }
 
         const gain = cost + Math.floor((playerData.skills?.force || 0) / 10); 
         let improved = false;
         
-        if (curVal >= limit - 1) {
+        // 判斷是否為「突破/提升上限」的時刻 (當前值已經快滿兩倍了)
+        // 注意：這裡的邏輯是，如果修練會溢出 limit，就嘗試提升 maxVal
+        if (curVal + gain >= limit) {
             if (typeName !== "內力") {
+                // 非內力屬性需要潛能
                 const pot = playerData.combat?.potential || 0;
                 if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
                 playerData.combat.potential -= 1;
             }
             
+            // 消耗資源
             attr[costAttr] -= cost; 
-            attr[attrMax] += 1; 
-            attr[attrCur] = attr[attrMax]; 
-            
-            improved = true;
-            let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
-            UI.print(msg, "system", true);
 
-            if (typeName === "內力") {
-                attr.maxHp = (attr.maxHp || 100) + 3;
-                attr.hp += 3;
-                UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system", true);
+            if (isCapReached) {
+                // [修正] 達到瓶頸：不提升 Max，但填滿 Current 到 Limit
+                attr[attrCur] = limit;
+                UI.print(UI.txt(`你的內力修為受限(${maxCap})，只能積蓄內力至 ${limit}，無法提升上限。`, "#ffaa00"), "system", true);
+                
+                // 如果是自動修練，這時候可以考慮停下來，或者繼續維持滿狀態(視玩家喜好，這裡設定為滿了提示後繼續保持)
+            } else {
+                // [修正] 未達瓶頸：提升 Max
+                attr[attrMax] += 1; 
+                attr[attrCur] = attr[attrMax]; // 突破後，當前值通常會重置為新的 Max (或是保留 overflow，MUD常見是設為 max)
+                
+                improved = true;
+                let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
+                UI.print(msg, "system", true);
+
+                if (typeName === "內力") {
+                    attr.maxHp = (attr.maxHp || 100) + 3;
+                    attr.hp += 3;
+                    UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system", true);
+                }
             }
 
         } else {
+            // 一般修練：單純增加當前值
             attr[costAttr] -= cost;
             const newVal = curVal + gain;
             attr[attrCur] = Math.min(limit, newVal);
@@ -403,7 +418,7 @@ export const SkillSystem = {
         await updatePlayer(userId, { enabled_skills: playerData.enabled_skills });
     },
 
-    // [修正] 放棄技能 (增加 UI.print 的 allowHtml 參數)
+    // 放棄技能
     abandon: async (p, a, u) => {
         if (a.length === 0) { UI.print("放棄什麼? (abandon <skill_id>)", "error"); return; }
         const skillId = a[0];
@@ -414,7 +429,6 @@ export const SkillSystem = {
         if (p.tempAbandon !== skillId) {
             p.tempAbandon = skillId;
             const sName = SkillDB[skillId] ? SkillDB[skillId].name : skillId;
-            // [修正] 這裡加上 true
             UI.print(UI.txt(`警告！你確定要廢除 ${sName} (${skillId}) 嗎？`, "#ff5555"), "system", true);
             UI.print(UI.txt("這將會完全清除該技能的等級，且不可恢復！", "#ff5555"), "system", true);
             UI.print("請再次輸入相同的指令以確認。", "system");
