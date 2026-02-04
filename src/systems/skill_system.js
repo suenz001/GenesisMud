@@ -339,22 +339,21 @@ export const SkillSystem = {
         if (!npc) { UI.print("這裡沒有這個人。", "error"); return; }
         if (!npc.family) { UI.print(`${npc.name} 說道：「我只是一介平民，不懂收徒。」`, "chat"); return; }
         
-        // [修改] 允許同門換師父
+        // [修改] 允許同門換師父，但僅提示獲得指導，不更換資料庫中的師父 ID
         if (playerData.family) {
             // 如果是同一個人，提示已經拜師
             if (playerData.family.masterId === npc.id) { 
                 UI.print(`你已經是 ${npc.name} 的徒弟了。`, "error"); 
                 return; 
             }
-            // 如果是同門派（例如都是 'common_gym'），允許改拜
+            // 如果是同門派（例如都是 'common_gym'）
             if (playerData.family.sect === npc.family) {
                 UI.print(`${npc.name} 點點頭道：「既然是同門師兄弟，那我就指點你一二吧。」`, "chat");
-                UI.print(UI.txt(`你改拜 ${npc.name} 為師了。`, "#00ff00"), "system");
                 
-                playerData.family.masterId = npc.id;
-                playerData.family.masterName = npc.name;
-                // 門派不變，輩分通常也不變(簡化處理)
-                await updatePlayer(userId, { family: playerData.family });
+                // [修改] 修正 HTML 顯示錯誤 (加入第三個參數 true)，且不變更師父 ID
+                UI.print(UI.txt(`你獲得了 ${npc.name} 的指導。`, "#00ff00"), "system", true);
+                
+                // 這裡我們不執行 updatePlayer，因為師父還是原來的
                 return;
             }
             
@@ -398,7 +397,7 @@ export const SkillSystem = {
 
         // 其他門派預留 (未來可加入扣屬性、追殺等)
         UI.print(`${p.family.masterName} 怒喝道：「欺師滅祖之徒，今日我便清理門戶！」`, "error");
-        UI.print(UI.txt("（系統提示：目前版本尚未實裝其他門派的叛師懲罰，但未來可能會導致嚴重後果。）", "#ffff00"));
+        UI.print(UI.txt("（系統提示：目前版本尚未實裝其他門派的叛師懲罰，但未來可能會導致嚴重後果。）", "#ffff00"), "system", true);
         
         // 暫時給予離開功能
         if (a[0] === 'confirm') {
@@ -529,7 +528,7 @@ export const SkillSystem = {
         const npc = findNPCInRoom(p.location, mid); 
         if(!npc){UI.print("這裡沒有這個人。","error");return;} 
         
-        // [修改] 允許向同門派的任何師父學習
+        // [修改] 允許向同門派的任何師父學習 (判斷 sect/family)
         const isMaster = p.family && p.family.masterId === npc.id;
         const isSameSect = p.family && p.family.sect === npc.family;
 

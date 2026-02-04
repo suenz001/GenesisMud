@@ -154,7 +154,7 @@ export const MapSystem = {
                         isUnconscious = activeData.isUnconscious || activeData.currentHp <= 0;
                         statusTag += getNpcStatusText(activeData.currentHp, activeData.maxHp, isUnconscious);
                         
-                        // [修改] 只要怪物有目標，一律顯示紅色的【戰鬥中】
+                        // 只要怪物有目標，一律顯示紅色的【戰鬥中】
                         if (!isUnconscious && activeData.targetId) {
                              statusTag += UI.txt(" 【戰鬥中】", "#ff0000", true);
                         }
@@ -310,7 +310,11 @@ export const MapSystem = {
                         UI.print(UI.attrLine("體力", `${UI.txt(displayHp, hpColor)}/${npc.combat.maxHp}`), "chat", true);
                     }
 
-                    if (playerData.family && playerData.family.masterId === npc.id && npc.skills) {
+                    // [修改] 如果是自己的師父，或是同門派，就可以看到技能列表
+                    const isMyMaster = playerData.family && playerData.family.masterId === npc.id;
+                    const isSameSect = playerData.family && npc.family && playerData.family.sect === npc.family;
+
+                    if ((isMyMaster || isSameSect) && npc.skills) {
                         let skillHtml = `<br>${UI.txt("【 師傳武學 】", "#ffff00")}<br>`;
                         skillHtml += `<div style="display:grid; grid-template-columns: 1fr auto auto; gap:5px;">`;
                         for (const [sid, lvl] of Object.entries(npc.skills)) {
