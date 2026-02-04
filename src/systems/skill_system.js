@@ -82,6 +82,7 @@ export const SkillSystem = {
                 }
             } else {
                 // 滿了就維持，或者顯示已滿
+                // 這裡傳入 "1" 試圖突破，或者可以選擇就停在滿狀態
                 await SkillSystem.trainStat(p, u, "內力", "force", "maxForce", "hp", "氣", ["1"]);
             }
         }, 2000); 
@@ -102,8 +103,11 @@ export const SkillSystem = {
         const maxVal = attr[attrMax];
         const curVal = attr[attrCur];
         const limit = maxVal * 2; 
+        
+        const isDoubleMode = (args && args[0] === 'double');
 
-        if (args && args[0] === 'double') {
+        if (isDoubleMode) {
+            // 如果已經滿了，直接提示並停止
             if (curVal >= limit) {
                 UI.print(UI.txt(`你的${typeName}已經運轉至極限(${limit})，無法再容納更多了。`, "#ffff00"), "system", true);
                 
@@ -159,35 +163,43 @@ export const SkillSystem = {
         // 判斷是否為「突破/提升上限」的時刻 (當前值已經快滿兩倍了)
         // 注意：這裡的邏輯是，如果修練會溢出 limit，就嘗試提升 maxVal
         if (curVal + gain >= limit) {
-            if (typeName !== "內力") {
-                // 非內力屬性需要潛能
-                const pot = playerData.combat?.potential || 0;
-                if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
-                playerData.combat.potential -= 1;
-            }
             
-            // 消耗資源
-            attr[costAttr] -= cost; 
-
-            if (isCapReached) {
-                // [修正] 達到瓶頸：不提升 Max，但填滿 Current 到 Limit
+            // [修正] 如果是 double 模式，即使滿了也不要突破，只是填滿
+            if (isDoubleMode) {
+                attr[costAttr] -= cost;
                 attr[attrCur] = limit;
-                UI.print(UI.txt(`你的內力修為受限(${maxCap})，只能積蓄內力至 ${limit}，無法提升上限。`, "#ffaa00"), "system", true);
-                
-                // 如果是自動修練，這時候可以考慮停下來，或者繼續維持滿狀態(視玩家喜好，這裡設定為滿了提示後繼續保持)
-            } else {
-                // [修正] 未達瓶頸：提升 Max
-                attr[attrMax] += 1; 
-                attr[attrCur] = attr[attrMax]; // 突破後，當前值通常會重置為新的 Max (或是保留 overflow，MUD常見是設為 max)
-                
-                improved = true;
-                let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
+                let msg = `你運轉周天，消耗 ${cost} 點${costName}，將${typeName}積蓄到了極限 (${limit})。`;
                 UI.print(msg, "system", true);
+            } else {
+                // 原本的突破邏輯 (非 double 模式下)
+                if (typeName !== "內力") {
+                    // 非內力屬性需要潛能
+                    const pot = playerData.combat?.potential || 0;
+                    if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
+                    playerData.combat.potential -= 1;
+                }
+                
+                // 消耗資源
+                attr[costAttr] -= cost; 
 
-                if (typeName === "內力") {
-                    attr.maxHp = (attr.maxHp || 100) + 3;
-                    attr.hp += 3;
-                    UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system", true);
+                if (isCapReached) {
+                    // 達到瓶頸：不提升 Max，但填滿 Current 到 Limit
+                    attr[attrCur] = limit;
+                    UI.print(UI.txt(`你的內力修為受限(${maxCap})，只能積蓄內力至 ${limit}，無法提升上限。`, "#ffaa00"), "system", true);
+                } else {
+                    // 未達瓶頸：提升 Max
+                    attr[attrMax] += 1; 
+                    attr[attrCur] = attr[attrMax]; // 突破後，當前值重置為新的 Max
+                    
+                    improved = true;
+                    let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
+                    UI.print(msg, "system", true);
+
+                    if (typeName === "內力") {
+                        attr.maxHp = (attr.maxHp || 100) + 3;
+                        attr.hp += 3;
+                        UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system", true);
+                    }
                 }
             }
 
