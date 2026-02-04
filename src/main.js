@@ -12,12 +12,18 @@ import { CommandSystem } from "./systems/commands.js";
 import { MapSystem } from "./systems/map.js"; 
 import { ItemDB } from "./data/items.js"; 
 import { auth, db } from "./firebase.js";
+import { PlayerSystem } from "./systems/player.js"; // 確保導入 PlayerSystem 以使用 quit
 
 let currentUser = null;
 let localPlayerData = null; 
 let regenInterval = null; 
 let autoSaveInterval = null; 
 let playerUnsubscribe = null;
+
+// [新增] 閒置檢測相關變數
+let lastInputTime = Date.now();
+const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 分鐘無動作則登出
+let heartbeatCounter = 0; // 用於控制心跳寫入頻率
 
 let gameState = 'INIT'; 
 let tempCreationData = {}; 
@@ -32,13 +38,12 @@ UI.onAutoToggle({
     toggleDrink: () => { isAutoDrink = !isAutoDrink; return isAutoDrink; }
 });
 
-// [新增] 監聽 UI 的巨集更新事件，並儲存到 Firebase
+// 監聽 UI 的巨集更新事件
 UI.onMacroUpdate(async (id, macroData) => {
     if (!currentUser || !localPlayerData) return;
     
     if (!localPlayerData.macros) localPlayerData.macros = {};
     
-    // 如果指令為空，則刪除該設定
     if (!macroData.cmd) {
         delete localPlayerData.macros[id];
         UI.print(`已清除快捷鍵 ${id} 的設定。`, "system");
@@ -47,7 +52,6 @@ UI.onMacroUpdate(async (id, macroData) => {
         UI.print(`快捷鍵 ${id} 已設定為: [${macroData.name}] ${macroData.cmd}`, "system");
     }
 
-    // 更新 UI (雖然 onSnapshot 會觸發，但為了即時回饋先做一次)
     UI.updateMacroButtons(localPlayerData.macros);
 
     try {
@@ -64,6 +68,8 @@ onAuthStateChanged(auth, async (user) => {
         currentUser = user;
         UI.showLoginPanel(false);
         UI.enableGameInput(true);
+        // 重置閒置計時器
+        lastInputTime = Date.now();
         await checkAndLoadPlayer(user);
     } else {
         cleanupGameSession(); 
@@ -74,6 +80,17 @@ onAuthStateChanged(auth, async (user) => {
         UI.print("請登入以開始遊戲。", "system");
         UI.showLoginPanel(true);
         UI.enableGameInput(false);
+    }
+});
+
+// [新增] 瀏覽器關閉/刷新前的處理 (盡力而為的存檔與狀態更新)
+window.addEventListener('beforeunload', (e) => {
+    if (currentUser && localPlayerData) {
+        // 嘗試標記狀態為離線 (瀏覽器關閉時不保證能完成，但這是標準做法)
+        // 注意：這裡不能使用 await
+        const playerRef = doc(db, "players", currentUser.uid);
+        // 使用 Beacon 或 fetch keepalive 會更穩，但這裡簡單使用 Firestore SDK 嘗試發送
+        // 我們主要依賴 "lastActive" 心跳機制來判斷斷線
     }
 });
 
@@ -104,7 +121,6 @@ function setupPlayerListener(user, isFirstLoad = false) {
             
             UI.updateHUD(localPlayerData);
             
-            // [新增] 當資料更新時，同步更新巨集按鈕
             if (localPlayerData.macros) {
                 UI.updateMacroButtons(localPlayerData.macros);
             } else {
@@ -174,6 +190,9 @@ UI.onAuthAction({
 });
 
 UI.onInput((cmd) => {
+    // [新增] 每次輸入指令時，重置閒置計時器
+    lastInputTime = Date.now();
+
     if (!currentUser) {
         UI.print("請先登入。", "error");
         return;
@@ -194,13 +213,37 @@ function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
     if (autoSaveInterval) clearInterval(autoSaveInterval);
     
+    // 這個循環每 10 秒執行一次
     regenInterval = setInterval(async () => {
         if (!localPlayerData || !user) return;
         
+        // 1. 閒置檢測邏輯
+        const now = Date.now();
+        if (now - lastInputTime > IDLE_TIMEOUT) {
+            // 如果不在修練狀態，則強制登出
+            if (localPlayerData.state !== 'exercising') {
+                UI.print("【系統】由於長時間未活動，系統將您自動登出。", "system", true);
+                // 呼叫 quit 指令邏輯
+                await PlayerSystem.quit(localPlayerData, [], user.uid);
+                return; // 中斷後續邏輯
+            }
+            // 如果正在修練，則不登出，繼續執行下方的心跳更新
+        }
+
+        // 2. 心跳 (Heartbeat) 與 恢復邏輯
+        // 每 6 次循環 (約 60 秒) 強制更新一次 lastActive，證明自己還活著
+        heartbeatCounter++;
+        let forceUpdate = false;
+        
+        if (heartbeatCounter >= 6) {
+            heartbeatCounter = 0;
+            forceUpdate = true;
+        }
+
         const attr = localPlayerData.attributes;
-        let msg = [];
         let changed = false;
 
+        // 自然恢復邏輯
         if (attr.hp < attr.maxHp) {
             const recover = Math.floor(attr.maxHp * 0.1); 
             attr.hp = Math.min(attr.maxHp, attr.hp + recover);
@@ -233,6 +276,7 @@ function startRegeneration(user) {
             changed = true;
         }
         
+        // 自動飲食邏輯
         if (localPlayerData.inventory) {
             if (isAutoEat && attr.food < attr.maxFood * 0.8) {
                 const foodItem = localPlayerData.inventory.find(i => {
@@ -259,11 +303,17 @@ function startRegeneration(user) {
             }
         }
 
-        if (changed) {
+        // 執行資料庫更新
+        if (changed || forceUpdate) {
             UI.updateHUD(localPlayerData);
             try {
                 const playerRef = doc(db, "players", user.uid);
-                await updateDoc(playerRef, { attributes: attr });
+                // 準備更新資料，包含屬性與最後活動時間(心跳)
+                const updatePayload = { 
+                    attributes: attr,
+                    lastActive: Date.now() // [新增] 更新心跳時間
+                };
+                await updateDoc(playerRef, updatePayload);
             } catch (e) {
                 console.error("Auto regen save failed", e);
             }
@@ -283,8 +333,8 @@ function startRegeneration(user) {
                 equipment: localPlayerData.equipment,
                 combat: localPlayerData.combat,
                 location: localPlayerData.location,
-                // [新增] 自動存檔也包含 macros
                 macros: localPlayerData.macros || {},
+                lastActive: Date.now(), // 自動存檔也更新心跳
                 lastSaved: new Date().toISOString()
             });
             UI.print("【系統】自動保存了進度。", "system");
@@ -418,8 +468,8 @@ async function createNewCharacter(user, data) {
         sect: "none",
         createdAt: new Date().toISOString(),
         enabled_skills: {},
-        // [新增] 初始巨集為空
-        macros: {} 
+        macros: {},
+        lastActive: Date.now() // [新增] 初始化心跳
     };
 
     try {

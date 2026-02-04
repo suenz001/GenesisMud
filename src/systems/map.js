@@ -83,8 +83,13 @@ export const MapSystem = {
             const playersRef = collection(db, "players");
             const q = query(playersRef, where("location", "==", playerData.location));
             const querySnapshot = await getDocs(q);
+            const now = Date.now();
+
             querySnapshot.forEach(doc => {
                 const p = doc.data();
+                // [修改] 過濾斷線玩家 (5分鐘無心跳)
+                if (now - (p.lastActive || 0) > 300000) return;
+                
                 playersInRoom.push(p); 
             });
         } catch (e) { console.error(e); }
@@ -137,7 +142,6 @@ export const MapSystem = {
                 });
             } catch (e) {}
 
-            // [新增] 紀錄 NPC 出現次數，用於生成 fight rabbit 2 等指令
             const npcCounts = {};
 
             let npcListHtml = "";
@@ -145,7 +149,6 @@ export const MapSystem = {
                 if (deadIndices.includes(index)) return;
                 const npc = NPCDB[npcId];
                 if (npc) {
-                    // 計算這是第幾隻同名 NPC
                     if (!npcCounts[npcId]) npcCounts[npcId] = 0;
                     npcCounts[npcId]++;
                     const npcOrder = npcCounts[npcId];
@@ -163,7 +166,6 @@ export const MapSystem = {
                     const diff = CombatSystem.getDifficultyInfo(playerData, npcId);
                     const coloredName = UI.txt(npc.name, diff.color);
                     
-                    // [修改] 按鈕指令加入序號 (例如 fight rabbit 2)
                     let links = `${coloredName} <span style="color:#aaa">(${npc.id})</span>${statusTag} `;
                     links += UI.makeCmd("[看]", `look ${npc.id} ${npcOrder}`, "cmd-btn");
                     
@@ -174,7 +176,9 @@ export const MapSystem = {
                         if (!isMyMaster && npc.family) links += UI.makeCmd("[拜師]", `apprentice ${npc.id} ${npcOrder}`, "cmd-btn");
                         if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id} ${npcOrder}`, "cmd-btn");
                         if (playerData.state !== 'fighting') {
-                            links += UI.makeCmd("[戰鬥]", `fight ${npc.id} ${npcOrder}`, "cmd-btn") + UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
+                            links += UI.makeCmd("[戰鬥]", `fight ${npc.id} ${npcOrder}`, "cmd-btn");
+                            // [調整] 木頭人通常不殺，或者殺了沒獎勵，但為了測試方便保留殺指令
+                            links += UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
                         }
                     }
                     npcListHtml += `<div style="margin-top:4px;">${links}</div>`;
@@ -210,14 +214,12 @@ export const MapSystem = {
     },
 
     // === 核心功能：觀察特定目標 (Look Target) ===
-    // [修改] 增加 targetOrder 參數 (預設 1)
     lookTarget: async (playerData, targetIdOrName, targetOrder = 1) => {
         UI.hideInspection();
         
-        // 轉型確保是數字
         if (typeof targetOrder === 'string') targetOrder = parseInt(targetOrder) || 1;
 
-        // 1. 檢查背包 (暫不支援重名物品索引，通常物品操作用 ID)
+        // 1. 檢查背包
         if (playerData.inventory) {
             const item = playerData.inventory.find(i => i.id === targetIdOrName || i.name === targetIdOrName);
             if (item) {
@@ -241,7 +243,6 @@ export const MapSystem = {
             let targetNpcId = null;
             let realIndex = -1;
             
-            // 確認目標 ID
             if (room.npcs.includes(targetIdOrName)) {
                 targetNpcId = targetIdOrName;
             } else {
@@ -256,7 +257,6 @@ export const MapSystem = {
             if (targetNpcId) {
                 const npc = NPCDB[targetNpcId];
                 
-                // 取得已死亡清單
                 let deadIndices = [];
                 try {
                     const deadRef = collection(db, "dead_npcs");
@@ -271,13 +271,9 @@ export const MapSystem = {
                     });
                 } catch(e) { console.error(e); }
 
-                // [修改] 尋找第 N 隻匹配的 NPC
                 let matchCount = 0;
                 for(let i=0; i<room.npcs.length; i++) {
                     if (room.npcs[i] === targetNpcId) {
-                        // 即使是屍體也要算在次數裡，確保索引位置正確 (例如 rabbit 2 死了，rabbit 3 不應該變成 2)
-                        // 但如果是要"觀察"，通常只能觀察活著或昏迷的
-                        // 這裡為了簡單，我們跳過"完全消失"的屍體 (但 dead_npcs 其實還沒消失)
                         if (!deadIndices.includes(i)) {
                             matchCount++;
                             if (matchCount === targetOrder) {
@@ -353,6 +349,14 @@ export const MapSystem = {
 
             if (!pSnap.empty) {
                 const targetP = pSnap.docs[0].data();
+                
+                // [新增] 檢查該玩家是否已斷線 (心跳檢測)
+                if (Date.now() - (targetP.lastActive || 0) > 300000) {
+                    // 如果已斷線，雖然資料還在，但視為"看不到"
+                    UI.print("你看不到 " + targetIdOrName + "。", "error");
+                    return;
+                }
+
                 UI.showInspection('player', targetP.name, 'item'); 
                 UI.print(UI.titleLine(targetP.name), "chat", true);
                 
