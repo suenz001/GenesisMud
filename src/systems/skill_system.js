@@ -36,6 +36,7 @@ function findNPCInRoom(roomId, npcNameOrId) {
 export const SkillSystem = {
     // === 自動修練內力 (Auto Force) ===
     autoForce: async (p, a, u) => {
+        // 如果已經在修練，則停止
         if (autoForceInterval || p.state === 'exercising') {
             if (autoForceInterval) clearInterval(autoForceInterval);
             autoForceInterval = null;
@@ -52,13 +53,15 @@ export const SkillSystem = {
 
         p.state = 'exercising';
         await updatePlayer(u, { state: 'exercising' });
-        UI.print("你開始閉目養神，自動運轉內息... (再次輸入 autoforce 以解除)", "system");
+        UI.print("你盤膝而坐，開始運轉內息...(HP不足時將自動調息，再次輸入 autoforce 停止)", "system");
         
+        let waitRound = 0; // 用於控制等待訊息的頻率
+
         autoForceInterval = setInterval(async () => {
+            // 安全檢查：如果狀態不對，強制停止
             if (p.state !== 'exercising') {
                 clearInterval(autoForceInterval);
                 autoForceInterval = null;
-                UI.print("自動修練已被中斷。", "error");
                 return;
             }
 
@@ -66,20 +69,57 @@ export const SkillSystem = {
             const maxForce = attr.maxForce;
             const curForce = attr.force;
             const limit = maxForce * 2;
+            const forceSkillLvl = p.skills.force || 0;
+            const conBonus = attr.con || 20;
+            const hardCap = (forceSkillLvl + conBonus) * 10;
 
-            if (attr.hp < 20) { return; }
-
-            if (curForce < limit) {
-                const needed = limit - curForce;
-                const affordable = attr.hp - 10;
-                if (affordable > 0) {
-                    let amount = Math.min(needed, affordable, 100); 
-                    await SkillSystem.trainStat(p, u, "內力", "force", "maxForce", "hp", "氣", [amount.toString()]);
+            // 1. 檢查 HP 是否足夠 (保留 20 點保命)
+            // 如果 HP 太低，進入「等待模式」
+            if (attr.hp <= 20) {
+                waitRound++;
+                // 每 5 次迴圈 (約 10 秒) 顯示一次提示，避免洗頻
+                if (waitRound % 5 === 0) {
+                    UI.print("你運氣調息，等待體力恢復...", "system");
+                    UI.updateHUD(p);
                 }
-            } else {
-                await SkillSystem.trainStat(p, u, "內力", "force", "maxForce", "hp", "氣", ["1"]);
+                // 重要：這裡直接 return，不執行修練，等待下一次心跳檢查 HP
+                return;
             }
-        }, 2000); 
+
+            // 2. 判斷修練邏輯
+            // 目標：先將內力 (force) 修練到上限 (limit)
+            if (curForce < limit) {
+                // 計算填滿所需的內力
+                const needed = limit - curForce;
+                
+                // 計算當前 HP 能負擔多少 (保留 20 點)
+                const affordable = Math.max(0, attr.hp - 20);
+                
+                if (affordable > 0) {
+                    // 每次最多修練 50 點，避免數值跳動太大
+                    let amount = Math.min(needed, affordable, 50); 
+                    
+                    // 執行修練 (增加內力)
+                    // 注意：trainStat 內部會扣減 HP 並增加 force
+                    if (amount > 0) {
+                        await SkillSystem.trainStat(p, u, "內力", "force", "maxForce", "hp", "氣", [amount.toString()]);
+                    }
+                }
+            } 
+            // 3. 如果內力已經滿了 (>= limit)，嘗試突破上限
+            else {
+                // 檢查是否已達技能等級的硬上限
+                if (maxForce >= hardCap) {
+                    if (waitRound % 5 === 0) {
+                        UI.print("你的基本內功火候不足，無法再提升內力上限了。", "error");
+                    }
+                    waitRound++;
+                } else {
+                    // 執行 exercise 1 來嘗試突破
+                    await SkillSystem.trainStat(p, u, "內力", "force", "maxForce", "hp", "氣", ["1"]);
+                }
+            }
+        }, 2000); // 每 2 秒執行一次循環
     },
 
     // === 屬性修練 (Exercise/Respirate/Meditate) ===
@@ -127,7 +167,10 @@ export const SkillSystem = {
             if (!isNaN(parsed) && parsed > 0) cost = parsed;
         }
 
+        // 檢查消耗是否足夠
         if (attr[costAttr] < cost) { 
+            // 對於自動修練，這裡通常不會觸發，因為外面已經檢查過了
+            // 但若是手動輸入 exercise，這裡會擋住
             UI.print(`你的${costName}不足，無法修練。(需要 ${cost})`, "error"); 
             return; 
         }
@@ -148,6 +191,7 @@ export const SkillSystem = {
         const gain = cost + Math.floor((playerData.skills?.force || 0) / 10); 
         let improved = false;
         
+        // 判斷是否超過當前上限 (limit)
         if (curVal + gain >= limit) {
             if (isDoubleMode) {
                 attr[costAttr] -= cost;
@@ -155,6 +199,7 @@ export const SkillSystem = {
                 let msg = `你運轉周天，消耗 ${cost} 點${costName}，將${typeName}積蓄到了極限 (${limit})。`;
                 UI.print(msg, "system", true);
             } else {
+                // 這是突破上限的邏輯
                 if (typeName !== "內力") {
                     const pot = playerData.combat?.potential || 0;
                     if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
@@ -165,7 +210,10 @@ export const SkillSystem = {
 
                 if (isCapReached) {
                     attr[attrCur] = limit;
-                    UI.print(UI.txt(`你的內力修為受限(${maxCap})，只能積蓄內力至 ${limit}，無法提升上限。`, "#ffaa00"), "system", true);
+                    // 只在手動時提示，避免自動修練洗頻
+                    if (!autoForceInterval) {
+                        UI.print(UI.txt(`你的內力修為受限(${maxCap})，只能積蓄內力至 ${limit}，無法提升上限。`, "#ffaa00"), "system", true);
+                    }
                 } else {
                     attr[attrMax] += 1; 
                     attr[attrCur] = attr[attrMax]; 
@@ -183,6 +231,7 @@ export const SkillSystem = {
             }
 
         } else {
+            // 一般積蓄內力
             attr[costAttr] -= cost;
             const newVal = curVal + gain;
             attr[attrCur] = Math.min(limit, newVal);

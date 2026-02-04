@@ -23,6 +23,7 @@ const commandRegistry = {
     'save': { description: '存檔', execute: PlayerSystem.save },
     'quit': { description: '離開遊戲', execute: PlayerSystem.quit }, 
     'suicide': { description: '自殺刪檔', execute: PlayerSystem.suicide },
+    'hp': { description: '狀態', execute: (p) => UI.updateHUD(p) }, // 確保有 hp 指令
     
     // === 戰鬥與切磋指令 ===
     'kill': { description: '下殺手', execute: CombatSystem.kill },
@@ -56,7 +57,7 @@ const commandRegistry = {
     'learn': { description: '學藝', execute: SkillSystem.learn },
     'practice': { description: '練習', execute: SkillSystem.practice },
     'apprentice': { description: '拜師', execute: SkillSystem.apprentice },
-    'betray': { description: '叛出師門', execute: SkillSystem.betray }, // [新增] 叛師指令
+    'betray': { description: '叛出師門', execute: SkillSystem.betray },
     'enable': { description: '激發', execute: SkillSystem.enable },
     'unenable': { description: '解除激發', execute: SkillSystem.unenable },
     'abandon': { description: '放棄技能', execute: SkillSystem.abandon },
@@ -117,42 +118,47 @@ export const CommandSystem = {
     handle: (inputStr, playerData, userId) => {
         if (!inputStr) return;
         
+        const args = inputStr.trim().split(/\s+/);
+        const cmdName = args.shift().toLowerCase();
+        
         // 暈倒檢測
         if (playerData.isUnconscious && playerData.attributes.hp > 50) {
             playerData.isUnconscious = false;
             UI.print("你慢慢清醒了過來。", "system");
             updatePlayer(userId, { isUnconscious: false });
         }
+
+        if (playerData.isUnconscious) {
+             UI.print("你現在暈過去了，動彈不得！", "error");
+             return;
+        }
+
+        // [新增] 修練狀態 (Exercising) 嚴格攔截
+        // 只允許: look, score, skills, hp, help, autoforce, inventory(i)
+        if (playerData.state === 'exercising') {
+            const allowedExercisingCmds = ['autoforce', 'look', 'l', 'score', 'hp', 'skills', 'sk', 'help', 'inventory', 'i'];
+            if (!allowedExercisingCmds.includes(cmdName)) {
+                UI.print("你正在專心修練，無法分心做這件事！(輸入 autoforce 解除)", "error");
+                return;
+            }
+        }
         
         // 戰鬥狀態指令過濾
         if (playerData.state === 'fighting') {
-             const args = inputStr.trim().split(/\s+/);
-             const cmd = args[0].toLowerCase();
-             
-             if (['n','s','e','w','u','d','north','south','east','west','up','down'].includes(cmd)) {
+             if (['n','s','e','w','u','d','north','south','east','west','up','down'].includes(cmdName)) {
                  // 允許戰鬥中嘗試移動 (逃跑)
              } else if (![
-                 // [修改] 在這裡加入了 'kill' 和 'fight'，允許戰鬥中繼續下指令
                  'kill', 'fight', 
                  'look', 'score', 'hp', 'help', 'skills', 'l',
                  'enforce', 'exert', 'inventory', 'i', 'eat', 'drink', 'wield', 'unwield' 
-             ].includes(cmd)) {
+             ].includes(cmdName)) {
                  UI.print("戰鬥中無法分心做這件事！", "error");
                  return;
              }
         }
         
-        if (playerData.isUnconscious) {
-             UI.print("你現在暈過去了，動彈不得！", "error");
-             return;
-        }
-        
         if (!playerData) { UI.print("靈魂尚未歸位...", "error"); return; }
-        const args = inputStr.trim().split(/\s+/);
-        const cmdName = args.shift().toLowerCase();
         
-        // [修改] 移除了「防止重複輸入戰鬥指令」的區塊，現在允許重複輸入 kill/fight 來加入更多敵人
-
         const command = commandRegistry[cmdName];
         if (command) command.execute(playerData, args, userId);
         else UI.print("你胡亂比劃了一通。(輸入 help 查看指令)", "error");
