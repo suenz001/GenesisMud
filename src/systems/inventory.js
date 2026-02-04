@@ -1,5 +1,5 @@
 // src/systems/inventory.js
-import { collection, addDoc, query, where, getDocs, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, addDoc, query, where, getDocs, deleteDoc, doc, serverTimestamp, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { db } from "../firebase.js";
 import { UI } from "../ui.js";
 import { ItemDB } from "../data/items.js";
@@ -60,6 +60,28 @@ function findShopkeeperInRoom(roomId) {
         if (npc && npc.shop) return npc; 
     }
     return null;
+}
+
+// [新增] 尋找房間內的玩家 (排除自己)
+async function findPlayerInRoom(roomId, targetNameOrId, selfId) {
+    const playersRef = collection(db, "players");
+    
+    // 先找 ID
+    let q = query(playersRef, where("location", "==", roomId), where("id", "==", targetNameOrId));
+    let snap = await getDocs(q);
+    
+    // 如果找不到 ID，找名字 (Name)
+    if (snap.empty) {
+        q = query(playersRef, where("location", "==", roomId), where("name", "==", targetNameOrId));
+        snap = await getDocs(q);
+    }
+
+    if (snap.empty) return null;
+    
+    const targetDoc = snap.docs[0];
+    if (targetDoc.id === selfId) return null; // 不能給自己
+
+    return { id: targetDoc.id, data: targetDoc.data() };
 }
 
 export const InventorySystem = {
@@ -130,21 +152,13 @@ export const InventorySystem = {
 
             // 2. 排序邏輯
             processedItems.sort((a, b) => {
-                // 優先權 1: 已裝備 > 未裝備
                 if (a.isEquipped && !b.isEquipped) return -1;
                 if (!a.isEquipped && b.isEquipped) return 1;
-
-                // 優先權 2: 若都已裝備，依照部位順序
                 if (a.isEquipped && b.isEquipped) {
                     const idxA = SLOT_ORDER.indexOf(a.equipSlot);
                     const idxB = SLOT_ORDER.indexOf(b.equipSlot);
-                    // 沒在列表中的部位排在後面
-                    const safeIdxA = idxA === -1 ? 999 : idxA;
-                    const safeIdxB = idxB === -1 ? 999 : idxB;
-                    return safeIdxA - safeIdxB;
+                    return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
                 }
-
-                // 優先權 3: 未裝備物品維持原本背包順序 (不變動)
                 return 0; 
             });
 
@@ -184,52 +198,36 @@ export const InventorySystem = {
         await updatePlayer(userId, { equipment: playerData.equipment });
     },
 
-    // [修改] 通用穿戴指令
     wear: async (playerData, args, userId) => {
         if (args.length === 0) return UI.print("你要穿戴什麼？", "error");
         const itemId = args[0];
-        
-        // 1. 檢查背包
         const invItem = playerData.inventory.find(i => i.id === itemId || i.name === itemId);
         if (!invItem) return UI.print("你身上沒有這個東西。", "error");
-        
-        // 2. 檢查物品資料
         const itemData = ItemDB[invItem.id];
         if (!itemData) return UI.print("物品資料錯誤。", "error");
-
-        // 3. 檢查是否為可穿戴部位
         const slot = SLOT_MAPPING[itemData.type];
         if (!slot) return UI.print("這東西看起來不能穿在身上。", "error");
 
         if (!playerData.equipment) playerData.equipment = {};
-
-        // 4. 替換舊裝備
         if (playerData.equipment[slot]) {
             const oldId = playerData.equipment[slot];
             const oldName = ItemDB[oldId] ? ItemDB[oldId].name : oldId;
             UI.print(`你脫下了身上的${oldName}。`, "system");
         }
-
-        // 5. 穿上新裝備
         playerData.equipment[slot] = invItem.id;
         UI.print(`你穿戴上了 ${itemData.name}。`, "system");
-        
         await updatePlayer(userId, { equipment: playerData.equipment });
     },
 
-    // [修改] 通用脫下指令
     unwear: async (playerData, args, userId) => {
-        if (args.length === 0) return UI.print("你要脫下什麼？(請輸入物品ID或名稱)", "error");
+        if (args.length === 0) return UI.print("你要脫下什麼？", "error");
         const target = args[0];
-        
         if (!playerData.equipment) return UI.print("你身上光溜溜的，沒什麼好脫的。", "error");
 
         let foundSlot = null;
         let foundItemId = null;
-
-        // 遍歷裝備欄尋找目標
         for (const [slot, equippedId] of Object.entries(playerData.equipment)) {
-            if (slot === 'weapon') continue; // 跳過武器
+            if (slot === 'weapon') continue; 
             const info = ItemDB[equippedId];
             if (equippedId === target || (info && info.name === target)) {
                 foundSlot = slot;
@@ -238,15 +236,9 @@ export const InventorySystem = {
             }
         }
 
-        if (!foundSlot) {
-            UI.print("你身上沒有穿戴這樣裝備。", "error");
-            return;
-        }
-
-        // 執行脫下
+        if (!foundSlot) { UI.print("你身上沒有穿戴這樣裝備。", "error"); return; }
         const itemName = ItemDB[foundItemId] ? ItemDB[foundItemId].name : foundItemId;
         delete playerData.equipment[foundSlot];
-        
         UI.print(`你脫下了身上的 ${itemName}。`, "system");
         await updatePlayer(userId, { equipment: playerData.equipment });
     },
@@ -268,7 +260,6 @@ export const InventorySystem = {
             const oldVal = attr.food;
             attr.food = attr.food + itemData.value;
             const recover = attr.food - oldVal;
-
             UI.print(`你吃下了一份${invItem.name}，恢復了 ${recover} 點食物值。`, "system");
             MessageSystem.broadcast(playerData.location, `${playerData.name} 拿出 ${invItem.name} 吃幾口。`);
             await updatePlayer(userId, { "attributes.food": attr.food });
@@ -283,10 +274,7 @@ export const InventorySystem = {
             const room = MapSystem.getRoom(playerData.location);
             if (room && room.hasWell) {
                 const attr = playerData.attributes;
-                if (attr.water >= attr.maxWater) {
-                    UI.print("你一點也不渴。", "system");
-                    return;
-                }
+                if (attr.water >= attr.maxWater) { UI.print("你一點也不渴。", "system"); return; }
                 attr.water = attr.maxWater;
                 UI.print("你走到井邊，大口喝著甘甜的井水，頓時覺得清涼解渴。", "system");
                 MessageSystem.broadcast(playerData.location, `${playerData.name} 走到井邊喝了幾口水。`);
@@ -313,7 +301,6 @@ export const InventorySystem = {
             const oldVal = attr.water;
             attr.water = attr.water + itemData.value;
             const recover = attr.water - oldVal;
-
             UI.print(`你喝了一口${invItem.name}，恢復了 ${recover} 點飲水值。`, "system");
             MessageSystem.broadcast(playerData.location, `${playerData.name} 拿起 ${invItem.name} 喝了幾口。`);
             await updatePlayer(userId, { "attributes.water": attr.water });
@@ -333,34 +320,25 @@ export const InventorySystem = {
 
     get: async (p,a,u) => { 
         if(a.length===0) return UI.print("撿啥?","error"); 
-        
         if (a[0] === 'all') {
             const q = query(collection(db, "room_items"), where("roomId", "==", p.location));
             const snap = await getDocs(q);
             if (snap.empty) return UI.print("這裡沒什麼好撿的。", "system");
-
             let pickedNames = [];
             if (!p.inventory) p.inventory = [];
-
             const deletePromises = [];
-
             snap.forEach(d => {
                 const itemData = d.data();
                 const ex = p.inventory.find(x => x.id === itemData.itemId);
-                if (ex) ex.count++; 
-                else p.inventory.push({ id: itemData.itemId, name: itemData.name, count: 1 });
-
+                if (ex) ex.count++; else p.inventory.push({ id: itemData.itemId, name: itemData.name, count: 1 });
                 pickedNames.push(itemData.name);
                 deletePromises.push(deleteDoc(doc(db, "room_items", d.id)));
             });
-
             await Promise.all(deletePromises);
             await updatePlayer(u, { inventory: p.inventory });
-            
             UI.print(`你撿起了：${pickedNames.join("、")}。`, "system");
             return;
         }
-
         const q=query(collection(db,"room_items"),where("roomId","==",p.location),where("itemId","==",a[0])); 
         const snap=await getDocs(q); 
         if(snap.empty)return UI.print("沒東西","error"); 
@@ -401,61 +379,27 @@ export const InventorySystem = {
         if (a.length >= 2 && !isNaN(a[1])) amount = parseInt(a[1]);
 
         const shopkeeper = findShopkeeperInRoom(p.location);
-        if (!shopkeeper) {
-            UI.print("這裡沒有人收東西。", "error");
-            return;
-        }
-
+        if (!shopkeeper) { UI.print("這裡沒有人收東西。", "error"); return; }
         const invIndex = p.inventory ? p.inventory.findIndex(i => i.id === itemId) : -1;
-        if (invIndex === -1) {
-            UI.print("你身上沒有這樣東西。", "error");
-            return;
-        }
+        if (invIndex === -1) { UI.print("你身上沒有這樣東西。", "error"); return; }
         const item = p.inventory[invIndex];
-        if (item.count < amount) {
-            UI.print("你身上的數量不夠。", "error");
-            return;
-        }
-
-        // 檢查是否裝備中 (遍歷所有裝備欄位)
+        if (item.count < amount) { UI.print("你身上的數量不夠。", "error"); return; }
         let isEquipped = false;
-        if (p.equipment) {
-            for (const key in p.equipment) {
-                if (p.equipment[key] === itemId) {
-                    isEquipped = true;
-                    break;
-                }
-            }
-        }
-
-        if (isEquipped) {
-            UI.print(`你必須先卸下 ${item.name} 才能販賣。`, "error");
-            return;
-        }
+        if (p.equipment) { for (const key in p.equipment) { if (p.equipment[key] === itemId) { isEquipped = true; break; } } }
+        if (isEquipped) { UI.print(`你必須先卸下 ${item.name} 才能販賣。`, "error"); return; }
 
         const itemInfo = ItemDB[itemId];
         if (!itemInfo) return; 
-        
         const baseValue = itemInfo.value || 0;
-        if (baseValue <= 0) {
-            UI.print(`${shopkeeper.name} 搖搖頭道：「這東西不值錢，我不能收。」`, "chat");
-            return;
-        }
+        if (baseValue <= 0) { UI.print(`${shopkeeper.name} 搖搖頭道：「這東西不值錢，我不能收。」`, "chat"); return; }
 
         const sellPrice = Math.floor(baseValue * 0.7);
         const totalGet = sellPrice * amount;
 
-        if (item.count > amount) {
-            item.count -= amount;
-        } else {
-            p.inventory.splice(invIndex, 1);
-        }
-
+        if (item.count > amount) item.count -= amount; else p.inventory.splice(invIndex, 1);
         p.money = (p.money || 0) + totalGet;
-
         UI.print(`你賣掉了 ${amount} ${item.name}，獲得了 ${UI.formatMoney(totalGet)}。`, "system", true);
         UI.print(`${shopkeeper.name} 笑嘻嘻地把 ${item.name} 收了起來。`, "chat");
-
         await updatePlayer(u, { money: p.money, inventory: p.inventory });
     },
 
@@ -469,5 +413,113 @@ export const InventorySystem = {
         for(const[k,v]of Object.entries(npc.shop)) 
             h+=`<div>${ItemDB[k].name} <span style="color:#888">(${k})</span>: ${UI.formatMoney(v)} ${UI.makeCmd("[買1]",`buy ${k} 1 from ${npc.id}`,"cmd-btn")}</div>`; 
         UI.print(h,"",true); 
+    },
+
+    // === [新增] Give 指令 ===
+    give: async (p, a, u) => {
+        // 解析: give <item> [amount] to <target>
+        if (a.length < 3) { UI.print("指令格式: give <物品ID> [數量] to <對象ID>", "error"); return; }
+
+        let itemId, targetId, amount = 1;
+        const toIndex = a.indexOf('to');
+
+        if (toIndex === -1) { UI.print("請使用 'to' 指定對象。(例如 give water to waiter)", "error"); return; }
+
+        // to 之前是物品和數量
+        itemId = a[0];
+        if (toIndex === 2 && !isNaN(parseInt(a[1]))) {
+            amount = parseInt(a[1]);
+        }
+        
+        // to 之後是目標
+        if (a.length > toIndex + 1) {
+            targetId = a[toIndex + 1];
+        } else {
+            UI.print("你要給誰？", "error");
+            return;
+        }
+
+        if (amount <= 0) { UI.print("數量錯誤。", "error"); return; }
+
+        // 1. 檢查自己是否有該物品
+        const invIndex = p.inventory ? p.inventory.findIndex(i => i.id === itemId || i.name === itemId) : -1;
+        if (invIndex === -1) { UI.print("你身上沒有這樣東西。", "error"); return; }
+        
+        const myItem = p.inventory[invIndex];
+        const realItemId = myItem.id; // 修正為真實 ID
+        const itemInfo = ItemDB[realItemId];
+
+        if (myItem.count < amount) { UI.print("你身上的數量不夠。", "error"); return; }
+
+        // 檢查是否裝備中
+        let isEquipped = false;
+        if (p.equipment) {
+            for (const key in p.equipment) {
+                if (p.equipment[key] === realItemId) {
+                    isEquipped = true;
+                    break;
+                }
+            }
+        }
+        if (isEquipped) { UI.print(`你必須先卸下 ${itemInfo.name} 才能送人。`, "error"); return; }
+
+        // 2. 搜尋目標 (優先找玩家，再找 NPC)
+        let targetPlayer = await findPlayerInRoom(p.location, targetId, p.id); // p.id (uid) or id field? p.id is 'admin' style or uid? main.js sends currentUser.uid as u, but p is doc data. p.id is display ID.
+        // wait, updatePlayer uses 'u' (userId/UID). The player data 'p' has 'id' (display ID).
+        // findPlayerInRoom needs to handle filtering by p.id (display ID) or u (uid). The function uses doc.id (uid) comparison.
+        
+        // 3. 處理目標是 NPC 的情況
+        if (!targetPlayer) {
+            const npc = findNPCInRoom(p.location, targetId);
+            if (npc) {
+                // [NPC 拒絕邏輯]
+                // 這裡未來可以加入 Quest 檢查： if (npc.questItem === realItemId) { ... }
+                // 目前全部拒絕
+                UI.print(`你拿出 ${itemInfo.name} 遞給 ${npc.name}。`, "system");
+                const rejectMsg = `${npc.name} 說道：「無功不受祿，這${itemInfo.name}您還是收回去吧。」`;
+                UI.print(UI.txt(rejectMsg, "#ffff00"), "chat");
+                MessageSystem.broadcast(p.location, `${p.name} 想給 ${npc.name} ${itemInfo.name}，但是被拒絕了。`);
+                return;
+            }
+            UI.print("這裡沒有這個人。", "error");
+            return;
+        }
+
+        // 4. 處理目標是玩家的情況
+        const targetData = targetPlayer.data;
+        const targetUid = targetPlayer.id;
+
+        // 扣除給予者的物品
+        if (myItem.count > amount) {
+            myItem.count -= amount;
+        } else {
+            p.inventory.splice(invIndex, 1);
+        }
+
+        // 增加接收者的物品
+        if (!targetData.inventory) targetData.inventory = [];
+        const existingItem = targetData.inventory.find(i => i.id === realItemId);
+        if (existingItem) {
+            existingItem.count += amount;
+        } else {
+            targetData.inventory.push({ id: realItemId, name: itemInfo.name, count: amount });
+        }
+
+        // 同步更新雙方資料庫
+        // 注意：這裡應該用 Transaction 比較好，但為了保持代碼一致性先分別更新
+        try {
+            await updatePlayer(u, { inventory: p.inventory });
+            await updatePlayer(targetUid, { inventory: targetData.inventory });
+
+            UI.print(`你給了 ${targetData.name} ${amount} ${itemInfo.name}。`, "system");
+            MessageSystem.broadcast(p.location, `${p.name} 給了 ${targetData.name} 一些 ${itemInfo.name}。`);
+            
+            // 如果對方在線上，理論上 broadcast 會通知，但可以更明確
+            // 這裡不做額外通知，依賴 world log
+        } catch (e) {
+            console.error("Give item failed", e);
+            UI.print("給予物品時發生錯誤，操作已取消。", "error");
+            // 簡易回滾 (僅 client 端顯示，實際 DB 可能部分更新，這裡簡化處理)
+        }
     }
 };

@@ -46,6 +46,9 @@ const commandRegistry = {
     'get': { description: '撿', execute: InventorySystem.get },
     'inventory': { description: '背包', execute: InventorySystem.inventory },
     'i': { description: '背包 (縮寫)', execute: InventorySystem.inventory },
+    
+    // [新增] Give 指令
+    'give': { description: '給予', execute: InventorySystem.give },
 
     // === 技能與修練指令 ===
     'skills': { description: '查看技能', execute: SkillSystem.skills },
@@ -74,7 +77,6 @@ const commandRegistry = {
         description: '觀察', 
         execute: (p, a) => { 
             if (a.length > 0) {
-                // [修正] 傳遞 a[1] 作為索引 (例如 look rabbit 2)
                 import("./map.js").then(m => m.MapSystem.lookTarget(p, a[0], a[1]));
             } else {
                 import("./map.js").then(m => m.MapSystem.look(p));
