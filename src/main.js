@@ -13,6 +13,7 @@ import { MapSystem } from "./systems/map.js";
 import { ItemDB } from "./data/items.js"; 
 import { auth, db } from "./firebase.js";
 import { PlayerSystem } from "./systems/player.js"; // 確保導入 PlayerSystem 以使用 quit
+import { CombatSystem } from "./systems/combat.js"; // [新增] 引入 CombatSystem 以進行戰鬥狀態同步
 
 let currentUser = null;
 let localPlayerData = null; 
@@ -120,6 +121,12 @@ function setupPlayerListener(user, isFirstLoad = false) {
             localPlayerData = docSnap.data();
             
             UI.updateHUD(localPlayerData);
+            
+            // [新增] 戰鬥狀態自動同步
+            // 如果資料庫變成 fighting (例如被別人攻擊)，但本地還沒跑 combat loop，強制同步
+            if (localPlayerData.state === 'fighting' && localPlayerData.combatTarget) {
+                 CombatSystem.syncCombatState(localPlayerData, user.uid);
+            }
             
             if (localPlayerData.macros) {
                 UI.updateMacroButtons(localPlayerData.macros);

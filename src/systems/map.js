@@ -87,8 +87,8 @@ export const MapSystem = {
 
             querySnapshot.forEach(doc => {
                 const p = doc.data();
-                // 過濾斷線玩家
-                if (now - (p.lastActive || 0) > 300000) return;
+                // [修改] 放寬斷線判定至 10 分鐘 (600000ms)，避免瀏覽器切換分頁導致看不到人
+                if (now - (p.lastActive || 0) > 600000) return;
                 playersInRoom.push(p); 
             });
         } catch (e) { console.error(e); }
@@ -310,7 +310,7 @@ export const MapSystem = {
                         UI.print(UI.attrLine("體力", `${UI.txt(displayHp, hpColor)}/${npc.combat.maxHp}`), "chat", true);
                     }
 
-                    // [修改] 如果是自己的師父，或是同門派，就可以看到技能列表
+                    // 如果是自己的師父，或是同門派，就可以看到技能列表
                     const isMyMaster = playerData.family && playerData.family.masterId === npc.id;
                     const isSameSect = playerData.family && npc.family && playerData.family.sect === npc.family;
 
@@ -349,8 +349,8 @@ export const MapSystem = {
             if (!pSnap.empty) {
                 const targetP = pSnap.docs[0].data();
                 
-                // 檢查該玩家是否已斷線
-                if (Date.now() - (targetP.lastActive || 0) > 300000) {
+                // [修改] 放寬觀察玩家的斷線判定至 10 分鐘
+                if (Date.now() - (targetP.lastActive || 0) > 600000) {
                     UI.print("你看不到 " + targetIdOrName + "。", "error");
                     return;
                 }

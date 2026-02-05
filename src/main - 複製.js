@@ -5,7 +5,6 @@ import {
     createUserWithEmailAndPassword, 
     signInAnonymously 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-// [修改] 引入 onSnapshot
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { UI } from "./ui.js";
@@ -13,13 +12,18 @@ import { CommandSystem } from "./systems/commands.js";
 import { MapSystem } from "./systems/map.js"; 
 import { ItemDB } from "./data/items.js"; 
 import { auth, db } from "./firebase.js";
+import { PlayerSystem } from "./systems/player.js"; // 確保導入 PlayerSystem 以使用 quit
 
 let currentUser = null;
 let localPlayerData = null; 
 let regenInterval = null; 
 let autoSaveInterval = null; 
-// [新增] 監聽器取消函數
 let playerUnsubscribe = null;
+
+// [新增] 閒置檢測相關變數
+let lastInputTime = Date.now();
+const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 分鐘無動作則登出
+let heartbeatCounter = 0; // 用於控制心跳寫入頻率
 
 let gameState = 'INIT'; 
 let tempCreationData = {}; 
@@ -34,14 +38,41 @@ UI.onAutoToggle({
     toggleDrink: () => { isAutoDrink = !isAutoDrink; return isAutoDrink; }
 });
 
+// 監聽 UI 的巨集更新事件
+UI.onMacroUpdate(async (id, macroData) => {
+    if (!currentUser || !localPlayerData) return;
+    
+    if (!localPlayerData.macros) localPlayerData.macros = {};
+    
+    if (!macroData.cmd) {
+        delete localPlayerData.macros[id];
+        UI.print(`已清除快捷鍵 ${id} 的設定。`, "system");
+    } else {
+        localPlayerData.macros[id] = macroData;
+        UI.print(`快捷鍵 ${id} 已設定為: [${macroData.name}] ${macroData.cmd}`, "system");
+    }
+
+    UI.updateMacroButtons(localPlayerData.macros);
+
+    try {
+        const playerRef = doc(db, "players", currentUser.uid);
+        await updateDoc(playerRef, { macros: localPlayerData.macros });
+    } catch (e) {
+        console.error("儲存巨集失敗", e);
+        UI.print("設定儲存失敗，請檢查網路。", "error");
+    }
+});
+
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
         UI.showLoginPanel(false);
         UI.enableGameInput(true);
+        // 重置閒置計時器
+        lastInputTime = Date.now();
         await checkAndLoadPlayer(user);
     } else {
-        cleanupGameSession(); // [修改] 統一清理邏輯
+        cleanupGameSession(); 
         currentUser = null;
         localPlayerData = null;
         gameState = 'INIT';
@@ -52,7 +83,17 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// [新增] 清理遊戲工作階段 (登出時呼叫)
+// [新增] 瀏覽器關閉/刷新前的處理 (盡力而為的存檔與狀態更新)
+window.addEventListener('beforeunload', (e) => {
+    if (currentUser && localPlayerData) {
+        // 嘗試標記狀態為離線 (瀏覽器關閉時不保證能完成，但這是標準做法)
+        // 注意：這裡不能使用 await
+        const playerRef = doc(db, "players", currentUser.uid);
+        // 使用 Beacon 或 fetch keepalive 會更穩，但這裡簡單使用 Firestore SDK 嘗試發送
+        // 我們主要依賴 "lastActive" 心跳機制來判斷斷線
+    }
+});
+
 function cleanupGameSession() {
     if (regenInterval) {
         clearInterval(regenInterval);
@@ -63,15 +104,14 @@ function cleanupGameSession() {
         autoSaveInterval = null;
     }
     if (playerUnsubscribe) {
-        playerUnsubscribe(); // 停止監聽 Firestore
+        playerUnsubscribe(); 
         playerUnsubscribe = null;
     }
     CommandSystem.stopCombat();
 }
 
-// [新增] 設定玩家資料即時監聽
 function setupPlayerListener(user, isFirstLoad = false) {
-    if (playerUnsubscribe) playerUnsubscribe(); // 防止重複監聽
+    if (playerUnsubscribe) playerUnsubscribe(); 
 
     const playerRef = doc(db, "players", user.uid);
     
@@ -79,16 +119,19 @@ function setupPlayerListener(user, isFirstLoad = false) {
         if (docSnap.exists()) {
             localPlayerData = docSnap.data();
             
-            // 每次資料變動 (包含收到物品、自動回血存檔) 都更新介面
             UI.updateHUD(localPlayerData);
+            
+            if (localPlayerData.macros) {
+                UI.updateMacroButtons(localPlayerData.macros);
+            } else {
+                UI.updateMacroButtons({});
+            }
 
-            // 如果這是初次載入 (或重新連線)，執行初始化邏輯
             if (isFirstLoad) {
-                isFirstLoad = false; // 確保只執行一次
+                isFirstLoad = false; 
                 
                 UI.print("讀取檔案成功... 你的江湖與你同在。", "system");
                 
-                // 處理鬼門關邏輯
                 if (localPlayerData.location === 'ghost_gate') {
                     const deathTime = localPlayerData.deathTime || 0;
                     const now = Date.now();
@@ -147,6 +190,9 @@ UI.onAuthAction({
 });
 
 UI.onInput((cmd) => {
+    // [新增] 每次輸入指令時，重置閒置計時器
+    lastInputTime = Date.now();
+
     if (!currentUser) {
         UI.print("請先登入。", "error");
         return;
@@ -154,7 +200,6 @@ UI.onInput((cmd) => {
 
     if (gameState === 'PLAYING') {
         CommandSystem.handle(cmd, localPlayerData, currentUser.uid);
-        // 現在 onSnapshot 會負責更新 UI，但為了保持操作手感，本地也更新一次
         if (localPlayerData) {
             UI.updateHUD(localPlayerData); 
         }
@@ -168,13 +213,37 @@ function startRegeneration(user) {
     if (regenInterval) clearInterval(regenInterval);
     if (autoSaveInterval) clearInterval(autoSaveInterval);
     
+    // 這個循環每 10 秒執行一次
     regenInterval = setInterval(async () => {
         if (!localPlayerData || !user) return;
         
+        // 1. 閒置檢測邏輯
+        const now = Date.now();
+        if (now - lastInputTime > IDLE_TIMEOUT) {
+            // 如果不在修練狀態，則強制登出
+            if (localPlayerData.state !== 'exercising') {
+                UI.print("【系統】由於長時間未活動，系統將您自動登出。", "system", true);
+                // 呼叫 quit 指令邏輯
+                await PlayerSystem.quit(localPlayerData, [], user.uid);
+                return; // 中斷後續邏輯
+            }
+            // 如果正在修練，則不登出，繼續執行下方的心跳更新
+        }
+
+        // 2. 心跳 (Heartbeat) 與 恢復邏輯
+        // 每 6 次循環 (約 60 秒) 強制更新一次 lastActive，證明自己還活著
+        heartbeatCounter++;
+        let forceUpdate = false;
+        
+        if (heartbeatCounter >= 6) {
+            heartbeatCounter = 0;
+            forceUpdate = true;
+        }
+
         const attr = localPlayerData.attributes;
-        let msg = [];
         let changed = false;
 
+        // 自然恢復邏輯
         if (attr.hp < attr.maxHp) {
             const recover = Math.floor(attr.maxHp * 0.1); 
             attr.hp = Math.min(attr.maxHp, attr.hp + recover);
@@ -207,6 +276,7 @@ function startRegeneration(user) {
             changed = true;
         }
         
+        // 自動飲食邏輯
         if (localPlayerData.inventory) {
             if (isAutoEat && attr.food < attr.maxFood * 0.8) {
                 const foodItem = localPlayerData.inventory.find(i => {
@@ -233,12 +303,17 @@ function startRegeneration(user) {
             }
         }
 
-        if (changed) {
-            // 本地先更新一次 UI
+        // 執行資料庫更新
+        if (changed || forceUpdate) {
             UI.updateHUD(localPlayerData);
             try {
                 const playerRef = doc(db, "players", user.uid);
-                await updateDoc(playerRef, { attributes: attr });
+                // 準備更新資料，包含屬性與最後活動時間(心跳)
+                const updatePayload = { 
+                    attributes: attr,
+                    lastActive: Date.now() // [新增] 更新心跳時間
+                };
+                await updateDoc(playerRef, updatePayload);
             } catch (e) {
                 console.error("Auto regen save failed", e);
             }
@@ -258,6 +333,8 @@ function startRegeneration(user) {
                 equipment: localPlayerData.equipment,
                 combat: localPlayerData.combat,
                 location: localPlayerData.location,
+                macros: localPlayerData.macros || {},
+                lastActive: Date.now(), // 自動存檔也更新心跳
                 lastSaved: new Date().toISOString()
             });
             UI.print("【系統】自動保存了進度。", "system");
@@ -343,11 +420,9 @@ function getErrMsg(code) {
 async function checkAndLoadPlayer(user) {
     const playerRef = doc(db, "players", user.uid);
     try {
-        // 先檢查檔案是否存在 (決定要載入還是新建)
         const docSnap = await getDoc(playerRef);
 
         if (docSnap.exists()) {
-            // 檔案存在，設定監聽器並載入
             setupPlayerListener(user, true);
         } else {
             UI.print("檢測到新面孔...", "system");
@@ -392,12 +467,13 @@ async function createNewCharacter(user, data) {
         equipment: { weapon: null, armor: null },
         sect: "none",
         createdAt: new Date().toISOString(),
-        enabled_skills: {}
+        enabled_skills: {},
+        macros: {},
+        lastActive: Date.now() // [新增] 初始化心跳
     };
 
     try {
         await setDoc(playerRef, initialData);
-        // [新增] 創建完成後，也需要啟動監聽器
         setupPlayerListener(user, false); 
         
         localPlayerData = initialData;
