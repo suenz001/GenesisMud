@@ -469,9 +469,8 @@ export const CombatSystem = {
         CombatSystem.fight(playerData, [], userId, false, npc);
     },
 
-    // [核心修復] 同步戰鬥狀態
     syncCombatState: async (playerData, userId) => {
-        if (combatInterval) return; // 避免重複啟動
+        if (combatInterval) return; 
 
         if (playerData.state === 'fighting' && playerData.combatTarget) {
             const target = playerData.combatTarget;
@@ -713,8 +712,6 @@ export const CombatSystem = {
             targetHp: targetData.attributes.hp, targetMaxHp: targetData.attributes.maxHp, targetData: targetData 
         }];
 
-        // [關鍵修正] 存入 combatTarget 的 id 必須是 Firestore 的 Document ID (UID)，而不是角色名稱 ID
-        // 因為 syncCombatState 會拿這個 ID 去 db.collection('players').doc(id) 抓資料
         await updatePlayer(userId, { state: 'fighting', combatTarget: { id: targetId, type: 'player' } });
         await updatePlayer(targetId, { state: 'fighting', combatTarget: { id: userId, type: 'player' } });
 
@@ -727,16 +724,29 @@ export const CombatSystem = {
             if (combatList.length === 0) { CombatSystem.stopCombat(userId); return; }
             
             try {
-                // [關鍵修正] 在每回合開頭強制更新本地玩家的位置與屬性
+                // [關鍵修正] 在每回合開頭強制更新本地玩家狀態，並檢查是否已昏迷
                 const playerRef = doc(db, "players", userId);
                 const playerSnap = await getDoc(playerRef);
                 
                 if (playerSnap.exists()) {
                     const freshData = playerSnap.data();
                     
-                    // 強制覆蓋位置，防止因閉包導致位置過時而觸發 stopCombat
                     if (freshData.location) playerData.location = freshData.location; 
                     
+                    // [新增] 同步昏迷狀態
+                    playerData.isUnconscious = freshData.isUnconscious || (freshData.attributes.hp <= 0);
+                    
+                    // [新增] 如果發現自己昏迷了，或者狀態已被重置，立即停止戰鬥
+                    if (playerData.isUnconscious) {
+                        UI.print(UI.txt("你已經暈倒了，無法繼續戰鬥。", "#888"), "system");
+                        CombatSystem.stopCombat(userId);
+                        return;
+                    }
+                    if (freshData.state !== 'fighting') {
+                        CombatSystem.stopCombat(userId);
+                        return;
+                    }
+
                     if (!playerData.combat) playerData.combat = {};
                     playerData.combat.enforce = freshData.combat?.enforce || 0; 
                     if (freshData.attributes) playerData.attributes = freshData.attributes;
