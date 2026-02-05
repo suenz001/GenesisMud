@@ -713,9 +713,10 @@ export const CombatSystem = {
             targetHp: targetData.attributes.hp, targetMaxHp: targetData.attributes.maxHp, targetData: targetData 
         }];
 
-        // [關鍵修正] 確保兩邊的戰鬥狀態都寫入資料庫
-        await updatePlayer(userId, { state: 'fighting', combatTarget: { id: targetData.id, type: 'player' } });
-        await updatePlayer(targetId, { state: 'fighting', combatTarget: { id: playerData.id, type: 'player' } });
+        // [關鍵修正] 存入 combatTarget 的 id 必須是 Firestore 的 Document ID (UID)，而不是角色名稱 ID
+        // 因為 syncCombatState 會拿這個 ID 去 db.collection('players').doc(id) 抓資料
+        await updatePlayer(userId, { state: 'fighting', combatTarget: { id: targetId, type: 'player' } });
+        await updatePlayer(targetId, { state: 'fighting', combatTarget: { id: userId, type: 'player' } });
 
         if (combatInterval) clearInterval(combatInterval);
         CombatSystem.runCombatLoop(playerData, userId);
