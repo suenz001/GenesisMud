@@ -101,6 +101,7 @@ export const MapSystem = {
                 let status = "";
                 if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
                 else if (p.state === 'exercising') status = UI.txt(" (正在運功修練)", "#ffff00"); 
+                
                 if (p.isUnconscious) status += UI.txt(" (昏迷)", "#888");
 
                 const lookLink = UI.makeCmd(p.name, `look ${p.id}`, "cmd-link");
@@ -349,7 +350,7 @@ export const MapSystem = {
             if (!pSnap.empty) {
                 const targetP = pSnap.docs[0].data();
                 
-                // [修改] 放寬觀察玩家的斷線判定至 10 分鐘
+                // [修改] 放寬斷線判定至 10 分鐘
                 if (Date.now() - (targetP.lastActive || 0) > 600000) {
                     UI.print("你看不到 " + targetIdOrName + "。", "error");
                     return;
@@ -366,7 +367,12 @@ export const MapSystem = {
                 if(hpPct < 0.5) hpColor = "#ffff00";
                 if(hpPct < 0.2) hpColor = "#ff0000";
                 
-                UI.print(UI.attrLine("狀態", targetP.isUnconscious ? UI.txt("昏迷不醒", "#888") : UI.txt("健康", hpColor)), "chat", true);
+                let statusText = "健康";
+                if (targetP.isUnconscious) statusText = UI.txt("昏迷不醒", "#888");
+                else if (targetP.state === 'fighting') statusText = UI.txt("戰鬥中", "#ff0000"); // [修改] 增加戰鬥中狀態
+                else statusText = UI.txt("健康", hpColor);
+
+                UI.print(UI.attrLine("狀態", statusText), "chat", true);
 
                 if (targetP.equipment) {
                     UI.print("<br>" + UI.txt("【 裝備 】", "#00ffff"), "chat", true);

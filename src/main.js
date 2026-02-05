@@ -88,9 +88,7 @@ onAuthStateChanged(auth, async (user) => {
 window.addEventListener('beforeunload', (e) => {
     if (currentUser && localPlayerData) {
         // 嘗試標記狀態為離線 (瀏覽器關閉時不保證能完成，但這是標準做法)
-        // 注意：這裡不能使用 await
         const playerRef = doc(db, "players", currentUser.uid);
-        // 使用 Beacon 或 fetch keepalive 會更穩，但這裡簡單使用 Firestore SDK 嘗試發送
         // 我們主要依賴 "lastActive" 心跳機制來判斷斷線
     }
 });

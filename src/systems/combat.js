@@ -469,9 +469,9 @@ export const CombatSystem = {
         CombatSystem.fight(playerData, [], userId, false, npc);
     },
 
-    // [新增] 同步戰鬥狀態 (用於自動觸發被動戰鬥)
+    // [核心修復] 同步戰鬥狀態
     syncCombatState: async (playerData, userId) => {
-        if (combatInterval) return; // 戰鬥已在進行中
+        if (combatInterval) return; // 避免重複啟動
 
         if (playerData.state === 'fighting' && playerData.combatTarget) {
             const target = playerData.combatTarget;
@@ -482,7 +482,6 @@ export const CombatSystem = {
                 
                 if (tSnap.exists()) {
                     const tData = tSnap.data();
-                    // 重建 combatList
                     combatList = [{
                         type: 'pvp', targetId: target.id, targetName: tData.name,
                         targetHp: tData.attributes.hp, targetMaxHp: tData.attributes.maxHp, targetData: tData 
@@ -491,7 +490,6 @@ export const CombatSystem = {
                     UI.print(UI.txt(`你正與 ${tData.name} 激戰中！`, "#ff8800"), "system");
                     CombatSystem.runCombatLoop(playerData, userId);
                 } else {
-                    // 目標不存在，停止戰鬥
                     await updatePlayer(userId, { state: 'normal', combatTarget: null });
                 }
             }
@@ -715,6 +713,7 @@ export const CombatSystem = {
             targetHp: targetData.attributes.hp, targetMaxHp: targetData.attributes.maxHp, targetData: targetData 
         }];
 
+        // [關鍵修正] 確保兩邊的戰鬥狀態都寫入資料庫
         await updatePlayer(userId, { state: 'fighting', combatTarget: { id: targetData.id, type: 'player' } });
         await updatePlayer(targetId, { state: 'fighting', combatTarget: { id: playerData.id, type: 'player' } });
 
@@ -727,13 +726,18 @@ export const CombatSystem = {
             if (combatList.length === 0) { CombatSystem.stopCombat(userId); return; }
             
             try {
+                // [關鍵修正] 在每回合開頭強制更新本地玩家的位置與屬性
                 const playerRef = doc(db, "players", userId);
                 const playerSnap = await getDoc(playerRef);
+                
                 if (playerSnap.exists()) {
                     const freshData = playerSnap.data();
+                    
+                    // 強制覆蓋位置，防止因閉包導致位置過時而觸發 stopCombat
+                    if (freshData.location) playerData.location = freshData.location; 
+                    
                     if (!playerData.combat) playerData.combat = {};
                     playerData.combat.enforce = freshData.combat?.enforce || 0; 
-                    
                     if (freshData.attributes) playerData.attributes = freshData.attributes;
                     
                     playerData.busy = freshData.busy || 0;
@@ -829,7 +833,6 @@ export const CombatSystem = {
                         const targetId = currentTarget.targetId;
                         const tDoc = await getDoc(doc(db, "players", targetId));
                         
-                        // [新增] 檢查對手是否存在，以及是否還在同一個房間
                         if (!tDoc.exists()) { 
                             UI.print("對手已經離開了遊戲。", "system");
                             CombatSystem.stopCombat(userId); 
@@ -837,8 +840,8 @@ export const CombatSystem = {
                         }
                         const tData = tDoc.data();
                         
-                        // [關鍵修復] 如果對手位置改變，停止戰鬥
-                        if (tData.location !== playerData.location) {
+                        // [關鍵修正] 增加容錯：如果對手位置暫時讀不到，不要馬上停止戰鬥
+                        if (tData.location && tData.location !== playerData.location) {
                             UI.print(`對手 ${tData.name} 已經離開了這裡。`, "system");
                             CombatSystem.stopCombat(userId);
                             return;
