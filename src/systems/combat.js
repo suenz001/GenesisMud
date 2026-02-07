@@ -472,6 +472,15 @@ export const CombatSystem = {
     syncCombatState: async (playerData, userId) => {
         if (combatInterval) return; 
 
+        // [重要修正] 如果自己已經沒血或暈倒了，不要啟動戰鬥迴圈
+        if (playerData.attributes.hp <= 0 || playerData.isUnconscious) {
+            // 確保資料庫狀態也是正常的
+            if (playerData.state === 'fighting') {
+                await updatePlayer(userId, { state: 'normal', combatTarget: null });
+            }
+            return;
+        }
+
         if (playerData.state === 'fighting' && playerData.combatTarget) {
             const target = playerData.combatTarget;
             
@@ -721,6 +730,7 @@ export const CombatSystem = {
 
     runCombatLoop: (playerData, userId) => {
         const combatRound = async () => {
+            // [安全鎖] 如果 combatList 為空，停止戰鬥
             if (combatList.length === 0) { CombatSystem.stopCombat(userId); return; }
             
             try {
@@ -733,14 +743,14 @@ export const CombatSystem = {
                     
                     if (freshData.location) playerData.location = freshData.location; 
                     
-                    // [新增] 同步昏迷狀態
+                    // 同步昏迷狀態
                     playerData.isUnconscious = freshData.isUnconscious || (freshData.attributes.hp <= 0);
                     
-                    // [新增] 如果發現自己昏迷了，或者狀態已被重置，立即停止戰鬥
+                    // [終極防詐屍] 如果發現自己昏迷了，或者狀態已被重置，立即停止戰鬥並跳出
                     if (playerData.isUnconscious) {
                         UI.print(UI.txt("你已經暈倒了，無法繼續戰鬥。", "#888"), "system");
                         CombatSystem.stopCombat(userId);
-                        return;
+                        return; // 這裡的 return 非常重要，它阻止了後續的攻擊代碼執行
                     }
                     if (freshData.state !== 'fighting') {
                         CombatSystem.stopCombat(userId);
@@ -760,6 +770,8 @@ export const CombatSystem = {
                 }
             } catch (e) {
                 console.error("Sync player state error:", e);
+                CombatSystem.stopCombat(userId); // 出錯也停止
+                return;
             }
 
             const playerStats = getCombatStats(playerData);
@@ -887,7 +899,10 @@ export const CombatSystem = {
                                 }
                             } else {
                                 UI.print(getSkillActionMsg(playerData, tData.name, true, "你"), "chat", true);
+                                // [修正] 閃避訊息也要廣播
+                                const dodgeMsg = UI.txt(`${tData.name} 靈巧地閃過了 ${playerData.name} 的攻擊！`, "#aaa");
                                 UI.print(UI.txt(`${tData.name} 靈巧地閃過了你的攻擊！`, "#aaa"), "chat", true);
+                                MessageSystem.broadcast(playerData.location, dodgeMsg);
                             }
                         }
                     }

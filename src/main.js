@@ -13,7 +13,7 @@ import { MapSystem } from "./systems/map.js";
 import { ItemDB } from "./data/items.js"; 
 import { auth, db } from "./firebase.js";
 import { PlayerSystem } from "./systems/player.js"; // 確保導入 PlayerSystem 以使用 quit
-import { CombatSystem } from "./systems/combat.js"; // [新增] 引入 CombatSystem 以進行戰鬥狀態同步
+import { CombatSystem } from "./systems/combat.js"; // 引入 CombatSystem
 
 let currentUser = null;
 let localPlayerData = null; 
@@ -21,7 +21,6 @@ let regenInterval = null;
 let autoSaveInterval = null; 
 let playerUnsubscribe = null;
 
-// [新增] 閒置檢測相關變數
 let lastInputTime = Date.now();
 const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 分鐘無動作則登出
 let heartbeatCounter = 0; // 用於控制心跳寫入頻率
@@ -69,8 +68,18 @@ onAuthStateChanged(auth, async (user) => {
         currentUser = user;
         UI.showLoginPanel(false);
         UI.enableGameInput(true);
-        // 重置閒置計時器
         lastInputTime = Date.now();
+        
+        // [關鍵修復] 登入時立即強制更新一次 lastActive，確保 look 能馬上看到人
+        try {
+            const playerRef = doc(db, "players", user.uid);
+            // 這裡使用 setDoc merge 避免覆蓋，如果文件還不存在(新帳號)會由 checkAndLoadPlayer 處理
+            // 但對於舊帳號，這能確保 lastActive 立即有值
+            await setDoc(playerRef, { lastActive: Date.now() }, { merge: true });
+        } catch(e) {
+            console.log("更新登入時間失敗 (可能是新帳號):", e);
+        }
+
         await checkAndLoadPlayer(user);
     } else {
         cleanupGameSession(); 
@@ -84,12 +93,10 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// [新增] 瀏覽器關閉/刷新前的處理 (盡力而為的存檔與狀態更新)
 window.addEventListener('beforeunload', (e) => {
     if (currentUser && localPlayerData) {
-        // 嘗試標記狀態為離線 (瀏覽器關閉時不保證能完成，但這是標準做法)
+        // 嘗試標記狀態為離線
         const playerRef = doc(db, "players", currentUser.uid);
-        // 我們主要依賴 "lastActive" 心跳機制來判斷斷線
     }
 });
 
@@ -120,8 +127,7 @@ function setupPlayerListener(user, isFirstLoad = false) {
             
             UI.updateHUD(localPlayerData);
             
-            // [新增] 戰鬥狀態自動同步
-            // 如果資料庫變成 fighting (例如被別人攻擊)，但本地還沒跑 combat loop，強制同步
+            // 戰鬥狀態自動同步
             if (localPlayerData.state === 'fighting' && localPlayerData.combatTarget) {
                  CombatSystem.syncCombatState(localPlayerData, user.uid);
             }
@@ -195,7 +201,7 @@ UI.onAuthAction({
 });
 
 UI.onInput((cmd) => {
-    // [新增] 每次輸入指令時，重置閒置計時器
+    // 每次輸入指令時，重置閒置計時器
     lastInputTime = Date.now();
 
     if (!currentUser) {
@@ -232,7 +238,6 @@ function startRegeneration(user) {
                 await PlayerSystem.quit(localPlayerData, [], user.uid);
                 return; // 中斷後續邏輯
             }
-            // 如果正在修練，則不登出，繼續執行下方的心跳更新
         }
 
         // 2. 心跳 (Heartbeat) 與 恢復邏輯
@@ -316,7 +321,7 @@ function startRegeneration(user) {
                 // 準備更新資料，包含屬性與最後活動時間(心跳)
                 const updatePayload = { 
                     attributes: attr,
-                    lastActive: Date.now() // [新增] 更新心跳時間
+                    lastActive: Date.now() // 更新心跳時間
                 };
                 await updateDoc(playerRef, updatePayload);
             } catch (e) {
