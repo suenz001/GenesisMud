@@ -175,8 +175,13 @@ function parseActionMsg(msg, attackerName, defenderName, weaponName) {
 function getDodgeMessage(entity, attackerName, entityNameOverride = null) {
     let msg = `$N身形一晃，閃過了$P的攻擊！`; 
     let activeDodge = null;
+    
+    // 優先檢查激發的輕功
     if (entity.enabled_skills && entity.enabled_skills.dodge) {
         activeDodge = entity.enabled_skills.dodge;
+    } else if (entity.skills && entity.skills.dodge) {
+        // 如果沒激發，默認使用基本輕功 (前提是基本輕功有定義在 SkillDB)
+        activeDodge = 'dodge';
     }
 
     if (activeDodge && SkillDB[activeDodge] && SkillDB[activeDodge].dodge_actions) {
@@ -473,13 +478,11 @@ export const CombatSystem = {
         if (combatInterval) return; 
 
         // [關鍵修復] 如果玩家已經昏迷或沒血，強制終止並修正資料庫狀態
-        // 這是防止無限迴圈的「總開關」
         if (playerData.attributes.hp <= 0 || playerData.isUnconscious) {
-            // 如果資料庫狀態還卡在 fighting，強制修正為 normal
             if (playerData.state === 'fighting') {
                 await updatePlayer(userId, { state: 'normal', combatTarget: null });
             }
-            return; // 絕對不要啟動戰鬥迴圈
+            return; 
         }
 
         if (playerData.state === 'fighting' && playerData.combatTarget) {
@@ -496,7 +499,6 @@ export const CombatSystem = {
                         targetHp: tData.attributes.hp, targetMaxHp: tData.attributes.maxHp, targetData: tData 
                     }];
                     
-                    // [關鍵修復] 補上 true 參數，讓 HTML 顏色代碼正確顯示，而不是顯示原始碼
                     UI.print(UI.txt(`你正與 ${tData.name} 激戰中！`, "#ff8800"), "system", true);
                     CombatSystem.runCombatLoop(playerData, userId);
                 } else {
@@ -749,9 +751,8 @@ export const CombatSystem = {
                     
                     // [終極防詐屍] 如果發現自己昏迷了，或者狀態已被重置，立即停止戰鬥並跳出
                     if (playerData.isUnconscious) {
-                        // 避免重複顯示 "已經暈倒"，我們只在 syncCombatState 處理顯示
                         CombatSystem.stopCombat(userId);
-                        return; // 這裡的 return 非常重要，它阻止了後續的攻擊代碼執行
+                        return; // 阻止後續攻擊代碼執行
                     }
                     if (freshData.state !== 'fighting') {
                         CombatSystem.stopCombat(userId);
@@ -900,10 +901,11 @@ export const CombatSystem = {
                                 }
                             } else {
                                 UI.print(getSkillActionMsg(playerData, tData.name, true, "你"), "chat", true);
-                                // [修正] 補上閃避廣播
-                                const dodgeMsg = UI.txt(`${tData.name} 靈巧地閃過了 ${playerData.name} 的攻擊！`, "#aaa");
-                                UI.print(UI.txt(`${tData.name} 靈巧地閃過了你的攻擊！`, "#aaa"), "chat", true);
-                                MessageSystem.broadcast(playerData.location, dodgeMsg);
+                                // [修正] 使用 getDodgeMessage 取得正確的閃避敘述
+                                const localDodge = getDodgeMessage(tData, "你", tData.name); 
+                                const publicDodge = getDodgeMessage(tData, playerData.name, tData.name);
+                                UI.print(localDodge, "chat", true);
+                                MessageSystem.broadcast(playerData.location, publicDodge);
                             }
                         }
                     }

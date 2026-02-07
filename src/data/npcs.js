@@ -115,7 +115,7 @@ export const NPCDB = {
         description: "一隻可愛的小野兔，正在吃草。",
         attributes: { str: 5, con: 5, per: 25, kar: 20, int: 10, cor: 10 },
         combat: { hp: 150, maxHp: 150, attack: 10, defense: 0, xp: 10 }, 
-        skills: { "dodge": 20, "unarmed": 10 }, 
+        skills: { "dodge": 20, "agile-beast": 10 }, // [修改] 使用靈獸技能
         drops: [{ id: "rabbit_meat", rate: 1.0 }, { id: "rabbit_skin", rate: 0.5 }]
     },
     "pheasant": {
@@ -124,7 +124,7 @@ export const NPCDB = {
         description: "一隻色彩斑斕的野雞，在草叢中覓食。",
         attributes: { str: 8, con: 5, per: 25, kar: 15, int: 10, cor: 10 },
         combat: { hp: 160, maxHp: 160, attack: 15, defense: 5, xp: 20 }, 
-        skills: { "dodge": 25, "unarmed": 15 },
+        skills: { "dodge": 25, "bird-hit": 15 }, // [修改] 使用飛禽技能
         drops: [{ id: "pheasant_meat", rate: 1.0 }, { id: "pheasant_feather", rate: 0.6 }]
     },
 
@@ -135,7 +135,7 @@ export const NPCDB = {
         description: "一隻調皮的猴子，手裡拿著不知道哪來的果子。",
         attributes: { str: 10, con: 10, per: 40, kar: 15, int: 20, cor: 10 },
         combat: { hp: 280, maxHp: 280, attack: 20, defense: 10, xp: 35 }, 
-        skills: { "dodge": 40, "unarmed": 25 },
+        skills: { "dodge": 40, "agile-beast": 25 }, // [修改] 使用靈獸技能
         drops: [{ id: "wild_fruit", rate: 0.8 }]
     },
     "snake": {
@@ -145,7 +145,7 @@ export const NPCDB = {
         description: "一條盤踞在樹枝上的蟒蛇，吐著信子。",
         attributes: { str: 15, con: 10, per: 20, kar: 10, int: 10, cor: 10 },
         combat: { hp: 290, maxHp: 290, attack: 28, defense: 5, xp: 45 }, 
-        skills: { "dodge": 30, "unarmed": 35 },
+        skills: { "dodge": 30, "snake-move": 35 }, // [修改] 使用蛇行毒手
         drops: [{ id: "snake_gall", rate: 0.2 }, { id: "snake_skin", rate: 0.5 }]
     },
 
@@ -156,7 +156,7 @@ export const NPCDB = {
         description: "行動敏捷的山貓，眼神銳利。",
         attributes: { str: 18, con: 15, per: 35, kar: 10, int: 15, cor: 10 },
         combat: { hp: 410, maxHp: 410, attack: 32, defense: 15, xp: 55 }, 
-        skills: { "dodge": 50, "unarmed": 40 },
+        skills: { "dodge": 50, "wolf-claw": 40 }, // [修改] 使用猛獸爪牙
         drops: [{ id: "bobcat_skin", rate: 0.4 }]
     },
     "boar": {
@@ -165,7 +165,7 @@ export const NPCDB = {
         description: "一隻兇猛的野豬，皮糙肉厚。",
         attributes: { str: 25, con: 25, per: 10, kar: 10, int: 5, cor: 5 },
         combat: { hp: 450, maxHp: 450, attack: 40, defense: 25, xp: 70 }, 
-        skills: { "dodge": 40, "unarmed": 50 },
+        skills: { "dodge": 40, "boar-charge": 50 }, // [修改] 使用野蠻衝撞
         drops: [{ id: "boar_meat", rate: 1.0 }, { id: "boar_tooth", rate: 0.3 }]
     },
 
@@ -177,7 +177,7 @@ export const NPCDB = {
         description: "眼神兇惡的野狼，成群結隊。",
         attributes: { str: 30, con: 20, per: 30, kar: 10, int: 15, cor: 10 },
         combat: { hp: 600, maxHp: 600, attack: 50, defense: 20, xp: 100 },
-        skills: { "dodge": 60, "unarmed": 60 },
+        skills: { "dodge": 60, "wolf-claw": 60 }, // [修改] 使用猛獸爪牙
         drops: [{ id: "wolf_skin", rate: 0.4 }]
     },
     "bear": {
@@ -187,7 +187,7 @@ export const NPCDB = {
         description: "一頭巨大的黑熊，站起來像一座小山。",
         attributes: { str: 40, con: 40, per: 15, kar: 10, int: 10, cor: 10 },
         combat: { hp: 1800, maxHp: 1800, attack: 90, defense: 60, xp: 300 },
-        skills: { "dodge": 30, "unarmed": 70, "force": 50 },
+        skills: { "dodge": 30, "wolf-claw": 70, "force": 50 }, // [修改] 熊也使用爪牙
         drops: [{ id: "bear_skin", rate: 1.0 }, { id: "bear_paw", rate: 0.2 }]
     }
 };

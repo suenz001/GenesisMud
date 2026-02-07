@@ -2,7 +2,6 @@
 import { UI } from "../ui.js";
 
 // === 共用工具：取得技能等級描述 ===
-// 這份邏輯原本在 skill_system.js，現在統一放在這裡供各處呼叫
 export function getSkillLevelDesc(level) {
     if (level >= 200) return UI.txt("返璞歸真", "#ff00ff", true);
     if (level >= 181) return UI.txt("深不可測", "#ff4500");
@@ -85,10 +84,83 @@ export const SkillDB = {
     },
     
     "force": { name: "基本內功", type: "force", rating: 1.0, desc: "修練內息的入門功夫。" },
-    "dodge": { name: "基本閃躲", type: "dodge", rating: 1.0, desc: "閃避敵人攻擊的基礎身法。" },
+    "dodge": { 
+        name: "基本閃躲", type: "dodge", rating: 1.0, desc: "閃避敵人攻擊的基礎身法。",
+        dodge_actions: [
+            "$N身形一閃，避開了這一擊。",
+            "$N向後一跳，閃過了$P的攻擊。",
+            "$N側身一讓，躲開了$P的招式。"
+        ]
+    },
+
+    // ================== 野獸專屬技能 (Beast Skills) ==================
+    "wolf-claw": {
+        name: "猛獸爪牙", type: "martial", rating: 1.2, base: "unarmed",
+        desc: "野獸的本能，撕咬抓撓。",
+        actions: [
+            { msg: "$P張開獠牙，發出低吼，狠狠咬向$N的喉嚨！", damage: 25 },
+            { msg: "$P揮舞利爪，帶著腥風拍向$N的胸口！", damage: 20 },
+            { msg: "$P後腿一蹬，猛地撲向$N，氣勢驚人！", damage: 22 }
+        ],
+        dodge_actions: [
+            "$N四肢一蹬，向旁跳開，避過了這一擊。",
+            "$N伏低身子，咆哮一聲，讓過了$P的攻勢。"
+        ]
+    },
+    "snake-move": {
+        name: "蛇行毒手", type: "martial", rating: 1.2, base: "unarmed",
+        desc: "如毒蛇般詭異的攻擊方式。",
+        actions: [
+            { msg: "$P身體一縮，如彈簧般射出，張口咬向$N！", damage: 25 },
+            { msg: "$P尾巴一掃，帶著腥風捲向$N的下盤！", damage: 20 },
+            { msg: "$P吐著信子，無聲無息地纏向$N！", damage: 22 }
+        ],
+        dodge_actions: [
+            "$N貼地遊走，詭異地滑開了攻擊。",
+            "$N身體扭曲成不可思議的角度，避開了$P的招式。"
+        ]
+    },
+    "bird-hit": {
+        name: "飛禽撲擊", type: "martial", rating: 1.1, base: "unarmed",
+        desc: "飛禽的攻擊方式。",
+        actions: [
+            { msg: "$P雙翅一振，尖嘴如利劍般啄向$N的眼睛！", damage: 18 },
+            { msg: "$P騰空而起，利爪抓向$N的天靈蓋！", damage: 20 },
+            { msg: "$P拍打翅膀，掀起一陣狂風掃向$N！", damage: 15 }
+        ],
+        dodge_actions: [
+            "$N雙翅一展，凌空拔起，避開了這一擊。",
+            "$N撲騰一下飛到了高處，讓$P撲了個空。"
+        ]
+    },
+    "boar-charge": {
+        name: "野蠻衝撞", type: "martial", rating: 1.3, base: "unarmed",
+        desc: "野豬等大型生物的衝撞。",
+        actions: [
+            { msg: "$P低下頭，獠牙對準$N猛力衝撞過來！", damage: 30 },
+            { msg: "$P嚎叫一聲，以後腿猛蹬，像戰車般撞向$N！", damage: 28 },
+            { msg: "$P暴怒地用頭部頂向$N的腹部！", damage: 25 }
+        ],
+        dodge_actions: [
+            "$N皮糙肉厚，硬是扛了一下，側身卸開力道。",
+            "$N憤怒地刨著蹄子，不退反進，將攻勢化解。"
+        ]
+    },
+    "agile-beast": {
+        name: "靈獸身法", type: "martial", rating: 1.1, base: "unarmed",
+        desc: "小型動物的靈活攻擊。",
+        actions: [
+            { msg: "$P後腿猛蹬，一記蹬腿踹向$N的面門！", damage: 15 },
+            { msg: "$P吱吱亂叫，揮舞爪子亂抓$N的臉！", damage: 12 },
+            { msg: "$P身形一竄，張口咬向$N的腳踝！", damage: 18 }
+        ],
+        dodge_actions: [
+            "$N像一陣煙似的鑽進死角，讓攻擊落了空。",
+            "$N靈巧地翻了個跟斗，跳到了$P的身後。"
+        ]
+    },
 
     // ================== 進階武學 (Advanced) ==================
-
 
     "iron-palm": {
         name: "鐵砂掌", id: "iron-palm", base: "unarmed", type: "martial", rating: 1.4,
