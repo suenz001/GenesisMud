@@ -132,9 +132,9 @@ export const WorldMap = {
     },
 
     // ================== 遠方門派與節點 (Remote Nodes) ==================
-    // 這些節點的座標現在非常遠，中間會由系統自動生成路徑
+    // [修正] 座標已經調整為 perfect diagonal (45度) 或 straight line
 
-    // 南方：茅山 (距離約 10 格)
+    // 南方：茅山 (距離約 10 格, 直線向南)
     "maoshan_gate": {
         title: "茅山派山門",
         description: "霧氣在此處最為濃厚，隱約可見一座陰森的山門矗立在前方。門口貼滿了黃色的符紙，四周陰氣逼人。",
@@ -149,7 +149,7 @@ export const WorldMap = {
         x: 0, y: -13, z: 0, region: ["maoshan"]
     },
 
-    // 西方中繼站：漢口 (距離約 20 格)
+    // 西方中繼站：漢口 (距離約 20 格, 直線向西)
     "hankou_ferry": {
         title: "漢口渡口",
         description: "寬闊的漢水在此流過，與長江交匯。千帆競渡，這裡是前往武當山和巴蜀的交通樞紐。",
@@ -157,65 +157,74 @@ export const WorldMap = {
         x: -20, y: -1, z: 0, region: ["world"]
     },
 
-    // 西北分支：武當山 (距離漢口約 15 格)
+    // 西北分支：武當山 (距離漢口 10 格, 完美西北 NW)
+    // 漢口(-20, -1) -> 武當(-30, 9). 差 X-10, Y+10
     "wudang_gate": {
         title: "解劍池",
         description: "武當山腳下，仰望山勢非凡。這裡立著一塊石碑，上書『解劍』二字。無論是誰，到此都需解下兵刃以示尊敬。",
         allowSave: true, safe: true,
-        x: -30, y: 10, z: 0, region: ["wudang"]
+        x: -30, y: 9, z: 0, region: ["wudang"]
     },
     "wudang_hall": {
         title: "紫霄宮",
         description: "武當派的主殿，莊嚴肅穆。許多道士正在廣場上演練太極拳。",
         allowSave: true, safe: true,
-        x: -30, y: 10, z: 1, region: ["wudang"]
+        x: -30, y: 9, z: 1, region: ["wudang"]
     },
 
-    // 西南分支：巴蜀 (距離漢口約 20 格)
+    // 西南分支：巴蜀 (距離漢口 20 格, 完美西南 SW)
+    // 漢口(-20, -1) -> 成都(-40, -21). 差 X-20, Y-20
     "chengdu_city": {
         title: "成都城",
         description: "天府之國的首府，街道寬闊，茶館林立，一派休閒景象。",
         allowSave: true, safe: true,
-        x: -40, y: -15, z: 0, region: ["world"]
+        x: -40, y: -21, z: 0, region: ["world"]
     },
     
+    // 成都分支
+    // 唐門 (完美正西 W): 成都(-40, -21) -> (-45, -21). 差 X-5
     "tang_gate": {
         title: "唐門世家",
         description: "一座宏偉的宅院，大門緊閉。周圍是迷霧竹林，門口設有許多機關暗哨，令人望而生畏。",
         allowSave: true, safe: true,
-        x: -45, y: -15, z: 0, region: ["tangmen"]
+        x: -45, y: -21, z: 0, region: ["tangmen"]
     },
+    // 峨嵋 (完美西南 SW): 成都(-40, -21) -> (-45, -26). 差 X-5, Y-5
     "emei_gate": {
         title: "峨嵋接引殿",
         description: "峨嵋天下秀，山路兩旁古木參天，景色幽靜。這裡是峨嵋派的山門，常有女弟子在此值守。",
         allowSave: true, safe: true,
-        x: -45, y: -20, z: 0, region: ["emei"]
+        x: -45, y: -26, z: 0, region: ["emei"]
     },
+    // 青城 (完美西北 NW): 成都(-40, -21) -> (-45, -16). 差 X-5, Y+5
     "qingcheng_gate": {
         title: "青城上清宮",
         description: "青城天下幽，道觀依山而建，與自然融為一體。這條小路通往著名的青城山。",
         allowSave: true, safe: true,
-        x: -45, y: -10, z: 0, region: ["qingcheng"]
+        x: -45, y: -16, z: 0, region: ["qingcheng"]
     },
 
-    // 西北：西域與少林 (距離極遠)
+    // 西北：西域與少林
+    // 少林 (完美西北 NW): 揚州(0, -1) -> (-21, 20). 差 X-21, Y+21
     "shaolin_gate": {
         title: "少林寺山門",
         description: "天下武功出少林。嵩山少林寺威震江湖，山門前香客絡繹不絕。",
         allowSave: true, safe: true,
-        x: -15, y: 20, z: 0, region: ["shaolin"]
+        x: -21, y: 20, z: 0, region: ["shaolin"]
     },
+    // 崆峒 (完美西北 NW): 少林(-21, 20) -> (-50, 49). 差 X-29, Y+29
     "kongtong_gate": {
         title: "崆峒派",
         description: "山勢險峻，怪石嶙峋。崆峒派以此山為屏障，易守難攻。",
         allowSave: true, safe: true,
-        x: -50, y: 30, z: 0, region: ["kongtong"]
+        x: -50, y: 49, z: 0, region: ["kongtong"]
     },
+    // 崑崙 (完美正西 W): 崆峒(-50, 49) -> (-80, 49). 差 X-30
     "kunlun_gate": {
         title: "崑崙仙境",
         description: "萬山之祖，終年積雪。寒風刺骨，非常人所能忍受。這裡彷彿置身於仙境之中。",
         allowSave: true, safe: true,
-        x: -80, y: 40, z: 0, region: ["kunlun"]
+        x: -80, y: 49, z: 0, region: ["kunlun"]
     },
 
     // ================== 特殊 ==================
@@ -228,71 +237,75 @@ export const WorldMap = {
 
 // 2. 路徑定義 (Paths)
 // 系統會根據這些定義自動生成中間的房間
+// [修正] Distance 設定為座標差減1，確保 1 格 1 步
 export const WorldPaths = [
-    // 揚州 -> 茅山 (南行)
+    // 揚州 -> 茅山 (南行, Delta 11)
     {
         id: "path_yangzhou_maoshan",
         from: "yangzhou_square",
         to: "maoshan_gate",
-        distance: 10, // 總步數
+        distance: 10,
         type: "misty_road",
         desc: "這是一條通往茅山的小徑，越走霧氣越重，四周寂靜無聲。"
     },
-    // 揚州 -> 漢口 (西行官道)
+    // 揚州 -> 漢口 (西行官道, Delta 20)
     {
         id: "path_yangzhou_hankou",
         from: "yangzhou_square",
         to: "hankou_ferry",
-        distance: 20,
+        distance: 19,
         type: "official_road",
         desc: "這是一條連接東西方的寬闊官道，路上偶爾有鏢車經過，只有幾棵枯樹孤零零地立著。"
     },
-    // 揚州 -> 少林 (北行)
+    // 揚州 -> 少林 (西北, Delta 21)
     {
         id: "path_yangzhou_shaolin",
         from: "yangzhou_square",
         to: "shaolin_gate",
-        distance: 25,
+        distance: 20,
         type: "official_road",
         desc: "這是一條通往中原腹地的官道，遠處嵩山巍峨聳立。"
     },
-    // 漢口 -> 武當 (西北山路)
+    // 漢口 -> 武當 (西北, Delta 10)
     {
         id: "path_hankou_wudang",
         from: "hankou_ferry",
         to: "wudang_gate",
-        distance: 15,
+        distance: 9,
         type: "mountain_path",
         desc: "離開渡口往西北行，山勢漸高，雲霧繚繞，氣勢非凡，正是前往武當山的路徑。"
     },
-    // 漢口 -> 成都 (西南蜀道)
+    // 漢口 -> 成都 (西南, Delta 20)
     {
         id: "path_hankou_chengdu",
         from: "hankou_ferry",
         to: "chengdu_city",
-        distance: 25,
+        distance: 19,
         type: "shu_road",
         desc: "『蜀道難，難於上青天』。道路變得崎嶇險峻，兩旁是萬丈深淵，下方是奔騰的江水。"
     },
-    // 成都 -> 各門派 (短途)
-    { id: "path_cd_tang", from: "chengdu_city", to: "tang_gate", distance: 5, type: "bamboo_path", desc: "穿過一片茂密的竹林，霧氣瀰漫，很容易迷失方向。前方隱約可見唐門世家。" },
-    { id: "path_cd_emei", from: "chengdu_city", to: "emei_gate", distance: 8, type: "mountain_path", desc: "峨嵋山路秀麗清幽，古木參天，令人心曠神怡。" },
-    { id: "path_cd_qing", from: "chengdu_city", to: "qingcheng_gate", distance: 6, type: "mountain_path", desc: "青城天下幽，這條小徑格外安靜。" },
+    // 成都 -> 唐門 (正西, Delta 5)
+    { id: "path_cd_tang", from: "chengdu_city", to: "tang_gate", distance: 4, type: "bamboo_path", desc: "穿過一片茂密的竹林，霧氣瀰漫，很容易迷失方向。前方隱約可見唐門世家。" },
+    // 成都 -> 峨嵋 (西南, Delta 5)
+    { id: "path_cd_emei", from: "chengdu_city", to: "emei_gate", distance: 4, type: "mountain_path", desc: "峨嵋山路秀麗清幽，古木參天，令人心曠神怡。" },
+    // 成都 -> 青城 (西北, Delta 5)
+    { id: "path_cd_qing", from: "chengdu_city", to: "qingcheng_gate", distance: 4, type: "mountain_path", desc: "青城天下幽，這條小徑格外安靜。" },
 
-    // 絲綢之路 (超長途)
+    // 少林 -> 崆峒 (西北, Delta 29)
     {
         id: "path_silk_road",
-        from: "shaolin_gate", // 假設從中原出發
+        from: "shaolin_gate", 
         to: "kongtong_gate",
-        distance: 40,
+        distance: 28,
         type: "desert",
         desc: "出了玉門關，便是茫茫戈壁。黃土高坡，滿目黃土。風沙很大，吹得人睜不開眼。"
     },
+    // 崆峒 -> 崑崙 (正西, Delta 30)
     {
         id: "path_kongtong_kunlun",
         from: "kongtong_gate",
         to: "kunlun_gate",
-        distance: 30,
+        distance: 29,
         type: "snow_path",
         desc: "越往西走，地勢越高，空氣越稀薄。遠處崑崙雪山終年積雪，寒風刺骨。"
     }
