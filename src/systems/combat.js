@@ -57,25 +57,52 @@ async function fetchNpcState(uniqueId, defaultMaxHp) {
     return { hp: defaultMaxHp, busy: 0 };
 }
 
+// [修正] NPC 戰鬥數據計算：優先讀取 enabled_skills 並計算有效等級
 function getNPCCombatStats(npc) {
     let maxSkill = 0;
     let rating = 1.0; 
     let bestSkillId = 'unarmed';
 
-    if (npc.skills) {
-        for (const [sid, lvl] of Object.entries(npc.skills)) {
-            const sInfo = SkillDB[sid];
-            if (lvl > maxSkill) {
-                maxSkill = lvl;
-                bestSkillId = sid;
-                if (sInfo && sInfo.rating) rating = sInfo.rating;
+    // 1. 優先檢查 enabled_skills
+    // 大部分 NPC (包括野獸) 沒有裝備武器，所以檢查 unarmed 的激發狀態
+    if (npc.enabled_skills && npc.enabled_skills['unarmed']) {
+        const mappedSkill = npc.enabled_skills['unarmed'];
+        if (npc.skills && npc.skills[mappedSkill]) {
+            bestSkillId = mappedSkill;
+            maxSkill = npc.skills[mappedSkill];
+            
+            const sInfo = SkillDB[mappedSkill];
+            if (sInfo) {
+                if (sInfo.rating) rating = sInfo.rating;
+                
+                // 計算有效等級：如果有基礎武學，則加上 (基礎/2)
+                if (sInfo.base && npc.skills[sInfo.base]) {
+                    maxSkill = maxSkill + Math.floor(npc.skills[sInfo.base] / 2);
+                }
+            }
+        }
+    } else {
+        // 2. 備用邏輯：如果沒設定激發，才掃描等級最高的技能
+        if (npc.skills) {
+            for (const [sid, lvl] of Object.entries(npc.skills)) {
+                const sInfo = SkillDB[sid];
+                // 過濾掉輕功(dodge)和內功(force)，避免它們變成攻擊技能
+                if (sInfo && (sInfo.type === 'dodge' || sInfo.type === 'force')) continue;
+
+                if (lvl > maxSkill) {
+                    maxSkill = lvl;
+                    bestSkillId = sid;
+                    if (sInfo && sInfo.rating) rating = sInfo.rating;
+                }
             }
         }
     }
+
     const str = npc.attributes?.str || 20;
     const con = npc.attributes?.con || 20;
     const per = npc.attributes?.per || 20;
     
+    // 這裡的 maxSkill 現在是「有效等級」了 (如果適用)
     const ap = (str * 2.5) + (maxSkill * 5 * rating) + (npc.combat.attack || 0);
     const dp = (con * 2.5) + (maxSkill * 2) + (npc.combat.defense || 0);
     const hit = (per * 2.5) + (maxSkill * 3 * rating);
@@ -117,33 +144,30 @@ function getStatusDesc(name, current, max) {
     return null;
 }
 
-// [修改] 計算戰鬥等級：最高外功有效等級 + 最高內功有效等級
+// 計算戰鬥等級：最高外功有效等級 + 最高內功有效等級
 function getLevel(character) {
     if (!character) return 0;
     const skills = character.skills || {};
     let maxMartial = 0; 
     let maxForce = 0;
 
-    // 遍歷角色所有技能，尋找基礎技能並計算其有效等級
     for (const [sid, lvl] of Object.entries(skills)) {
         const skillInfo = SkillDB[sid];
         if (!skillInfo) continue;
 
-        // 判斷是否為基礎武學 (沒有 base 屬性或是 base 指向自己?? 通常 SkillDB 中基礎武學沒有 base 屬性)
-        // 為了保險，我們檢查：如果是 Martial 且是基礎，或 Force 且是基礎
-        
         let baseSkillId = null;
 
         if (skillInfo.base) {
-            // 這是一個進階技能，我們找到它的基礎技能
             baseSkillId = skillInfo.base;
         } else {
-            // 這本身可能是基礎技能
             baseSkillId = sid;
         }
 
         const baseInfo = SkillDB[baseSkillId];
         if (baseInfo) {
+            // 注意：這裡使用 player.js 的 getEffectiveSkillLevel
+            // 該函式需要 entity 有 enabled_skills 結構
+            // 我們在 npcs.js 已經幫怪物加上 enabled_skills 了
             const effLvl = getEffectiveSkillLevel(character, baseSkillId);
             
             if (baseInfo.type === 'martial') {
@@ -316,7 +340,7 @@ export async function findAliveNPC(roomId, targetId, targetIndex = 1) {
     return null;
 }
 
-// [修改] 獎勵計算：基礎公式 × 顏色係數
+// 獎勵計算：基礎公式 × 顏色係數
 export async function handleKillReward(npc, playerData, enemyState, userId) {
     try {
         const deadMsg = UI.txt(`${npc.name} 慘叫一聲，被你結果了性命。`, "#ff0000", true);
