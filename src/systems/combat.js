@@ -7,7 +7,7 @@ import { ItemDB } from "../data/items.js";
 import { SkillDB } from "../data/skills.js";
 import { MapSystem } from "./map.js";
 import { MessageSystem } from "./messages.js"; 
-import { updatePlayer, getCombatStats } from "./player.js";
+import { updatePlayer, getCombatStats, getEffectiveSkillLevel } from "./player.js";
 
 let combatInterval = null;
 let combatList = []; 
@@ -117,14 +117,40 @@ function getStatusDesc(name, current, max) {
     return null;
 }
 
+// [修改] 計算戰鬥等級：最高外功有效等級 + 最高內功有效等級
 function getLevel(character) {
+    if (!character) return 0;
     const skills = character.skills || {};
-    let maxMartial = 0, maxForce = 0;
+    let maxMartial = 0; 
+    let maxForce = 0;
+
+    // 遍歷角色所有技能，尋找基礎技能並計算其有效等級
     for (const [sid, lvl] of Object.entries(skills)) {
         const skillInfo = SkillDB[sid];
-        if (skillInfo && skillInfo.base) {
-            if (skillInfo.type === 'martial' && lvl > maxMartial) maxMartial = lvl;
-            if (skillInfo.type === 'force' && lvl > maxForce) maxForce = lvl;
+        if (!skillInfo) continue;
+
+        // 判斷是否為基礎武學 (沒有 base 屬性或是 base 指向自己?? 通常 SkillDB 中基礎武學沒有 base 屬性)
+        // 為了保險，我們檢查：如果是 Martial 且是基礎，或 Force 且是基礎
+        
+        let baseSkillId = null;
+
+        if (skillInfo.base) {
+            // 這是一個進階技能，我們找到它的基礎技能
+            baseSkillId = skillInfo.base;
+        } else {
+            // 這本身可能是基礎技能
+            baseSkillId = sid;
+        }
+
+        const baseInfo = SkillDB[baseSkillId];
+        if (baseInfo) {
+            const effLvl = getEffectiveSkillLevel(character, baseSkillId);
+            
+            if (baseInfo.type === 'martial') {
+                if (effLvl > maxMartial) maxMartial = effLvl;
+            } else if (baseInfo.type === 'force') {
+                if (effLvl > maxForce) maxForce = effLvl;
+            }
         }
     }
     return maxMartial + maxForce;
@@ -290,29 +316,55 @@ export async function findAliveNPC(roomId, targetId, targetIndex = 1) {
     return null;
 }
 
+// [修改] 獎勵計算：基礎公式 × 顏色係數
 export async function handleKillReward(npc, playerData, enemyState, userId) {
     try {
         const deadMsg = UI.txt(`${npc.name} 慘叫一聲，被你結果了性命。`, "#ff0000", true);
         UI.print(deadMsg, "system", true);
         MessageSystem.broadcast(playerData.location, UI.txt(`${npc.name} 被 ${playerData.name} 殺死了。`, "#ff0000", true));
         
+        // 1. 計算等級
         const playerLvl = getLevel(playerData);
         const npcLvl = getLevel(npc); 
-        let potGain = 100 + ((npcLvl - playerLvl) * 10);
-        if (potGain < 10) potGain = 10;
 
+        // 2. 基礎潛能 = NPC等級 * 2
+        let basePot = npcLvl * 2;
+        if (basePot < 10) basePot = 10;
+
+        // 3. 根據難度係數調整
         const ratio = enemyState.diffRatio || 1;
-        if (ratio < 0.5) {
-            potGain = 0; 
-            UI.print("這對手太弱了，你從戰鬥中毫無所獲。", "chat");
-        } else if (ratio < 0.8) {
-            potGain = Math.floor(potGain * 0.5);
-            UI.print("這對手對你來說太輕鬆了，收穫不多。", "chat");
+        let multiplier = 1.0;
+        let desc = "";
+
+        if (ratio < 0.5) { // 灰色
+            multiplier = 0;
+            desc = "這對手太弱了，你從戰鬥中毫無所獲。";
+        } else if (ratio < 0.8) { // 綠色
+            multiplier = 0.5;
+            desc = "這對手對你來說太輕鬆了，收穫不多。";
+        } else if (ratio < 1.2) { // 白色
+            multiplier = 1.0;
+            desc = `戰鬥勝利！獲得 ${Math.floor(basePot * multiplier)} 點潛能。`;
+        } else if (ratio < 2.0) { // 黃色
+            multiplier = 1.5;
+            desc = `你戰勝了強敵！獲得 ${Math.floor(basePot * multiplier)} 點潛能！`;
+        } else { // 紅色
+            multiplier = 2.0;
+            desc = `你創造了奇蹟！獲得 ${Math.floor(basePot * multiplier)} 點潛能！`;
+        }
+
+        const potGain = Math.floor(basePot * multiplier);
+        
+        if (multiplier === 0) {
+            UI.print(desc, "chat");
+        } else if (multiplier < 1) {
+            UI.print(`${desc} (獲得 ${potGain} 點潛能)`, "chat");
+        } else {
+            UI.print(UI.txt(desc, "#00ff00", true), "system", true);
         }
         
         if (potGain > 0) {
             playerData.combat.potential = (playerData.combat.potential || 0) + potGain;
-            UI.print(UI.txt(`戰鬥勝利！獲得 ${potGain} 點潛能。`, "#00ff00", true), "system", true);
         }
         
         playerData.combat.kills = (playerData.combat.kills || 0) + 1;

@@ -66,6 +66,14 @@ export const NPCDB = {
             "eight-trigram-blade": 80, // 八卦刀
             "arhat-stick": 80,         // 羅漢棍
             "yang-spear": 80           // 楊家槍
+        },
+        enabled_skills: {
+            "force": "turtle-force",
+            "dodge": "leaf-steps",
+            "unarmed": "iron-palm",
+            "blade": "eight-trigram-blade",
+            "stick": "arhat-stick",
+            "lance": "yang-spear"
         }
     },
 
@@ -91,6 +99,14 @@ export const NPCDB = {
             "shadow-dagger": 80,  // 如影隨形刺
             "cloud-whip": 80,     // 流雲鞭
             "golden-dart": 80     // 金錢鏢
+        },
+        enabled_skills: {
+            "force": "turtle-force",
+            "dodge": "leaf-steps",
+            "sword": "swift-sword",
+            "dagger": "shadow-dagger",
+            "whip": "cloud-whip",
+            "throwing": "golden-dart"
         }
     },
 
@@ -108,86 +124,100 @@ export const NPCDB = {
         skills: {} // 無技能
     },
 
-    // === 森林生物 (Tier 1: 森林邊緣) ===
+    // === 森林生物 (平滑曲線：等級 0 ~ 180 畢業) ===
+
+    // Tier 1: 新手練手 (Combat Level ~10)
     "rabbit": {
         id: "rabbit",
         name: "野兔",
         description: "一隻可愛的小野兔，正在吃草。",
         attributes: { str: 5, con: 5, per: 25, kar: 20, int: 10, cor: 10 },
-        combat: { hp: 150, maxHp: 150, attack: 10, defense: 0, xp: 10 }, 
-        skills: { "dodge": 20, "agile-beast": 10 }, // [修改] 使用靈獸技能
+        combat: { hp: 200, maxHp: 200, attack: 15, defense: 5, xp: 20 }, 
+        skills: { "unarmed": 10, "dodge": 10, "agile-beast": 5 },
+        enabled_skills: { "unarmed": "agile-beast" },
         drops: [{ id: "rabbit_meat", rate: 1.0 }, { id: "rabbit_skin", rate: 0.5 }]
     },
+    // Tier 1.5: 稍強 (Combat Level ~22)
     "pheasant": {
         id: "pheasant",
         name: "野雞",
         description: "一隻色彩斑斕的野雞，在草叢中覓食。",
         attributes: { str: 8, con: 5, per: 25, kar: 15, int: 10, cor: 10 },
-        combat: { hp: 160, maxHp: 160, attack: 15, defense: 5, xp: 20 }, 
-        skills: { "dodge": 25, "bird-hit": 15 }, // [修改] 使用飛禽技能
+        combat: { hp: 300, maxHp: 300, attack: 20, defense: 10, xp: 40 }, 
+        skills: { "unarmed": 15, "dodge": 15, "bird-hit": 15 },
+        enabled_skills: { "unarmed": "bird-hit" },
         drops: [{ id: "pheasant_meat", rate: 1.0 }, { id: "pheasant_feather", rate: 0.6 }]
     },
 
-    // === 森林生物 (Tier 2: 森林外圍) ===
+    // Tier 2: 初學 (Combat Level ~35)
     "monkey": {
         id: "monkey",
         name: "猴子",
         description: "一隻調皮的猴子，手裡拿著不知道哪來的果子。",
         attributes: { str: 10, con: 10, per: 40, kar: 15, int: 20, cor: 10 },
-        combat: { hp: 280, maxHp: 280, attack: 20, defense: 10, xp: 35 }, 
-        skills: { "dodge": 40, "agile-beast": 25 }, // [修改] 使用靈獸技能
+        combat: { hp: 600, maxHp: 600, attack: 30, defense: 20, xp: 70 }, 
+        skills: { "unarmed": 30, "dodge": 30, "agile-beast": 20 }, 
+        enabled_skills: { "unarmed": "agile-beast" },
         drops: [{ id: "wild_fruit", rate: 0.8 }]
     },
+    // Tier 2.5: 入門 (Combat Level ~60)
     "snake": {
         id: "snake",
         name: "蟒蛇",
         aggro: true, 
         description: "一條盤踞在樹枝上的蟒蛇，吐著信子。",
-        attributes: { str: 15, con: 10, per: 20, kar: 10, int: 10, cor: 10 },
-        combat: { hp: 290, maxHp: 290, attack: 28, defense: 5, xp: 45 }, 
-        skills: { "dodge": 30, "snake-move": 35 }, // [修改] 使用蛇行毒手
+        attributes: { str: 15, con: 15, per: 20, kar: 10, int: 10, cor: 10 },
+        combat: { hp: 1000, maxHp: 1000, attack: 50, defense: 30, xp: 120 }, 
+        skills: { "unarmed": 30, "dodge": 30, "snake-move": 30, "force": 30 },
+        enabled_skills: { "unarmed": "snake-move" },
         drops: [{ id: "snake_gall", rate: 0.2 }, { id: "snake_skin", rate: 0.5 }]
     },
 
-    // === 森林生物 (Tier 3: 森林深處) ===
+    // Tier 3: 進階 (Combat Level ~90)
     "bobcat": {
         id: "bobcat",
         name: "山貓",
         description: "行動敏捷的山貓，眼神銳利。",
-        attributes: { str: 18, con: 15, per: 35, kar: 10, int: 15, cor: 10 },
-        combat: { hp: 410, maxHp: 410, attack: 32, defense: 15, xp: 55 }, 
-        skills: { "dodge": 50, "wolf-claw": 40 }, // [修改] 使用猛獸爪牙
+        attributes: { str: 20, con: 20, per: 40, kar: 10, int: 15, cor: 10 },
+        combat: { hp: 2000, maxHp: 2000, attack: 70, defense: 50, xp: 180 }, 
+        skills: { "unarmed": 50, "dodge": 50, "wolf-claw": 50, "force": 30 }, 
+        enabled_skills: { "unarmed": "wolf-claw" },
         drops: [{ id: "bobcat_skin", rate: 0.4 }]
     },
+    // Tier 3.5: 挑戰 (Combat Level ~120)
     "boar": {
         id: "boar",
         name: "野豬",
         description: "一隻兇猛的野豬，皮糙肉厚。",
-        attributes: { str: 25, con: 25, per: 10, kar: 10, int: 5, cor: 5 },
-        combat: { hp: 450, maxHp: 450, attack: 40, defense: 25, xp: 70 }, 
-        skills: { "dodge": 40, "boar-charge": 50 }, // [修改] 使用野蠻衝撞
+        attributes: { str: 30, con: 30, per: 15, kar: 10, int: 5, cor: 5 },
+        combat: { hp: 3500, maxHp: 3500, attack: 90, defense: 70, xp: 240 }, 
+        skills: { "unarmed": 60, "dodge": 60, "boar-charge": 60, "force": 60 }, 
+        enabled_skills: { "unarmed": "boar-charge" },
         drops: [{ id: "boar_meat", rate: 1.0 }, { id: "boar_tooth", rate: 0.3 }]
     },
 
-    // === 森林生物 (Tier 4: 危險區域) ===
+    // Tier 4: 高手 (Combat Level ~150)
     "wolf": {
         id: "wolf",
         name: "野狼",
         aggro: true, 
         description: "眼神兇惡的野狼，成群結隊。",
-        attributes: { str: 30, con: 20, per: 30, kar: 10, int: 15, cor: 10 },
-        combat: { hp: 600, maxHp: 600, attack: 50, defense: 20, xp: 100 },
-        skills: { "dodge": 60, "wolf-claw": 60 }, // [修改] 使用猛獸爪牙
+        attributes: { str: 35, con: 30, per: 35, kar: 10, int: 15, cor: 10 },
+        combat: { hp: 5000, maxHp: 5000, attack: 110, defense: 90, xp: 300 },
+        skills: { "unarmed": 80, "dodge": 80, "wolf-claw": 80, "force": 60 }, 
+        enabled_skills: { "unarmed": "wolf-claw" },
         drops: [{ id: "wolf_skin", rate: 0.4 }]
     },
+    // Tier 5: 森林霸主 (Combat Level ~200, 適合玩家 180 畢業)
     "bear": {
         id: "bear",
         name: "黑熊",
         aggro: true, 
         description: "一頭巨大的黑熊，站起來像一座小山。",
-        attributes: { str: 40, con: 40, per: 15, kar: 10, int: 10, cor: 10 },
-        combat: { hp: 1800, maxHp: 1800, attack: 90, defense: 60, xp: 300 },
-        skills: { "dodge": 30, "wolf-claw": 70, "force": 50 }, // [修改] 熊也使用爪牙
+        attributes: { str: 50, con: 50, per: 20, kar: 10, int: 10, cor: 10 },
+        combat: { hp: 10000, maxHp: 10000, attack: 150, defense: 120, xp: 500 },
+        skills: { "unarmed": 100, "dodge": 100, "wolf-claw": 100, "force": 100 },
+        enabled_skills: { "unarmed": "wolf-claw" },
         drops: [{ id: "bear_skin", rate: 1.0 }, { id: "bear_paw", rate: 0.2 }]
     }
 };
