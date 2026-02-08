@@ -1,5 +1,6 @@
 // src/ui.js
 import { WorldMap } from "./data/world.js";
+import { MapSystem } from "./systems/map.js"; // [新增] 引入 MapSystem 以支援動態查詢
 
 const output = document.getElementById('output');
 const input = document.getElementById('cmd-input');
@@ -45,10 +46,11 @@ const valEnforce = document.getElementById('val-enforce');
 // 面板切換元素
 const panelInspection = document.getElementById('panel-inspection');
 const panelStatsGroup = document.getElementById('panel-stats-group');
+const miniMapBox = document.getElementById('mini-map-box');
 
 let currentEnforceValue = 0;
 
-// [新增] 巨集相關變數
+// 巨集相關變數
 let localMacros = {}; 
 let onMacroSaveCallback = null;
 
@@ -88,7 +90,7 @@ export const UI = {
         output.scrollTop = output.scrollHeight;
     },
     
-    // [新增] 更新巨集按鈕顯示
+    // 更新巨集按鈕顯示
     updateMacroButtons: (macros) => {
         localMacros = macros || {};
         for (let i = 1; i <= 4; i++) {
@@ -108,7 +110,7 @@ export const UI = {
         }
     },
 
-    // [新增] 註冊巨集儲存回調
+    // 註冊巨集儲存回調
     onMacroUpdate: (callback) => {
         onMacroSaveCallback = callback;
     },
@@ -160,73 +162,71 @@ export const UI = {
             valMoney.innerHTML = UI.formatMoney(playerData.money || 0);
         }
 
-        const currentRoom = WorldMap[playerData.location];
-        if (currentRoom) {
-            UI.drawRangeMap(currentRoom.x, currentRoom.y, currentRoom.z, playerData.location);
-        }
+        // [修改] 呼叫 drawRangeMap 並傳入 playerData，讓函數內部處理座標
+        UI.drawRangeMap(playerData);
     },
 
-    drawRangeMap: (px, py, pz, currentId) => {
-        const miniMapBox = document.getElementById('mini-map-box');
-        if(!miniMapBox) return;
-        miniMapBox.innerHTML = ''; 
-        
-        const grid = document.createElement('div');
-        grid.className = 'range-map-grid';
-        const radius = 2;
-        
-        const currentRoomData = WorldMap[currentId];
-        const currentRegions = currentRoomData ? (currentRoomData.region || ["world"]) : ["world"];
+    // [修改] 地圖繪製邏輯：使用 MapSystem.getRoomAt 來支援動態路徑
+    drawRangeMap: (playerData) => {
+        if (!miniMapBox) return;
+        if (!playerData || !playerData.location) return;
 
-        for (let y = py + radius; y >= py - radius; y--) {
-            for (let x = px - radius; x <= px + radius; x++) {
-                const div = document.createElement('div');
-                div.className = 'map-cell-range';
-                
-                let roomData = null;
-                for (const [key, val] of Object.entries(WorldMap)) {
-                    if (val.x === x && val.y === y && val.z === pz) {
-                        const targetRegions = val.region || ["world"];
-                        const hasCommonRegion = currentRegions.some(r => targetRegions.includes(r));
-                        if (hasCommonRegion) {
-                            roomData = val;
-                            break;
-                        }
+        // 1. 取得當前房間 (支援動態房間)
+        const currentRoom = MapSystem.getRoom(playerData.location);
+        if (!currentRoom) return;
+
+        const range = 2; // 顯示半徑 (5x5)
+        const cx = currentRoom.x;
+        const cy = currentRoom.y;
+        const cz = currentRoom.z;
+
+        let html = '<div class="map-grid">';
+
+        // Y 軸從上到下 (y+ 在上)
+        for (let y = cy + range; y >= cy - range; y--) {
+            for (let x = cx - range; x <= cx + range; x++) {
+                let cellClass = "map-cell";
+                let symbol = "&nbsp;";
+                let tooltip = "";
+
+                // [核心修改] 使用 MapSystem.getRoomAt 來查詢座標
+                const room = MapSystem.getRoomAt(x, y, cz);
+
+                if (room) {
+                    if (x === cx && y === cy) {
+                        cellClass += " map-center";
+                        symbol = '<i class="fas fa-user"></i>';
+                        tooltip = "你";
+                    } else {
+                        // 判斷房間類型給顏色
+                        if (room.safe) cellClass += " map-safe";
+                        else if (room.isDynamic) cellClass += " map-road"; // 動態路徑
+                        else if (room.region && room.region.includes("forest")) cellClass += " map-danger";
+                        else cellClass += " map-normal";
+                        
+                        // 簡化顯示：只取第一個字或特定符號
+                        if (room.title.includes("森林")) symbol = "林";
+                        else if (room.title.includes("客棧")) symbol = "店";
+                        else if (room.title.includes("武館")) symbol = "武";
+                        else if (room.title.includes("門")) symbol = "門";
+                        else if (room.isDynamic) symbol = "‧"; // 路徑顯示小點
+                        else symbol = "□";
+                        
+                        tooltip = room.title;
                     }
+                } else {
+                    cellClass += " map-empty";
                 }
 
-                if (roomData) {
-                    div.classList.add('room-exists');
-                    div.title = roomData.title;
-                    
-                    if (x === px && y === py) {
-                        div.classList.add('current-pos');
-                        div.innerHTML = '<i class="fas fa-user"></i>';
-                    } else {
-                        if (roomData.walls) {
-                            if (roomData.walls.includes('north')) div.classList.add('wall-north');
-                            if (roomData.walls.includes('south')) div.classList.add('wall-south');
-                            if (roomData.walls.includes('east'))  div.classList.add('wall-east');
-                            if (roomData.walls.includes('west'))  div.classList.add('wall-west');
-                        }
-                    }
-                } 
-                grid.appendChild(div);
+                html += `<div class="${cellClass}" title="${tooltip}">${symbol}</div>`;
             }
         }
+        html += '</div>';
         
-        const zInfo = document.createElement('div');
-        zInfo.style.position = 'absolute';
-        zInfo.style.bottom = '5px';
-        zInfo.style.right = '5px';
-        zInfo.style.fontSize = '10px';
-        zInfo.style.color = '#555';
-        zInfo.style.background = 'rgba(0,0,0,0.5)';
-        zInfo.style.padding = '2px 4px';
-        zInfo.style.borderRadius = '3px';
-        zInfo.textContent = `層: ${pz}`;
-        miniMapBox.appendChild(zInfo);
-        miniMapBox.appendChild(grid);
+        // 顯示層數
+        const zInfo = `<div style="position:absolute; bottom:5px; right:5px; font-size:10px; color:#555; background:rgba(0,0,0,0.5); padding:2px 4px;">層: ${cz}</div>`;
+        
+        miniMapBox.innerHTML = html + zInfo;
     },
 
     updateLocationInfo: (roomTitle) => { 
@@ -314,7 +314,7 @@ export const UI = {
             }
         };
 
-        // [新增] 處理巨集設定的輔助函式
+        // 處理巨集設定的輔助函式
         const handleMacroConfig = (id) => {
             const currentName = (localMacros[id] && localMacros[id].name) || "";
             const currentCmd = (localMacros[id] && localMacros[id].cmd) || "";
@@ -336,7 +336,7 @@ export const UI = {
         sendBtn.addEventListener('click', sendHandler);
         input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendHandler(); });
 
-        // [新增] 右鍵監聽 (Context Menu) 用於設定巨集
+        // 右鍵監聽 (Context Menu) 用於設定巨集
         document.body.addEventListener('contextmenu', (e) => {
             const btn = e.target.closest('.btn-macro');
             if (btn) {
@@ -350,7 +350,7 @@ export const UI = {
             const btn = e.target.closest('button');
             if (!btn) return;
             
-            // [新增] 巨集按鈕左鍵邏輯
+            // 巨集按鈕左鍵邏輯
             if (btn.classList.contains('btn-macro')) {
                 const id = btn.dataset.macroId;
                 const setting = localMacros[id];

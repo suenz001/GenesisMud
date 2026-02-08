@@ -12,7 +12,7 @@
     --accent-orange: #ff9900;
     --accent-purple: #cc66ff;
     
-    /* [新增] 統一儀表板高度變數，確保切換時不跳動 */
+    /* 統一儀表板高度變數，確保切換時不跳動 */
     --panel-fixed-height: 280px; 
 }
 
@@ -145,7 +145,7 @@ body {
     box-shadow: 0 2px 5px rgba(0,0,0,0.3);
 }
 
-/* --- 1. 雷達地圖 --- */
+/* --- 1. 雷達地圖 (更新支援動態地圖) --- */
 #panel-radar {
     padding: 0;
     overflow: hidden;
@@ -173,9 +173,11 @@ body {
         linear-gradient(#1a1a1a 1px, transparent 1px),
         linear-gradient(90deg, #1a1a1a 1px, transparent 1px);
     background-size: 20px 20px;
+    position: relative;
 }
 
-.range-map-grid {
+/* [新增] 地圖格線容器 */
+.map-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     grid-template-rows: repeat(5, 1fr);
@@ -186,23 +188,27 @@ body {
     aspect-ratio: 1;
 }
 
-.map-cell-range {
+/* [新增] 地圖單元格樣式 */
+.map-cell {
+    background: #222;
+    border: 1px solid #333;
     border-radius: 2px;
     display: flex;
     justify-content: center;
     align-items: center;
     font-size: 10px;
-    color: #444;
-    transition: all 0.3s;
+    color: #555;
+    transition: all 0.2s;
+    cursor: default;
 }
 
-.map-cell-range.room-exists {
-    background: #2a2a2a;
-    border: 1px solid #444;
-    color: #888;
-}
+/* [新增] 特殊地形顏色 */
+.map-road { background-color: #444; color: #888; border-color: #555; }
+.map-safe { border-color: var(--accent-green); color: var(--accent-green); background: #1a2a1a; }
+.map-danger { border-color: var(--accent-red); background: #2a1a1a; }
+.map-normal { background: #2a2a2a; border-color: #444; color: #888; }
 
-.map-cell-range.current-pos {
+.map-center {
     background: radial-gradient(circle, var(--accent-green) 0%, transparent 70%);
     border: 1px solid var(--accent-green);
     color: #fff;
@@ -211,39 +217,39 @@ body {
     animation: pulse 2s infinite;
 }
 
+.map-empty {
+    background: transparent;
+    border: none;
+}
+
 @keyframes pulse {
     0% { box-shadow: 0 0 0 0 rgba(51, 255, 51, 0.4); }
     70% { box-shadow: 0 0 0 5px rgba(51, 255, 51, 0); }
     100% { box-shadow: 0 0 0 0 rgba(51, 255, 51, 0); }
 }
 
-.wall-north { border-top: 2px solid var(--accent-red) !important; }
-.wall-south { border-bottom: 2px solid var(--accent-red) !important; }
-.wall-east  { border-right: 2px solid var(--accent-red) !important; }
-.wall-west  { border-left: 2px solid var(--accent-red) !important; }
-
 /* --- 中段容器與面板切換 --- */
 #mid-panel-container {
     transition: all 0.2s;
 }
 
-/* [修改] 儀表板群組：強制固定高度 */
+/* 儀表板群組：強制固定高度 */
 #panel-stats-group {
     display: flex;
     flex-direction: column;
-    gap: 10px; /* Vitals 和 Enforce 中間的縫隙 */
-    height: var(--panel-fixed-height); /* 強制高度 */
+    gap: 10px; 
+    height: var(--panel-fixed-height); 
     min-height: var(--panel-fixed-height);
     max-height: var(--panel-fixed-height);
 }
 
-/* [修改] 觀察面板：強制固定高度，與上方一致 */
+/* 觀察面板：強制固定高度，與上方一致 */
 #panel-inspection {
     text-align: center;
     background: #0f0f0f;
     border: 1px solid var(--accent-green);
     
-    height: var(--panel-fixed-height); /* 強制高度 */
+    height: var(--panel-fixed-height); 
     min-height: var(--panel-fixed-height);
     max-height: var(--panel-fixed-height);
     
@@ -303,7 +309,6 @@ body {
 }
 
 /* --- 3. 精氣神 (Vitals) --- */
-/* [新增] 讓 Vitals 面板佔滿剩餘空間 (扣除 Enforce 的空間) */
 #panel-vitals {
     flex-grow: 1;
     display: flex;
@@ -314,7 +319,7 @@ body {
 .vital-row {
     display: flex;
     align-items: center;
-    margin-bottom: 6px; /* 微調 */
+    margin-bottom: 6px; 
     gap: 8px;
 }
 
@@ -359,7 +364,7 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
-    margin-bottom: 8px; /* 微調 */
+    margin-bottom: 8px; 
     padding-top: 5px;
     border-top: 1px solid #333;
 }
@@ -394,7 +399,7 @@ body {
 .survival-grid {
     display: flex;
     gap: 10px;
-    margin-top: auto; /* 推到底部 */
+    margin-top: auto; 
     background: rgba(0,0,0,0.3);
     padding: 5px;
     border-radius: 4px;
@@ -436,8 +441,8 @@ body {
 
 /* --- 4. 內力控制 (Enforce) --- */
 #panel-enforce {
-    flex-shrink: 0; /* 防止被壓縮 */
-    height: 50px; /* 給予固定高度 */
+    flex-shrink: 0; 
+    height: 50px; 
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -494,29 +499,27 @@ body {
 }
 .enforce-display .unit { font-size: 10px; color: #666; font-weight: normal; }
 
-/* --- 5. 移動與快捷 (Modified) --- */
+/* --- 5. 移動與快捷 --- */
 #panel-move {
     display: flex;
-    flex-direction: row; /* [修改] 改為橫向排列 */
+    flex-direction: row; 
     align-items: center;
-    justify-content: space-between; /* 左右分開 */
+    justify-content: space-between; 
     gap: 5px;
 }
 
-/* [新增] 左側快捷鍵區 */
 .move-shortcuts {
     display: grid;
-    grid-template-columns: 1fr 1fr; /* 兩欄 */
-    gap: 4px; /* [修改] 縮小間距，確保 10 顆按鈕塞得下 */
-    flex: 1; /* 佔據左側空間 */
+    grid-template-columns: 1fr 1fr; 
+    gap: 4px; 
+    flex: 1; 
 }
 
-/* [新增] 小按鈕樣式 */
 .btn-action-sm {
     background: #222;
     border: 1px solid #444;
     color: #ccc;
-    padding: 5px 2px; /* [修改] 縮小 Padding */
+    padding: 5px 2px; 
     font-size: 11px;
     border-radius: 4px;
     cursor: pointer;
@@ -529,7 +532,6 @@ body {
     background: #333;
 }
 
-/* [新增] 自定義按鈕專屬樣式 */
 .btn-macro {
     border-color: #555; 
     color: #888;
@@ -547,7 +549,6 @@ body {
     border-style: solid;
 }
 
-/* [修改] 右側移動控制區 */
 .move-controls {
     display: flex;
     flex-direction: column;
@@ -619,7 +620,7 @@ body {
 }
 .btn-v-move:hover { background: #333; color: #fff; border-color: #666; }
 
-/* --- 6. 工具列 (Grid) --- */
+/* --- 6. 工具列 --- */
 #panel-utility { padding: 5px; }
 
 .utility-grid {

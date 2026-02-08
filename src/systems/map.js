@@ -35,13 +35,11 @@ function getNpcStatusText(currentHp, maxHp, isUnconscious) {
     return UI.txt(" (擦傷)", "#cccccc");
 }
 
-// === 自動計算方向輔助函式 ===
 function getDirectionFromCoords(fromX, fromY, toX, toY) {
     const dx = toX - fromX;
     const dy = toY - fromY;
     const angle = Math.atan2(dy, dx) * 180 / Math.PI;
 
-    // 將角度映射到 8 個方向
     if (angle >= 67.5 && angle < 112.5) return 'north';
     if (angle >= 22.5 && angle < 67.5) return 'northeast';
     if (angle >= -22.5 && angle < 22.5) return 'east';
@@ -63,50 +61,32 @@ function getReverseDirection(dir) {
     return map[dir] || 'unknown';
 }
 
-// === 路徑描述生成器 ===
 function getPathDescription(type, step, total) {
     const progress = Math.floor((step / total) * 100);
     let baseDesc = "";
     
     switch(type) {
-        case "official_road":
-            baseDesc = "這是一條寬闊平坦的官道，路面由青石板鋪成，可容兩輛馬車並行。";
-            break;
-        case "misty_road":
-            baseDesc = "四周霧氣瀰漫，道路兩旁的樹木影影綽綽，顯得有些陰森。";
-            break;
-        case "mountain_path":
-            baseDesc = "山路崎嶇不平，兩旁怪石嶙峋，偶爾能聽到猿啼鳥鳴。";
-            break;
-        case "shu_road":
-            baseDesc = "棧道沿著懸崖峭壁修建，下方是奔騰的江水，令人頭暈目眩。";
-            break;
-        case "desert":
-            baseDesc = "放眼望去，黃沙漫天，除了偶爾見到的枯骨，看不到任何生命的跡象。";
-            break;
-        case "snow_path":
-            baseDesc = "寒風呼嘯，大雪紛飛，每走一步都要消耗極大的體力。";
-            break;
-        case "bamboo_path":
-            baseDesc = "走在幽靜的竹林小徑中，陽光透過竹葉灑下斑駁的光點。";
-            break;
-        default:
-            baseDesc = "這是一條荒野小徑。";
+        case "official_road": baseDesc = "這是一條寬闊平坦的官道。"; break;
+        case "misty_road": baseDesc = "四周霧氣瀰漫，道路兩旁的樹木影影綽綽。"; break;
+        case "mountain_path": baseDesc = "山路崎嶇不平，偶爾能聽到猿啼鳥鳴。"; break;
+        case "shu_road": baseDesc = "棧道沿著懸崖峭壁修建，令人頭暈目眩。"; break;
+        case "desert": baseDesc = "放眼望去，黃沙漫天，看不到任何生命的跡象。"; break;
+        case "snow_path": baseDesc = "寒風呼嘯，大雪紛飛。"; break;
+        case "bamboo_path": baseDesc = "幽靜的竹林小徑。"; break;
+        default: baseDesc = "這是一條荒野小徑。";
     }
 
-    if (step === 1) return baseDesc + " 這裡是旅程的起點，回頭還能看到出發地。";
+    if (step === 1) return baseDesc + " 這裡是旅程的起點。";
     if (step === total) return baseDesc + " 前方似乎已經到了目的地。";
     if (progress < 50) return baseDesc + " 路途還很遙遠。";
     return baseDesc + " 目的地似乎不遠了。";
 }
 
 export const MapSystem = {
-    // === [修改] 支援動態房間生成 ===
+    // 1. 根據 ID 獲取房間 (原有邏輯)
     getRoom: (roomId) => {
-        // 1. 先查靜態地圖
         if (WorldMap[roomId]) return WorldMap[roomId];
 
-        // 2. 檢查是否為動態路徑 ID (格式: road:<pathId>:<step>)
         if (roomId.startsWith("road:")) {
             const parts = roomId.split(":");
             const pathId = parts[1];
@@ -120,56 +100,96 @@ export const MapSystem = {
             
             if (!fromNode || !toNode) return null;
 
-            // 線性插值計算虛擬座標 (用於雷達圖顯示)
             const ratio = step / (pathConfig.distance + 1);
             const curX = Math.round(fromNode.x + (toNode.x - fromNode.x) * ratio);
             const curY = Math.round(fromNode.y + (toNode.y - fromNode.y) * ratio);
-            const curZ = fromNode.z; // 假設路徑在同一平面，除非特殊處理
+            const curZ = fromNode.z;
 
             return {
                 id: roomId,
-                title: `${pathConfig.name || "旅途"} (${step}/${pathConfig.distance})`,
+                title: `${pathConfig.desc.substring(0, 4)}...`, 
                 description: getPathDescription(pathConfig.type, step, pathConfig.distance),
                 x: curX, y: curY, z: curZ,
                 region: ["world", "road"],
-                isDynamic: true // 標記為動態房間
+                isDynamic: true 
             };
         }
         return null;
     },
 
-    // === [修改] 計算所有可用出口 (靜態 + 動態) ===
+    // 2. [新增] 根據座標獲取房間 (給 UI 畫地圖用)
+    getRoomAt: (x, y, z) => {
+        // (A) 先找靜態房間
+        // 為了效能，這裡用 Object.values 遍歷。
+        // 如果地圖非常大，建議建立一個 Map<"x,y,z", Room> 的快取索引
+        const staticRoom = Object.values(WorldMap).find(r => r.x === x && r.y === y && r.z === z);
+        if (staticRoom) {
+            // 需要回傳包含 id 的物件
+            const id = Object.keys(WorldMap).find(key => WorldMap[key] === staticRoom);
+            return { ...staticRoom, id: id };
+        }
+
+        // (B) 再找動態路徑上的點
+        for (const path of WorldPaths) {
+            const fromNode = WorldMap[path.from];
+            const toNode = WorldMap[path.to];
+            
+            // 簡單的包圍盒優化 (Bounding Box Check)
+            const minX = Math.min(fromNode.x, toNode.x);
+            const maxX = Math.max(fromNode.x, toNode.x);
+            const minY = Math.min(fromNode.y, toNode.y);
+            const maxY = Math.max(fromNode.y, toNode.y);
+
+            // 如果目標座標根本不在這條路的矩形範圍內，跳過 (容許誤差 1 格)
+            if (x < minX - 1 || x > maxX + 1 || y < minY - 1 || y > maxY + 1) continue;
+            if (fromNode.z !== z) continue; // 假設目前路徑不跨層
+
+            // 遍歷這條路的所有步數，看看有沒有一點剛好對上 (x, y)
+            for (let s = 1; s <= path.distance; s++) {
+                const ratio = s / (path.distance + 1);
+                const cx = Math.round(fromNode.x + (toNode.x - fromNode.x) * ratio);
+                const cy = Math.round(fromNode.y + (toNode.y - fromNode.y) * ratio);
+
+                if (cx === x && cy === y) {
+                    return {
+                        id: `road:${path.id}:${s}`,
+                        title: "道路",
+                        x: cx, y: cy, z: z,
+                        region: ["world", "road"],
+                        isDynamic: true
+                    };
+                }
+            }
+        }
+        return null;
+    },
+
     getAvailableExits: (currentRoomId) => {
-        const room = MapSystem.getRoom(currentRoomId); // 使用新的 getRoom
+        const room = MapSystem.getRoom(currentRoomId);
         if (!room) return {};
         
         const exits = {};
         
-        // 1. 靜態房間的原生出口 (exits 屬性)
         if (room.exits) Object.assign(exits, room.exits);
 
-        // 2. 靜態房間的自動鄰居偵測 (保留原有邏輯)
         if (!room.isDynamic) {
             const currentRegions = room.region || ["world"];
             for (const [dir, offset] of Object.entries(DIR_OFFSET)) {
                 if (room.walls && room.walls.includes(dir)) continue;
-                const targetX = room.x + offset.x;
-                const targetY = room.y + offset.y;
-                const targetZ = room.z + offset.z;
+                // 利用 getRoomAt 來檢查鄰居，這樣也能看到動態道路！
+                const targetRoom = MapSystem.getRoomAt(room.x + offset.x, room.y + offset.y, room.z + offset.z);
                 
-                // 只檢查 WorldMap 裡的靜態房間
-                for (const [targetId, targetRoom] of Object.entries(WorldMap)) {
-                    if (targetRoom.x === targetX && targetRoom.y === targetY && targetRoom.z === targetZ) {
-                        const targetRegions = targetRoom.region || ["world"];
-                        const hasCommonRegion = currentRegions.some(r => targetRegions.includes(r));
-                        if (hasCommonRegion && !exits[dir]) exits[dir] = targetId;
+                if (targetRoom) {
+                    const targetRegions = targetRoom.region || ["world"];
+                    const hasCommonRegion = currentRegions.some(r => targetRegions.includes(r));
+                    
+                    // 特例：如果是路，允許從 world 連接
+                    if (targetRoom.isDynamic || hasCommonRegion) {
+                        if (!exits[dir]) exits[dir] = targetRoom.id;
                     }
                 }
             }
 
-            // 3. 檢查此靜態房間是否為某條路徑的「起點」或「終點」
-            // 若是起點 -> 增加往 road:pathId:1 的出口
-            // 若是終點 -> 增加往 road:pathId:max 的出口
             for (const path of WorldPaths) {
                 if (path.from === currentRoomId) {
                     const toNode = WorldMap[path.to];
@@ -183,7 +203,6 @@ export const MapSystem = {
                 }
             }
         }
-        // 4. 動態房間的出口計算
         else if (room.isDynamic) {
             const parts = currentRoomId.split(":");
             const pathId = parts[1];
@@ -194,20 +213,18 @@ export const MapSystem = {
                 const fromNode = WorldMap[pathConfig.from];
                 const toNode = WorldMap[pathConfig.to];
 
-                // 前進方向 (step + 1)
                 const forwardDir = getDirectionFromCoords(fromNode.x, fromNode.y, toNode.x, toNode.y);
                 if (step < pathConfig.distance) {
                     exits[forwardDir] = `road:${pathId}:${step + 1}`;
                 } else {
-                    exits[forwardDir] = pathConfig.to; // 到達終點
+                    exits[forwardDir] = pathConfig.to; 
                 }
 
-                // 後退方向 (step - 1)
                 const backwardDir = getReverseDirection(forwardDir);
                 if (step > 1) {
                     exits[backwardDir] = `road:${pathId}:${step - 1}`;
                 } else {
-                    exits[backwardDir] = pathConfig.from; // 回到起點
+                    exits[backwardDir] = pathConfig.from; 
                 }
             }
         }
@@ -215,20 +232,18 @@ export const MapSystem = {
         return exits;
     },
 
-    // === 核心功能：觀察房間 (Look) ===
     look: async (playerData) => {
         if (!playerData || !playerData.location) return;
         
         UI.hideInspection();
         
-        const room = MapSystem.getRoom(playerData.location); // 使用新的 getRoom
+        const room = MapSystem.getRoom(playerData.location); 
         if (!room) { UI.print("你陷入虛空...", "error"); return; }
 
-        // 動態房間不需要監聽 Log (節省資源)，或者給一個通用的 road log
         if (!room.isDynamic) {
             MessageSystem.listenToRoom(playerData.location);
         } else {
-            MessageSystem.stopListening(); // 停止監聽上一間房
+            MessageSystem.stopListening();
         }
 
         UI.updateLocationInfo(room.title);
@@ -237,122 +252,121 @@ export const MapSystem = {
         if (room.safe) UI.print(UI.txt("【 安全區 】", "#00ff00"), "system", true);
         UI.print(room.description);
 
-        // 1. 取得並顯示房間內的其他玩家 (動態房間也能看到人，但機率低)
-        let playersInRoom = [];
-        try {
-            const playersRef = collection(db, "players");
-            const q = query(playersRef, where("location", "==", playerData.location));
-            const querySnapshot = await getDocs(q);
-            const now = Date.now();
-
-            querySnapshot.forEach(doc => {
-                const p = doc.data();
-                if (now - (p.lastActive || 0) > 600000) return;
-                playersInRoom.push(p); 
-            });
-        } catch (e) { console.error(e); }
-
-        if (playersInRoom.length > 0) {
-            let playerHtml = "";
-            playersInRoom.forEach((p) => {
-                if (auth.currentUser && p.id === playerData.id) return; 
-
-                let status = "";
-                if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
-                else if (p.state === 'exercising') status = UI.txt(" (正在運功修練)", "#ffff00"); 
-                
-                if (p.isUnconscious) status += UI.txt(" (昏迷)", "#888");
-
-                const lookLink = UI.makeCmd(p.name, `look ${p.id}`, "cmd-link");
-                const fightBtn = UI.makeCmd("[切磋]", `fight ${p.id}`, "cmd-btn");
-                
-                playerHtml += `<div style="margin-top:2px;">[ 玩家 ] ${lookLink} <span style="color:#aaa">(${p.id})</span>${status} ${fightBtn}</div>`;
-            });
-            if (playerHtml) UI.print(playerHtml, "chat", true);
-        }
-
-        // 2. 讀取與顯示 NPC (動態房間目前不生怪，除了隨機遭遇，未來可擴充)
-        if (room.npcs && room.npcs.length > 0) {
-            // ... (保留原有的 NPC 顯示邏輯，如果是動態房間通常沒有 npcs 屬性，除非特殊生成)
-            // 這裡為了節省篇幅，且動態房間暫無固定 NPC，略過詳細代碼，僅保留邏輯結構
-            // 若 world.js 定義了 NPC (如靜態房間)，則照常顯示
-            const activeNpcMap = new Map();
+        // 動態房間目前不顯示其他玩家與 NPC，除非剛好重疊
+        // 為保持體驗流暢，這裡只對靜態房間做複雜的資料庫查詢
+        // 若要讓路上也能看到人，需要對 firebase query 做調整 (road:*)
+        if (!room.isDynamic) {
+            let playersInRoom = [];
             try {
-                const activeRef = collection(db, "active_npcs");
-                const qActive = query(activeRef, where("roomId", "==", playerData.location));
-                const activeSnaps = await getDocs(qActive);
-                activeSnaps.forEach(doc => { activeNpcMap.set(doc.id, doc.data()); });
-            } catch(e) {}
-
-            let deadIndices = [];
-            try {
-                const deadRef = collection(db, "dead_npcs");
-                const q = query(deadRef, where("roomId", "==", playerData.location));
-                const snapshot = await getDocs(q);
+                const playersRef = collection(db, "players");
+                const q = query(playersRef, where("location", "==", playerData.location));
+                const querySnapshot = await getDocs(q);
                 const now = Date.now();
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    if (now >= data.respawnTime) deleteDoc(doc.ref); 
-                    else if (room.npcs[data.index] === data.npcId) deadIndices.push(data.index);
+
+                querySnapshot.forEach(doc => {
+                    const p = doc.data();
+                    if (now - (p.lastActive || 0) > 600000) return;
+                    playersInRoom.push(p); 
                 });
+            } catch (e) { console.error(e); }
+
+            if (playersInRoom.length > 0) {
+                let playerHtml = "";
+                playersInRoom.forEach((p) => {
+                    if (auth.currentUser && p.id === playerData.id) return; 
+
+                    let status = "";
+                    if (p.state === 'fighting') status = UI.txt(" 【戰鬥中】", "#ff0000", true);
+                    else if (p.state === 'exercising') status = UI.txt(" (正在運功修練)", "#ffff00"); 
+                    
+                    if (p.isUnconscious) status += UI.txt(" (昏迷)", "#888");
+
+                    const lookLink = UI.makeCmd(p.name, `look ${p.id}`, "cmd-link");
+                    const fightBtn = UI.makeCmd("[切磋]", `fight ${p.id}`, "cmd-btn");
+                    
+                    playerHtml += `<div style="margin-top:2px;">[ 玩家 ] ${lookLink} <span style="color:#aaa">(${p.id})</span>${status} ${fightBtn}</div>`;
+                });
+                if (playerHtml) UI.print(playerHtml, "chat", true);
+            }
+
+            if (room.npcs && room.npcs.length > 0) {
+                const activeNpcMap = new Map();
+                try {
+                    const activeRef = collection(db, "active_npcs");
+                    const qActive = query(activeRef, where("roomId", "==", playerData.location));
+                    const activeSnaps = await getDocs(qActive);
+                    activeSnaps.forEach(doc => { activeNpcMap.set(doc.id, doc.data()); });
+                } catch(e) {}
+
+                let deadIndices = [];
+                try {
+                    const deadRef = collection(db, "dead_npcs");
+                    const q = query(deadRef, where("roomId", "==", playerData.location));
+                    const snapshot = await getDocs(q);
+                    const now = Date.now();
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        if (now >= data.respawnTime) deleteDoc(doc.ref); 
+                        else if (room.npcs[data.index] === data.npcId) deadIndices.push(data.index);
+                    });
+                } catch (e) {}
+
+                const npcCounts = {};
+                let npcListHtml = "";
+                room.npcs.forEach((npcId, index) => {
+                    if (deadIndices.includes(index)) return;
+                    const npc = NPCDB[npcId];
+                    if (npc) {
+                        if (!npcCounts[npcId]) npcCounts[npcId] = 0;
+                        npcCounts[npcId]++;
+                        const npcOrder = npcCounts[npcId];
+
+                        const uniqueId = getUniqueNpcId(playerData.location, npcId, index);
+                        let statusTag = "";
+                        let isUnconscious = false;
+                        
+                        if (activeNpcMap.has(uniqueId)) {
+                            const activeData = activeNpcMap.get(uniqueId);
+                            isUnconscious = activeData.isUnconscious || activeData.currentHp <= 0;
+                            statusTag += getNpcStatusText(activeData.currentHp, activeData.maxHp, isUnconscious);
+                            if (!isUnconscious && activeData.targetId) statusTag += UI.txt(" 【戰鬥中】", "#ff0000", true);
+                        }
+
+                        const diff = CombatSystem.getDifficultyInfo(playerData, npcId);
+                        const coloredName = UI.txt(npc.name, diff.color);
+                        
+                        let links = `${coloredName} <span style="color:#aaa">(${npc.id})</span>${statusTag} `;
+                        links += UI.makeCmd("[看]", `look ${npc.id} ${npcOrder}`, "cmd-btn");
+                        
+                        if (isUnconscious) {
+                            links += UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
+                        } else {
+                            const isMyMaster = (playerData.family && playerData.family.masterId === npc.id);
+                            if (!isMyMaster && npc.family) links += UI.makeCmd("[拜師]", `apprentice ${npc.id} ${npcOrder}`, "cmd-btn");
+                            if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id} ${npcOrder}`, "cmd-btn");
+                            links += UI.makeCmd("[戰鬥]", `fight ${npc.id} ${npcOrder}`, "cmd-btn");
+                            links += UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
+                        }
+                        npcListHtml += `<div style="margin-top:4px;">${links}</div>`;
+                    }
+                });
+                if (npcListHtml) UI.print(npcListHtml, "chat", true);
+            }
+
+            try {
+                const itemsRef = collection(db, "room_items");
+                const qItems = query(itemsRef, where("roomId", "==", playerData.location));
+                const itemSnapshot = await getDocs(qItems);
+                let itemHtml = "";
+                itemSnapshot.forEach((doc) => {
+                    const item = doc.data();
+                    let link = `${UI.txt(item.name, "#ddd")} <span style="color:#666">(${item.itemId})</span> `;
+                    link += UI.makeCmd("[撿取]", `get ${item.itemId}`, "cmd-btn");
+                    itemHtml += `<div style="margin-top:2px;">${link}</div>`;
+                });
+                if (itemHtml) UI.print(itemHtml, "chat", true);
             } catch (e) {}
-
-            const npcCounts = {};
-            let npcListHtml = "";
-            room.npcs.forEach((npcId, index) => {
-                if (deadIndices.includes(index)) return;
-                const npc = NPCDB[npcId];
-                if (npc) {
-                    if (!npcCounts[npcId]) npcCounts[npcId] = 0;
-                    npcCounts[npcId]++;
-                    const npcOrder = npcCounts[npcId];
-
-                    const uniqueId = getUniqueNpcId(playerData.location, npcId, index);
-                    let statusTag = "";
-                    let isUnconscious = false;
-                    
-                    if (activeNpcMap.has(uniqueId)) {
-                        const activeData = activeNpcMap.get(uniqueId);
-                        isUnconscious = activeData.isUnconscious || activeData.currentHp <= 0;
-                        statusTag += getNpcStatusText(activeData.currentHp, activeData.maxHp, isUnconscious);
-                        if (!isUnconscious && activeData.targetId) statusTag += UI.txt(" 【戰鬥中】", "#ff0000", true);
-                    }
-
-                    const diff = CombatSystem.getDifficultyInfo(playerData, npcId);
-                    const coloredName = UI.txt(npc.name, diff.color);
-                    
-                    let links = `${coloredName} <span style="color:#aaa">(${npc.id})</span>${statusTag} `;
-                    links += UI.makeCmd("[看]", `look ${npc.id} ${npcOrder}`, "cmd-btn");
-                    
-                    if (isUnconscious) {
-                        links += UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
-                    } else {
-                        const isMyMaster = (playerData.family && playerData.family.masterId === npc.id);
-                        if (!isMyMaster && npc.family) links += UI.makeCmd("[拜師]", `apprentice ${npc.id} ${npcOrder}`, "cmd-btn");
-                        if (npc.shop) links += UI.makeCmd("[商品]", `list ${npc.id} ${npcOrder}`, "cmd-btn");
-                        links += UI.makeCmd("[戰鬥]", `fight ${npc.id} ${npcOrder}`, "cmd-btn");
-                        links += UI.makeCmd("[殺]", `kill ${npc.id} ${npcOrder}`, "cmd-btn cmd-btn-buy");
-                    }
-                    npcListHtml += `<div style="margin-top:4px;">${links}</div>`;
-                }
-            });
-            if (npcListHtml) UI.print(npcListHtml, "chat", true);
         }
-
-        // 3. 顯示地板物品
-        try {
-            const itemsRef = collection(db, "room_items");
-            const qItems = query(itemsRef, where("roomId", "==", playerData.location));
-            const itemSnapshot = await getDocs(qItems);
-            let itemHtml = "";
-            itemSnapshot.forEach((doc) => {
-                const item = doc.data();
-                let link = `${UI.txt(item.name, "#ddd")} <span style="color:#666">(${item.itemId})</span> `;
-                link += UI.makeCmd("[撿取]", `get ${item.itemId}`, "cmd-btn");
-                itemHtml += `<div style="margin-top:2px;">${link}</div>`;
-            });
-            if (itemHtml) UI.print(itemHtml, "chat", true);
-        } catch (e) {}
 
         if (room.hasWell) UI.print(`這裡有一口清澈的${UI.txt("水井", "#00ffff")}。 ${UI.makeCmd("[喝水]", "drink water", "cmd-btn")}`, "chat", true);
 
@@ -365,13 +379,7 @@ export const MapSystem = {
         }
     },
 
-    // === 核心功能：觀察特定目標 (Look Target) ===
-    // (這部分邏輯與地圖結構無關，保持原樣即可，為節省篇幅不重複貼上，請保留原有的 lookTarget 函數)
     lookTarget: async (playerData, targetIdOrName, targetOrder = 1) => {
-        // ... (保持原有的 lookTarget 內容)
-        // 為了確保完整性，如果需要我可以把原本的 lookTarget 完整貼過來，
-        // 但基於您要求「提供完整檔案」，我會把前面的 lookTarget 複製過來
-        
         UI.hideInspection();
         if (typeof targetOrder === 'string') targetOrder = parseInt(targetOrder) || 1;
 
@@ -392,7 +400,7 @@ export const MapSystem = {
             }
         }
 
-        const room = MapSystem.getRoom(playerData.location); // 使用新的 getRoom
+        const room = MapSystem.getRoom(playerData.location); 
         if (room.npcs) {
             let targetNpcId = null;
             let realIndex = -1;
@@ -561,7 +569,7 @@ export const MapSystem = {
 
         const validExits = MapSystem.getAvailableExits(playerData.location);
         if (!validExits[direction]) {
-            const room = MapSystem.getRoom(playerData.location); // 使用新的 getRoom
+            const room = MapSystem.getRoom(playerData.location); 
             if (room && room.walls && room.walls.includes(direction)) UI.print("那邊是一面牆，過不去。", "error");
             else UI.print("那個方向沒有路。", "error");
             return;
@@ -609,7 +617,7 @@ export const MapSystem = {
             return;
         }
 
-        if (!WorldMap[targetRoomId]) return UI.print("目標地點不存在。", "error");
+        if (!MapSystem.getRoom(targetRoomId)) return UI.print("目標地點不存在。", "error");
         
         if (playerData.state === 'fighting' && CommandSystem.stopCombat) {
             CommandSystem.stopCombat(userId);
