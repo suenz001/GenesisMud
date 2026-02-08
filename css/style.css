@@ -145,7 +145,7 @@ body {
     box-shadow: 0 2px 5px rgba(0,0,0,0.3);
 }
 
-/* --- 1. 雷達地圖 (更新支援動態地圖) --- */
+/* --- 1. 雷達地圖 --- */
 #panel-radar {
     padding: 0;
     overflow: hidden;
@@ -176,7 +176,6 @@ body {
     position: relative;
 }
 
-/* [新增] 地圖格線容器 */
 .map-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
@@ -188,7 +187,6 @@ body {
     aspect-ratio: 1;
 }
 
-/* [新增] 地圖單元格樣式 */
 .map-cell {
     background: #222;
     border: 1px solid #333;
@@ -200,9 +198,9 @@ body {
     color: #555;
     transition: all 0.2s;
     cursor: default;
+    box-sizing: border-box; /* 確保邊框算在寬度內 */
 }
 
-/* [新增] 特殊地形顏色 */
 .map-road { background-color: #444; color: #888; border-color: #555; }
 .map-safe { border-color: var(--accent-green); color: var(--accent-green); background: #1a2a1a; }
 .map-danger { border-color: var(--accent-red); background: #2a1a1a; }
@@ -216,6 +214,12 @@ body {
     box-shadow: 0 0 10px rgba(51, 255, 51, 0.2);
     animation: pulse 2s infinite;
 }
+
+/* [新增] 牆壁紅線樣式 */
+.wall-top { border-top: 2px solid #ff0000 !important; }
+.wall-bottom { border-bottom: 2px solid #ff0000 !important; }
+.wall-left { border-left: 2px solid #ff0000 !important; }
+.wall-right { border-right: 2px solid #ff0000 !important; }
 
 .map-empty {
     background: transparent;

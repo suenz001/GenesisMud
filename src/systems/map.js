@@ -38,8 +38,19 @@ function getNpcStatusText(currentHp, maxHp, isUnconscious) {
 function getDirectionFromCoords(fromX, fromY, toX, toY) {
     const dx = toX - fromX;
     const dy = toY - fromY;
-    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    
+    // 嚴格判斷相鄰格子的方向 (用於動態路徑的每一步)
+    if (dx === 0 && dy === 1) return 'north';
+    if (dx === 0 && dy === -1) return 'south';
+    if (dx === 1 && dy === 0) return 'east';
+    if (dx === -1 && dy === 0) return 'west';
+    if (dx === 1 && dy === 1) return 'northeast';
+    if (dx === -1 && dy === 1) return 'northwest';
+    if (dx === 1 && dy === -1) return 'southeast';
+    if (dx === -1 && dy === -1) return 'southwest';
 
+    // 如果不是相鄰格子 (例如起點到終點的總方向)，則使用角度判斷
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
     if (angle >= 67.5 && angle < 112.5) return 'north';
     if (angle >= 22.5 && angle < 67.5) return 'northeast';
     if (angle >= -22.5 && angle < 22.5) return 'east';
@@ -82,8 +93,17 @@ function getPathDescription(type, step, total) {
     return baseDesc + " 目的地似乎不遠了。";
 }
 
+// 輔助：計算路徑上某一步驟的座標
+function calculatePathStepCoords(pathConfig, step) {
+    const fromNode = WorldMap[pathConfig.from];
+    const toNode = WorldMap[pathConfig.to];
+    const ratio = step / (pathConfig.distance + 1);
+    const cx = Math.round(fromNode.x + (toNode.x - fromNode.x) * ratio);
+    const cy = Math.round(fromNode.y + (toNode.y - fromNode.y) * ratio);
+    return { x: cx, y: cy, z: fromNode.z };
+}
+
 export const MapSystem = {
-    // 1. 根據 ID 獲取房間 (原有邏輯)
     getRoom: (roomId) => {
         if (WorldMap[roomId]) return WorldMap[roomId];
 
@@ -95,21 +115,13 @@ export const MapSystem = {
             const pathConfig = WorldPaths.find(p => p.id === pathId);
             if (!pathConfig) return null;
 
-            const fromNode = WorldMap[pathConfig.from];
-            const toNode = WorldMap[pathConfig.to];
-            
-            if (!fromNode || !toNode) return null;
-
-            const ratio = step / (pathConfig.distance + 1);
-            const curX = Math.round(fromNode.x + (toNode.x - fromNode.x) * ratio);
-            const curY = Math.round(fromNode.y + (toNode.y - fromNode.y) * ratio);
-            const curZ = fromNode.z;
+            const coords = calculatePathStepCoords(pathConfig, step);
 
             return {
                 id: roomId,
                 title: `${pathConfig.desc.substring(0, 4)}...`, 
                 description: getPathDescription(pathConfig.type, step, pathConfig.distance),
-                x: curX, y: curY, z: curZ,
+                x: coords.x, y: coords.y, z: coords.z,
                 region: ["world", "road"],
                 isDynamic: true 
             };
@@ -117,44 +129,32 @@ export const MapSystem = {
         return null;
     },
 
-    // 2. [新增] 根據座標獲取房間 (給 UI 畫地圖用)
     getRoomAt: (x, y, z) => {
-        // (A) 先找靜態房間
-        // 為了效能，這裡用 Object.values 遍歷。
-        // 如果地圖非常大，建議建立一個 Map<"x,y,z", Room> 的快取索引
         const staticRoom = Object.values(WorldMap).find(r => r.x === x && r.y === y && r.z === z);
         if (staticRoom) {
-            // 需要回傳包含 id 的物件
             const id = Object.keys(WorldMap).find(key => WorldMap[key] === staticRoom);
             return { ...staticRoom, id: id };
         }
 
-        // (B) 再找動態路徑上的點
         for (const path of WorldPaths) {
             const fromNode = WorldMap[path.from];
             const toNode = WorldMap[path.to];
             
-            // 簡單的包圍盒優化 (Bounding Box Check)
             const minX = Math.min(fromNode.x, toNode.x);
             const maxX = Math.max(fromNode.x, toNode.x);
             const minY = Math.min(fromNode.y, toNode.y);
             const maxY = Math.max(fromNode.y, toNode.y);
 
-            // 如果目標座標根本不在這條路的矩形範圍內，跳過 (容許誤差 1 格)
             if (x < minX - 1 || x > maxX + 1 || y < minY - 1 || y > maxY + 1) continue;
-            if (fromNode.z !== z) continue; // 假設目前路徑不跨層
+            if (fromNode.z !== z) continue;
 
-            // 遍歷這條路的所有步數，看看有沒有一點剛好對上 (x, y)
             for (let s = 1; s <= path.distance; s++) {
-                const ratio = s / (path.distance + 1);
-                const cx = Math.round(fromNode.x + (toNode.x - fromNode.x) * ratio);
-                const cy = Math.round(fromNode.y + (toNode.y - fromNode.y) * ratio);
-
-                if (cx === x && cy === y) {
+                const coords = calculatePathStepCoords(path, s);
+                if (coords.x === x && coords.y === y) {
                     return {
                         id: `road:${path.id}:${s}`,
                         title: "道路",
-                        x: cx, y: cy, z: z,
+                        x: coords.x, y: coords.y, z: z,
                         region: ["world", "road"],
                         isDynamic: true
                     };
@@ -172,37 +172,41 @@ export const MapSystem = {
         
         if (room.exits) Object.assign(exits, room.exits);
 
+        // === 靜態房間邏輯 ===
         if (!room.isDynamic) {
             const currentRegions = room.region || ["world"];
             for (const [dir, offset] of Object.entries(DIR_OFFSET)) {
                 if (room.walls && room.walls.includes(dir)) continue;
-                // 利用 getRoomAt 來檢查鄰居，這樣也能看到動態道路！
+                
                 const targetRoom = MapSystem.getRoomAt(room.x + offset.x, room.y + offset.y, room.z + offset.z);
                 
                 if (targetRoom) {
                     const targetRegions = targetRoom.region || ["world"];
                     const hasCommonRegion = currentRegions.some(r => targetRegions.includes(r));
                     
-                    // 特例：如果是路，允許從 world 連接
                     if (targetRoom.isDynamic || hasCommonRegion) {
                         if (!exits[dir]) exits[dir] = targetRoom.id;
                     }
                 }
             }
 
+            // 檢查是否連接到動態路徑 (起點/終點)
             for (const path of WorldPaths) {
                 if (path.from === currentRoomId) {
-                    const toNode = WorldMap[path.to];
-                    const dir = getDirectionFromCoords(room.x, room.y, toNode.x, toNode.y);
+                    // [修正] 計算第一步的確切座標，而非總方向
+                    const nextCoords = calculatePathStepCoords(path, 1);
+                    const dir = getDirectionFromCoords(room.x, room.y, nextCoords.x, nextCoords.y);
                     exits[dir] = `road:${path.id}:1`;
                 }
                 if (path.to === currentRoomId) {
-                    const fromNode = WorldMap[path.from];
-                    const dir = getDirectionFromCoords(room.x, room.y, fromNode.x, fromNode.y);
+                    // [修正] 計算最後一步的確切座標
+                    const prevCoords = calculatePathStepCoords(path, path.distance);
+                    const dir = getDirectionFromCoords(room.x, room.y, prevCoords.x, prevCoords.y);
                     exits[dir] = `road:${path.id}:${path.distance}`;
                 }
             }
         }
+        // === 動態房間邏輯 (修正鬼打牆問題) ===
         else if (room.isDynamic) {
             const parts = currentRoomId.split(":");
             const pathId = parts[1];
@@ -210,20 +214,27 @@ export const MapSystem = {
             const pathConfig = WorldPaths.find(p => p.id === pathId);
             
             if (pathConfig) {
-                const fromNode = WorldMap[pathConfig.from];
-                const toNode = WorldMap[pathConfig.to];
-
-                const forwardDir = getDirectionFromCoords(fromNode.x, fromNode.y, toNode.x, toNode.y);
+                // 1. 前進方向 (Next Step)
                 if (step < pathConfig.distance) {
+                    const nextCoords = calculatePathStepCoords(pathConfig, step + 1);
+                    const forwardDir = getDirectionFromCoords(room.x, room.y, nextCoords.x, nextCoords.y);
                     exits[forwardDir] = `road:${pathId}:${step + 1}`;
                 } else {
+                    // 到達終點
+                    const toNode = WorldMap[pathConfig.to];
+                    const forwardDir = getDirectionFromCoords(room.x, room.y, toNode.x, toNode.y);
                     exits[forwardDir] = pathConfig.to; 
                 }
 
-                const backwardDir = getReverseDirection(forwardDir);
+                // 2. 後退方向 (Previous Step)
                 if (step > 1) {
+                    const prevCoords = calculatePathStepCoords(pathConfig, step - 1);
+                    const backwardDir = getDirectionFromCoords(room.x, room.y, prevCoords.x, prevCoords.y);
                     exits[backwardDir] = `road:${pathId}:${step - 1}`;
                 } else {
+                    // 回到起點
+                    const fromNode = WorldMap[pathConfig.from];
+                    const backwardDir = getDirectionFromCoords(room.x, room.y, fromNode.x, fromNode.y);
                     exits[backwardDir] = pathConfig.from; 
                 }
             }
@@ -252,9 +263,6 @@ export const MapSystem = {
         if (room.safe) UI.print(UI.txt("【 安全區 】", "#00ff00"), "system", true);
         UI.print(room.description);
 
-        // 動態房間目前不顯示其他玩家與 NPC，除非剛好重疊
-        // 為保持體驗流暢，這裡只對靜態房間做複雜的資料庫查詢
-        // 若要讓路上也能看到人，需要對 firebase query 做調整 (road:*)
         if (!room.isDynamic) {
             let playersInRoom = [];
             try {

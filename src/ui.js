@@ -1,6 +1,6 @@
 // src/ui.js
 import { WorldMap } from "./data/world.js";
-import { MapSystem } from "./systems/map.js"; // [新增] 引入 MapSystem 以支援動態查詢
+import { MapSystem } from "./systems/map.js"; 
 
 const output = document.getElementById('output');
 const input = document.getElementById('cmd-input');
@@ -90,7 +90,6 @@ export const UI = {
         output.scrollTop = output.scrollHeight;
     },
     
-    // 更新巨集按鈕顯示
     updateMacroButtons: (macros) => {
         localMacros = macros || {};
         for (let i = 1; i <= 4; i++) {
@@ -110,7 +109,6 @@ export const UI = {
         }
     },
 
-    // 註冊巨集儲存回調
     onMacroUpdate: (callback) => {
         onMacroSaveCallback = callback;
     },
@@ -162,34 +160,33 @@ export const UI = {
             valMoney.innerHTML = UI.formatMoney(playerData.money || 0);
         }
 
-        // [修改] 呼叫 drawRangeMap 並傳入 playerData，讓函數內部處理座標
         UI.drawRangeMap(playerData);
     },
 
-    // [修改] 地圖繪製邏輯：使用 MapSystem.getRoomAt 來支援動態路徑
+    // [修改] 地圖繪製邏輯：增加 Wall (紅線) 檢測
     drawRangeMap: (playerData) => {
         if (!miniMapBox) return;
         if (!playerData || !playerData.location) return;
 
-        // 1. 取得當前房間 (支援動態房間)
         const currentRoom = MapSystem.getRoom(playerData.location);
         if (!currentRoom) return;
 
-        const range = 2; // 顯示半徑 (5x5)
+        // 取得當前房間的所有可用出口，用於繪製紅線
+        const currentExits = MapSystem.getAvailableExits(playerData.location);
+
+        const range = 2; // 顯示半徑
         const cx = currentRoom.x;
         const cy = currentRoom.y;
         const cz = currentRoom.z;
 
         let html = '<div class="map-grid">';
 
-        // Y 軸從上到下 (y+ 在上)
         for (let y = cy + range; y >= cy - range; y--) {
             for (let x = cx - range; x <= cx + range; x++) {
                 let cellClass = "map-cell";
                 let symbol = "&nbsp;";
                 let tooltip = "";
 
-                // [核心修改] 使用 MapSystem.getRoomAt 來查詢座標
                 const room = MapSystem.getRoomAt(x, y, cz);
 
                 if (room) {
@@ -197,19 +194,28 @@ export const UI = {
                         cellClass += " map-center";
                         symbol = '<i class="fas fa-user"></i>';
                         tooltip = "你";
+
+                        // [核心修改] 檢查中心點四周是否有路，若無則加紅線
+                        // 檢查北方 (y+1)
+                        if (MapSystem.getRoomAt(x, y + 1, cz) && !currentExits['north']) cellClass += " wall-top";
+                        // 檢查南方 (y-1)
+                        if (MapSystem.getRoomAt(x, y - 1, cz) && !currentExits['south']) cellClass += " wall-bottom";
+                        // 檢查東方 (x+1)
+                        if (MapSystem.getRoomAt(x + 1, y, cz) && !currentExits['east']) cellClass += " wall-right";
+                        // 檢查西方 (x-1)
+                        if (MapSystem.getRoomAt(x - 1, y, cz) && !currentExits['west']) cellClass += " wall-left";
+
                     } else {
-                        // 判斷房間類型給顏色
                         if (room.safe) cellClass += " map-safe";
-                        else if (room.isDynamic) cellClass += " map-road"; // 動態路徑
+                        else if (room.isDynamic) cellClass += " map-road"; 
                         else if (room.region && room.region.includes("forest")) cellClass += " map-danger";
                         else cellClass += " map-normal";
                         
-                        // 簡化顯示：只取第一個字或特定符號
                         if (room.title.includes("森林")) symbol = "林";
                         else if (room.title.includes("客棧")) symbol = "店";
                         else if (room.title.includes("武館")) symbol = "武";
                         else if (room.title.includes("門")) symbol = "門";
-                        else if (room.isDynamic) symbol = "‧"; // 路徑顯示小點
+                        else if (room.isDynamic) symbol = "‧"; 
                         else symbol = "□";
                         
                         tooltip = room.title;
@@ -223,9 +229,7 @@ export const UI = {
         }
         html += '</div>';
         
-        // 顯示層數
         const zInfo = `<div style="position:absolute; bottom:5px; right:5px; font-size:10px; color:#555; background:rgba(0,0,0,0.5); padding:2px 4px;">層: ${cz}</div>`;
-        
         miniMapBox.innerHTML = html + zInfo;
     },
 
@@ -314,7 +318,6 @@ export const UI = {
             }
         };
 
-        // 處理巨集設定的輔助函式
         const handleMacroConfig = (id) => {
             const currentName = (localMacros[id] && localMacros[id].name) || "";
             const currentCmd = (localMacros[id] && localMacros[id].cmd) || "";
@@ -336,11 +339,10 @@ export const UI = {
         sendBtn.addEventListener('click', sendHandler);
         input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendHandler(); });
 
-        // 右鍵監聽 (Context Menu) 用於設定巨集
         document.body.addEventListener('contextmenu', (e) => {
             const btn = e.target.closest('.btn-macro');
             if (btn) {
-                e.preventDefault(); // 阻止預設右鍵選單
+                e.preventDefault(); 
                 const id = btn.dataset.macroId;
                 handleMacroConfig(id);
             }
@@ -350,15 +352,14 @@ export const UI = {
             const btn = e.target.closest('button');
             if (!btn) return;
             
-            // 巨集按鈕左鍵邏輯
             if (btn.classList.contains('btn-macro')) {
                 const id = btn.dataset.macroId;
                 const setting = localMacros[id];
                 if (setting && setting.cmd) {
                     UI.print(`> ${setting.cmd}`);
-                    callback(setting.cmd); // 執行指令
+                    callback(setting.cmd); 
                 } else {
-                    handleMacroConfig(id); // 若無設定，點擊直接彈出設定
+                    handleMacroConfig(id); 
                 }
                 return;
             }
