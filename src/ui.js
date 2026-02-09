@@ -6,7 +6,7 @@ const output = document.getElementById('output');
 const input = document.getElementById('cmd-input');
 const sendBtn = document.getElementById('send-btn');
 const loginPanel = document.getElementById('login-panel');
-
+// ... (保留原本的 DOM 元素宣告，不用變) ...
 const emailInput = document.getElementById('email-input');
 const pwdInput = document.getElementById('pwd-input');
 const btnLogin = document.getElementById('btn-login');
@@ -54,7 +54,23 @@ let currentEnforceValue = 0;
 let localMacros = {}; 
 let onMacroSaveCallback = null;
 
+// [新增] 數字鍵盤對應表 (Numpad Mapping)
+const NUMPAD_MAP = {
+    'Numpad8': 'n',
+    'Numpad2': 's',
+    'Numpad4': 'w',
+    'Numpad6': 'e',
+    'Numpad7': 'nw',
+    'Numpad9': 'ne',
+    'Numpad1': 'sw',
+    'Numpad3': 'se',
+    'Numpad5': 'look',
+    'NumpadAdd': 'up',      // 加號鍵往上
+    'NumpadSubtract': 'down' // 減號鍵往下
+};
+
 export const UI = {
+    // ... (保留原本的 txt, titleLine, attrLine, formatMoney, makeCmd, print ... 等函式，不用變) ...
     txt: (text, color = '#ccc', bold = false) => {
         const style = `color:${color};${bold ? 'font-weight:bold;' : ''}`;
         return `<span style="${style}">${text}</span>`;
@@ -114,6 +130,7 @@ export const UI = {
     },
 
     updateHUD: (playerData) => {
+        // ... (保留原本的 updateHUD 內容) ...
         if (!playerData) return;
         const attr = playerData.attributes;
         
@@ -163,18 +180,16 @@ export const UI = {
         UI.drawRangeMap(playerData);
     },
 
-    // [修改] 地圖繪製邏輯：增加 Wall (紅線) 檢測
     drawRangeMap: (playerData) => {
+        // ... (保留原本的 drawRangeMap 內容) ...
         if (!miniMapBox) return;
         if (!playerData || !playerData.location) return;
 
         const currentRoom = MapSystem.getRoom(playerData.location);
         if (!currentRoom) return;
 
-        // 取得當前房間的所有可用出口，用於繪製紅線
         const currentExits = MapSystem.getAvailableExits(playerData.location);
-
-        const range = 2; // 顯示半徑
+        const range = 2; 
         const cx = currentRoom.x;
         const cy = currentRoom.y;
         const cz = currentRoom.z;
@@ -194,15 +209,9 @@ export const UI = {
                         cellClass += " map-center";
                         symbol = '<i class="fas fa-user"></i>';
                         tooltip = "你";
-
-                        // [核心修改] 檢查中心點四周是否有路，若無則加紅線
-                        // 檢查北方 (y+1)
                         if (MapSystem.getRoomAt(x, y + 1, cz) && !currentExits['north']) cellClass += " wall-top";
-                        // 檢查南方 (y-1)
                         if (MapSystem.getRoomAt(x, y - 1, cz) && !currentExits['south']) cellClass += " wall-bottom";
-                        // 檢查東方 (x+1)
                         if (MapSystem.getRoomAt(x + 1, y, cz) && !currentExits['east']) cellClass += " wall-right";
-                        // 檢查西方 (x-1)
                         if (MapSystem.getRoomAt(x - 1, y, cz) && !currentExits['west']) cellClass += " wall-left";
 
                     } else {
@@ -238,6 +247,7 @@ export const UI = {
     },
 
     enableGameInput: (enabled) => {
+        // ... (保留原本的 enableGameInput) ...
         input.disabled = !enabled;
         sendBtn.disabled = !enabled;
         const allBtns = document.querySelectorAll('button:not(#btn-login):not(#btn-register):not(#btn-guest)');
@@ -255,6 +265,7 @@ export const UI = {
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
     
     showInspection: (id, name, type) => {
+        // ... (保留原本的 showInspection) ...
         const img = document.getElementById('inspect-img');
         const nameLabel = document.getElementById('inspect-name');
         
@@ -283,6 +294,7 @@ export const UI = {
     },
 
     onAutoToggle: (callbacks) => {
+        // ... (保留原本的 onAutoToggle) ...
         btnAutoEat.addEventListener('click', () => {
             const isActive = callbacks.toggleEat();
             btnAutoEat.classList.toggle('active', isActive);
@@ -302,6 +314,7 @@ export const UI = {
         });
     },
 
+    // [修改] 這是主要修改的地方，增加了 Numpad 的監聽
     onInput: (callback) => {
         const updateInputState = (text) => {
             input.value = text;
@@ -339,6 +352,24 @@ export const UI = {
         sendBtn.addEventListener('click', sendHandler);
         input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendHandler(); });
 
+        // [新增] 全域鍵盤監聽，用於數字鍵盤走路
+        document.addEventListener('keydown', (e) => {
+            // 檢查是否是定義在 map 中的按鍵
+            if (NUMPAD_MAP[e.code]) {
+                // 如果焦點在輸入框，且按下的鍵是數字鍵，我們通常會希望"阻止"它被輸入到框框，
+                // 而是直接執行移動。這在 MUD Client 是常見行為 (NumLock 開啟時走路)。
+                // 這裡使用 preventDefault 阻止數字被輸入到輸入框
+                e.preventDefault();
+                
+                const cmd = NUMPAD_MAP[e.code];
+                UI.print(`> ${cmd}`);
+                callback(cmd);
+                
+                // 可選：可以讓輸入框保持焦點但不改變內容
+                input.focus();
+            }
+        });
+
         document.body.addEventListener('contextmenu', (e) => {
             const btn = e.target.closest('.btn-macro');
             if (btn) {
@@ -349,6 +380,7 @@ export const UI = {
         });
 
         document.body.addEventListener('click', (e) => {
+            // ... (保留原本的按鈕點擊處理) ...
             const btn = e.target.closest('button');
             if (!btn) return;
             
