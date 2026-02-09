@@ -39,7 +39,7 @@ function getDirectionFromCoords(fromX, fromY, toX, toY) {
     const dx = toX - fromX;
     const dy = toY - fromY;
     
-    // 嚴格判斷相鄰格子的方向 (用於動態路徑的每一步)
+    // 嚴格判斷相鄰格子的方向
     if (dx === 0 && dy === 1) return 'north';
     if (dx === 0 && dy === -1) return 'south';
     if (dx === 1 && dy === 0) return 'east';
@@ -49,7 +49,7 @@ function getDirectionFromCoords(fromX, fromY, toX, toY) {
     if (dx === 1 && dy === -1) return 'southeast';
     if (dx === -1 && dy === -1) return 'southwest';
 
-    // 如果不是相鄰格子 (例如起點到終點的總方向)，則使用角度判斷
+    // 備用角度判斷
     const angle = Math.atan2(dy, dx) * 180 / Math.PI;
     if (angle >= 67.5 && angle < 112.5) return 'north';
     if (angle >= 22.5 && angle < 67.5) return 'northeast';
@@ -93,11 +93,13 @@ function getPathDescription(type, step, total) {
     return baseDesc + " 目的地似乎不遠了。";
 }
 
-// 輔助：計算路徑上某一步驟的座標
+// [修正] 計算路徑座標：使用距離作為分母，確保 1 step = 1 unit coordinate
 function calculatePathStepCoords(pathConfig, step) {
     const fromNode = WorldMap[pathConfig.from];
     const toNode = WorldMap[pathConfig.to];
-    const ratio = step / (pathConfig.distance + 1);
+    // 使用 pathConfig.distance 作為分母，而不是 distance + 1
+    // 這意味著 step = distance 時，剛好到達終點
+    const ratio = step / pathConfig.distance; 
     const cx = Math.round(fromNode.x + (toNode.x - fromNode.x) * ratio);
     const cy = Math.round(fromNode.y + (toNode.y - fromNode.y) * ratio);
     return { x: cx, y: cy, z: fromNode.z };
@@ -115,6 +117,8 @@ export const MapSystem = {
             const pathConfig = WorldPaths.find(p => p.id === pathId);
             if (!pathConfig) return null;
 
+            // [修正] 如果 step >= distance，表示已經到終點了，理論上不應該請求這個 ID
+            // 但為了防呆，如果真的請求了，視為路徑末端
             const coords = calculatePathStepCoords(pathConfig, step);
 
             return {
@@ -148,7 +152,9 @@ export const MapSystem = {
             if (x < minX - 1 || x > maxX + 1 || y < minY - 1 || y > maxY + 1) continue;
             if (fromNode.z !== z) continue;
 
-            for (let s = 1; s <= path.distance; s++) {
+            // [修正] 只檢查 1 到 distance - 1 的中間路徑點
+            // 因為 0 是起點，distance 是終點
+            for (let s = 1; s < path.distance; s++) {
                 const coords = calculatePathStepCoords(path, s);
                 if (coords.x === x && coords.y === y) {
                     return {
@@ -193,20 +199,20 @@ export const MapSystem = {
             // 檢查是否連接到動態路徑 (起點/終點)
             for (const path of WorldPaths) {
                 if (path.from === currentRoomId) {
-                    // [修正] 計算第一步的確切座標，而非總方向
+                    // 起點 -> road:1
                     const nextCoords = calculatePathStepCoords(path, 1);
                     const dir = getDirectionFromCoords(room.x, room.y, nextCoords.x, nextCoords.y);
                     exits[dir] = `road:${path.id}:1`;
                 }
                 if (path.to === currentRoomId) {
-                    // [修正] 計算最後一步的確切座標
-                    const prevCoords = calculatePathStepCoords(path, path.distance);
+                    // 終點 -> 回到 road:distance-1
+                    const prevCoords = calculatePathStepCoords(path, path.distance - 1);
                     const dir = getDirectionFromCoords(room.x, room.y, prevCoords.x, prevCoords.y);
-                    exits[dir] = `road:${path.id}:${path.distance}`;
+                    exits[dir] = `road:${path.id}:${path.distance - 1}`;
                 }
             }
         }
-        // === 動態房間邏輯 (修正鬼打牆問題) ===
+        // === 動態房間邏輯 ===
         else if (room.isDynamic) {
             const parts = currentRoomId.split(":");
             const pathId = parts[1];
@@ -214,19 +220,23 @@ export const MapSystem = {
             const pathConfig = WorldPaths.find(p => p.id === pathId);
             
             if (pathConfig) {
-                // 1. 前進方向 (Next Step)
-                if (step < pathConfig.distance) {
+                // 1. 前進方向
+                // 如果下一步還沒到終點 (step + 1 < distance) -> road:step+1
+                // 如果下一步就是終點 (step + 1 == distance) -> toNode
+                if (step < pathConfig.distance - 1) {
                     const nextCoords = calculatePathStepCoords(pathConfig, step + 1);
                     const forwardDir = getDirectionFromCoords(room.x, room.y, nextCoords.x, nextCoords.y);
                     exits[forwardDir] = `road:${pathId}:${step + 1}`;
                 } else {
-                    // 到達終點
+                    // 下一步是終點
                     const toNode = WorldMap[pathConfig.to];
                     const forwardDir = getDirectionFromCoords(room.x, room.y, toNode.x, toNode.y);
                     exits[forwardDir] = pathConfig.to; 
                 }
 
-                // 2. 後退方向 (Previous Step)
+                // 2. 後退方向
+                // 如果這一步大於 1，退回 road:step-1
+                // 如果這一步是 1，退回 fromNode
                 if (step > 1) {
                     const prevCoords = calculatePathStepCoords(pathConfig, step - 1);
                     const backwardDir = getDirectionFromCoords(room.x, room.y, prevCoords.x, prevCoords.y);
