@@ -183,7 +183,7 @@ export const PlayerSystem = {
         await signOut(auth);
     },
 
-    // [優化] Score 顯示：包含食物飲水與詳細修為
+    // [優化] Score 顯示：包含食物飲水
     score: (playerData) => {
         if (!playerData) return;
         const attr = playerData.attributes;
@@ -213,7 +213,7 @@ export const PlayerSystem = {
         html += `<span style="color:#aaa">財產：</span><span style="color:#ffd700; display:inline-block; width:100px;">${moneyStr}</span>`;
         html += `<span style="color:#aaa">潛能：</span><span style="color:#ffff00">${potential}</span><br>`;
 
-        // 第三行：生存狀態
+        // [新增] 第三行：生存狀態
         html += `<span style="color:#aaa">食物：</span><span style="color:#00ff00; display:inline-block; width:100px;">${attr.food}/${attr.maxFood}</span>`;
         html += `<span style="color:#aaa">飲水：</span><span style="color:#00bfff">${attr.water}/${attr.maxWater}</span><br>`;
         
@@ -224,7 +224,7 @@ export const PlayerSystem = {
         
         html += `${border}<br>`;
 
-        // 第五行：修練數值 (Grid) - [更新] 顯示上限與倍率
+        // 第五行：修練數值 (Grid)
         html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">`;
         
         // 左欄
@@ -236,9 +236,9 @@ export const PlayerSystem = {
 
         // 右欄
         html += `<div>`;
-        html += `靈力：<span style="color:#eee">${attr.spiritual}/${attr.maxSpiritual * 2}</span> <span style="color:#888; font-size:0.9em;">(+${attr.maxSpiritual})</span> ${UI.makeCmd("[運]", cmdSp, "cmd-btn")}<br>`;
-        html += `內力：<span style="color:#eee">${attr.force}/${attr.maxForce * 2}</span> <span style="color:#888; font-size:0.9em;">(+${attr.maxForce})</span> ${UI.makeCmd("[運]", cmdHp, "cmd-btn")}<br>`;
-        html += `法力：<span style="color:#eee">${attr.mana}/${attr.maxMana * 2}</span> <span style="color:#888; font-size:0.9em;">(+${attr.maxMana})</span> ${UI.makeCmd("[運]", cmdMp, "cmd-btn")}<br>`;
+        html += `靈力：<span style="color:#eee">${attr.spiritual}/${attr.maxSpiritual}</span> ${UI.makeCmd("[運]", cmdSp, "cmd-btn")}<br>`;
+        html += `內力：<span style="color:#eee">${attr.force}/${attr.maxForce}</span> ${UI.makeCmd("[運]", cmdHp, "cmd-btn")}<br>`;
+        html += `法力：<span style="color:#eee">${attr.mana}/${attr.maxMana}</span> ${UI.makeCmd("[運]", cmdMp, "cmd-btn")}<br>`;
         html += `</div>`;
         
         html += `</div>`; 
@@ -315,7 +315,7 @@ export const PlayerSystem = {
 
         // 武學
         html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[武學]</span> `;
-        html += `<span style="${cmdStyle}">apprentice (拜師), learn (學習), practice (練習), study (讀書)</span><br>`;
+        html += `<span style="${cmdStyle}">apprentice (拜師), learn (學習), practice (練習)</span><br>`;
         html += `<span style="display:inline-block; width:60px;"></span> <span style="${cmdStyle}">enable (激發), unenable (取消激發)</span></div>`;
 
         // 修練
