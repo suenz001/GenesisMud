@@ -43,32 +43,32 @@ export const ItemDB = {
     "cloth_armor": { name: "布衣", type: "armor", defense: 5, value: 50, desc: "普通的粗布衣服，防禦力有限。" },
     "leather_armor": { name: "皮甲", type: "armor", defense: 12, value: 300, desc: "用硬皮製成的盔甲，能提供不錯的防護。" },
 
-    // --- [新增] 頭部 (Head) ---
+    // --- 頭部 (Head) ---
     "cloth_cap": { name: "布帽", type: "head", defense: 2, value: 20, desc: "一頂普通的布帽子，能遮風擋雨。" },
     "leather_helm": { name: "皮帽", type: "head", defense: 5, value: 150, desc: "硬皮製成的帽子，保護頭部。" },
 
-    // --- [新增] 護腕 (Wrists) ---
+    // --- 護腕 (Wrists) ---
     "cloth_wrists": { name: "布護腕", type: "wrists", defense: 1, value: 15, desc: "纏在手腕上的布條，減少扭傷。" },
     "leather_wrists": { name: "皮護腕", type: "wrists", defense: 3, value: 100, desc: "鑲有銅釘的皮護腕。" },
 
-    // --- [新增] 披風 (Cloak) ---
+    // --- 披風 (Cloak) ---
     "old_cloak": { name: "破舊披風", type: "cloak", defense: 1, value: 30, desc: "一件打滿補丁的舊披風。" },
     "canvas_cloak": { name: "粗布披風", type: "cloak", defense: 3, value: 100, desc: "厚實的帆布披風，適合旅行。" },
 
-    // --- [新增] 褲子 (Pants) ---
+    // --- 褲子 (Pants) ---
     "cloth_trousers": { name: "粗布長褲", type: "pants", defense: 2, value: 20, desc: "耐磨的粗布褲子。" },
     "leather_pants": { name: "皮褲", type: "pants", defense: 6, value: 200, desc: "野獸皮縫製的褲子，防護力不錯。" },
 
-    // --- [新增] 靴子 (Boots) ---
+    // --- 靴子 (Boots) ---
     "straw_sandals": { name: "草鞋", type: "boots", defense: 1, value: 10, desc: "乾草編織的鞋子，便宜但易壞。" },
     "cloth_boots": { name: "布靴", type: "boots", defense: 3, value: 80, desc: "厚底的布靴，穿起來很舒適。" },
     "leather_boots": { name: "皮靴", type: "boots", defense: 5, value: 250, desc: "結實的皮靴，適合長途跋涉。" },
 
-    // --- [新增] 腰帶 (Belt) ---
+    // --- 腰帶 (Belt) ---
     "rope_belt": { name: "草繩腰帶", type: "belt", defense: 0, value: 5, desc: "一條簡單的草繩，用來繫褲子。" },
     "leather_belt": { name: "皮帶", type: "belt", defense: 2, value: 100, desc: "寬大的牛皮腰帶。" },
 
-    // --- [新增] 項鍊/飾品 (Necklace) - 帶屬性 ---
+    // --- 項鍊/飾品 (Necklace) - 帶屬性 ---
     "copper_amulet": { 
         name: "護身符", type: "necklace", value: 50, 
         desc: "廟裡求來的平安符，戴在身上求個心安。",
@@ -83,5 +83,42 @@ export const ItemDB = {
         name: "玉佩", type: "necklace", value: 800, 
         desc: "一塊溫潤的玉佩，通體透亮。",
         props: { int: 1, per: 1 } // 悟性+1, 定力+1
+    },
+
+    // --- 書籍 (Books) ---
+    // 讀書識字 (Literate)
+    "book_literate_1": { 
+        name: "三字經", type: "book", value: 50, 
+        desc: "這是一本兒童啟蒙書籍，記載著淺顯易懂的道理。",
+        skill: "literate", maxLevel: 30 
+    },
+    "book_literate_2": { 
+        name: "千字文", type: "book", value: 200, 
+        desc: "這本書囊括了天文地理、倫理道德等各種知識，字字珠璣。",
+        skill: "literate", maxLevel: 60 
+    },
+
+    // 佛學淵源 (Buddhism) -> 提升靈力 (Max Spiritual) -> 增加精 (Max SP)
+    "book_buddha_1": { 
+        name: "心經", type: "book", value: 100, 
+        desc: "佛教經典中最短的一部經，雖然篇幅短小，但蘊含深奧的佛理。",
+        skill: "buddhism", maxLevel: 30
+    },
+    "book_buddha_2": { 
+        name: "金剛經", type: "book", value: 500, 
+        desc: "大乘佛教的重要經典，闡述了空性與般若智慧。",
+        skill: "buddhism", maxLevel: 60
+    },
+
+    // 基本咒術 (Spells) -> 提升法力 (Max Mana) -> 增加神 (Max MP)
+    "book_taoism_1": { 
+        name: "符咒入門", type: "book", value: 100, 
+        desc: "記載著畫符唸咒基本法門的書籍，是道家弟子的入門必修。",
+        skill: "spells", maxLevel: 30
+    },
+    "book_taoism_2": { 
+        name: "道德經", type: "book", value: 500, 
+        desc: "道家至高無上的經典，言簡意賅，包羅萬象。",
+        skill: "spells", maxLevel: 60
     }
 };

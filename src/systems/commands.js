@@ -9,7 +9,7 @@ import { CombatSystem } from "./combat.js";
 import { PlayerSystem, updatePlayer } from "./player.js";
 import { InventorySystem } from "./inventory.js";
 import { SkillSystem } from "./skill_system.js";
-import { PerformSystem } from "./perform_system.js"; // [新增] 引入絕招系統
+import { PerformSystem } from "./perform_system.js"; 
 
 const dirMapping = {
     'n': 'north', 's': 'south', 'e': 'east', 'w': 'west',
@@ -29,7 +29,7 @@ const commandRegistry = {
     // === 戰鬥與切磋指令 ===
     'kill': { description: '下殺手', execute: CombatSystem.kill },
     'fight': { description: '切磋', execute: CombatSystem.fight },
-    'perform': { description: '施展絕招', execute: PerformSystem.execute }, // [新增] 絕招指令
+    'perform': { description: '施展絕招', execute: PerformSystem.execute }, 
     'y': { description: '接受', execute: CombatSystem.acceptDuel },
     'yes': { description: '接受', execute: CombatSystem.acceptDuel },
     'n': { description: '拒絕', execute: CombatSystem.rejectDuel },
@@ -56,6 +56,7 @@ const commandRegistry = {
     'sk': { description: '查看技能 (縮寫)', execute: SkillSystem.skills },
     'learn': { description: '學藝', execute: SkillSystem.learn },
     'practice': { description: '練習', execute: SkillSystem.practice },
+    'study': { description: '研讀書籍', execute: SkillSystem.study }, // [新增] 讀書指令
     'apprentice': { description: '拜師', execute: SkillSystem.apprentice },
     'betray': { description: '叛出師門', execute: SkillSystem.betray },
     'enable': { description: '激發', execute: SkillSystem.enable },
@@ -63,9 +64,9 @@ const commandRegistry = {
     'abandon': { description: '放棄技能', execute: SkillSystem.abandon },
     
     // === 屬性修練指令 ===
-    'exercise': { description: '運氣', execute: (p,a,u) => SkillSystem.trainStat(p,u,"內力","force","maxForce","hp","氣",a) },
-    'respirate': { description: '運精', execute: (p,a,u) => SkillSystem.trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精",a) },
-    'meditate': { description: '運神', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神",a) },
+    'exercise': { description: '運氣 (氣->內力)', execute: (p,a,u) => SkillSystem.trainStat(p,u,"內力","force","maxForce","hp","氣",a) },
+    'respirate': { description: '運精 (精->靈力)', execute: (p,a,u) => SkillSystem.trainStat(p,u,"靈力","spiritual","maxSpiritual","sp","精",a) },
+    'meditate': { description: '運神 (神->法力)', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神",a) },
     
     // === 內力運用與自動修練指令 ===
     'exert': { description: '運功', execute: SkillSystem.exert },
@@ -144,7 +145,7 @@ export const CommandSystem = {
              if (['n','s','e','w','u','d','north','south','east','west','up','down'].includes(cmdName)) {
                  // 允許戰鬥中嘗試移動 (逃跑)
              } else if (![
-                 'kill', 'fight', 'perform', // [新增] 允許戰鬥中使用 perform
+                 'kill', 'fight', 'perform', 
                  'look', 'score', 'hp', 'help', 'skills', 'l',
                  'enforce', 'exert', 'inventory', 'i', 'eat', 'drink', 'wield', 'unwield' 
              ].includes(cmdName)) {
@@ -153,10 +154,8 @@ export const CommandSystem = {
              }
         }
         
-        // [新增] 忙碌狀態 (Busy) 過濾
-        // 如果玩家被定身，大部分指令都不能用
+        // 忙碌狀態 (Busy) 過濾
         if (playerData.busy && Date.now() < playerData.busy) {
-            // 允許查看狀態的指令
             const allowedBusyCmds = ['look', 'l', 'score', 'hp', 'inventory', 'i', 'help'];
             if (!allowedBusyCmds.includes(cmdName)) {
                 const remaining = Math.ceil((playerData.busy - Date.now()) / 1000);

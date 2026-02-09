@@ -7,6 +7,7 @@ import { updatePlayer, getEffectiveSkillLevel } from "./player.js";
 import { MapSystem } from "./map.js";
 import { MessageSystem } from "./messages.js";
 import { NPCDB } from "../data/npcs.js";
+import { ItemDB } from "../data/items.js";
 
 let autoForceInterval = null; 
 let isProcessing = false; // 防止異步操作重疊的鎖
@@ -37,6 +38,99 @@ function findNPCInRoom(roomId, npcNameOrId) {
 }
 
 export const SkillSystem = {
+    // === 讀書 (Study) ===
+    study: async (p, args, userId) => {
+        if (p.state === 'fighting') return UI.print("戰鬥中無法讀書！", "error");
+        if (p.state === 'busy') return UI.print("你現在正忙著。", "error");
+
+        const bookId = args[0];
+        let count = parseInt(args[1]) || 1;
+        if (count < 1) count = 1;
+        if (count > 50) count = 50; 
+
+        if (!bookId) return UI.print("指令格式：study <物品id> [次數]", "system");
+
+        // 檢查背包是否有這本書
+        const bookItem = p.inventory ? p.inventory.find(i => i.id === bookId) : null;
+        if (!bookItem) return UI.print("你身上沒有這本書。", "error");
+
+        const itemInfo = ItemDB[bookId];
+        if (!itemInfo || itemInfo.type !== 'book') return UI.print("這不是書。", "error");
+
+        const targetSkillId = itemInfo.skill; // 例如 'literate', 'buddhism', 'spells'
+        const maxBookLevel = itemInfo.maxLevel || 60; // 書籍等級上限，預設 60
+
+        if (!targetSkillId) return UI.print("這本書似乎太深奧了，你看不出個所以然。", "error");
+
+        // 檢查當前技能等級
+        const currentLvl = p.skills[targetSkillId] || 0;
+        
+        // 硬上限檢查：書籍最高只能讀到 60 (高級需拜師)
+        if (currentLvl >= 60 && maxBookLevel >= 60) {
+            UI.print(`你覺得《${itemInfo.name}》上的知識你已經完全掌握了，再讀也沒用。(上限 60 級)`, "system");
+            return;
+        }
+
+        // 書籍上限檢查
+        if (currentLvl >= maxBookLevel) {
+            UI.print(`你已經完全讀通了《${itemInfo.name}》，這本書對你已無幫助。`, "system");
+            return;
+        }
+
+        UI.print(`你翻開《${itemInfo.name}》，開始研讀...`, "system");
+
+        let actualCount = 0;
+        let totalGain = 0;
+        let isLevelUp = false;
+
+        const mpCost = 20; // 每次讀書消耗 20 點神 (MP)
+        const int = p.attributes.int || 20; // 悟性
+        const literateLvl = p.skills['literate'] || 0; // 讀書識字等級
+
+        for (let i = 0; i < count; i++) {
+            if (p.attributes.mp < mpCost) {
+                UI.print(actualCount > 0 ? `你讀了 ${actualCount} 次，覺得腦袋發脹，需要休息。(需要神: ${mpCost})` : `你現在精神不濟，無法讀書。(需要神: ${mpCost})`, "error");
+                break;
+            }
+
+            p.attributes.mp -= mpCost;
+
+            // === 經驗值公式 ===
+            // 獲得經驗 = (悟性 * 2) + (讀書識字等級 * 1) + 隨機浮動
+            let gain = (int * 2) + (literateLvl * 1) + Math.floor(Math.random() * 10);
+            if (gain < 1) gain = 1;
+
+            if (!p.skill_exp) p.skill_exp = {};
+            if (!p.skill_exp[targetSkillId]) p.skill_exp[targetSkillId] = 0;
+
+            p.skill_exp[targetSkillId] += gain;
+            totalGain += gain;
+            actualCount++;
+
+            const maxExp = calculateMaxExp(currentLvl);
+
+            if (p.skill_exp[targetSkillId] >= maxExp) {
+                p.skills[targetSkillId] = currentLvl + 1;
+                p.skill_exp[targetSkillId] -= maxExp;
+                
+                const skillName = SkillDB[targetSkillId] ? SkillDB[targetSkillId].name : targetSkillId;
+                UI.print(UI.txt(`在第 ${actualCount} 次研讀中，你豁然開朗！${skillName} 提升到了 ${p.skills[targetSkillId]} 級！`, "#00ff00", true), "system", true);
+                isLevelUp = true;
+                break;
+            }
+        }
+
+        if (actualCount > 0 && !isLevelUp) {
+            UI.print(`你研讀了 ${actualCount} 次《${itemInfo.name}》，獲得了 ${totalGain} 點經驗。`, "system");
+        }
+
+        await updatePlayer(userId, { 
+            "attributes.mp": p.attributes.mp,
+            "skills": p.skills,
+            "skill_exp": p.skill_exp
+        });
+    },
+
     // === 自動修練內力 (Auto Force) - 蓄力爆發版 ===
     autoForce: async (p, a, u) => {
         // 如果已經在修練，則停止
@@ -65,14 +159,11 @@ export const SkillSystem = {
         let isWaitingForRegen = false;
 
         autoForceInterval = setInterval(async () => {
-            // 如果上一次的資料庫操作還沒完成，這一次先跳過
             if (isProcessing) return;
-
-            // 鎖定
             isProcessing = true;
 
             try {
-                // [關鍵修復] 每次循環都從資料庫抓取「最新」的玩家狀態
+                // 每次循環都從資料庫抓取「最新」的玩家狀態
                 const playerRef = doc(db, "players", u);
                 const playerSnap = await getDoc(playerRef);
 
@@ -84,7 +175,7 @@ export const SkillSystem = {
 
                 const freshP = playerSnap.data();
 
-                // 0. 安全檢查：狀態是否被外部改變
+                // 安全檢查
                 if (freshP.state !== 'exercising') {
                     clearInterval(autoForceInterval);
                     autoForceInterval = null;
@@ -97,38 +188,31 @@ export const SkillSystem = {
                 const curHp = attr.hp;
                 const limit = maxForce * 2;
                 
-                // === 核心邏輯修改：蓄力爆發 ===
-                
                 // 1. 如果內力還沒滿 2 倍 -> 計算需要多少氣血才能「一次補滿」
                 if (curForce < limit) {
                     const neededForce = limit - curForce;
-                    // exercise 轉換率通常是 1:1 (除非有特殊技能加成，這裡保守估計 1氣換1內力)
-                    // 但我們需要保留至少 10 點氣血保命
                     const hpCostNeeded = neededForce; 
                     
-                    // 檢查當前氣血是否足夠「一次性」補滿
+                    // 檢查當前氣血是否足夠「一次性」補滿，並保留 10 點
                     if (curHp > hpCostNeeded + 10) {
-                        // 氣血足夠，直接執行大額修練
                         if (isWaitingForRegen) {
                             isWaitingForRegen = false;
                             UI.print(UI.txt("氣血充盈，開始衝擊氣脈！", "#00ff00"), "system", true);
                         }
-                        // 這裡直接傳入需要的總量
+                        // 執行大額修練
                         await SkillSystem.trainStat(freshP, u, "內力", "force", "maxForce", "hp", "氣", [neededForce.toString()]);
                     } else {
-                        // 氣血不足，進入等待模式 (完全不修練，純粹等回血)
+                        // 氣血不足，進入等待模式
                         if (!isWaitingForRegen) {
                             isWaitingForRegen = true;
                             const missingHp = hpCostNeeded + 10 - curHp;
                             UI.print(UI.txt(`氣血不足以一次貫通 (缺 ${missingHp} 氣)，暫停運功積蓄氣血...`, "#888888"), "system", true);
                             UI.updateHUD(freshP);
                         }
-                        // 這裡直接 return，什麼都不做，等待下一次循環檢查氣血
                     }
                 } 
-                // 2. 內力已達 2 倍 -> 執行突破 (Exercise 1)
+                // 2. 內力已達 2 倍 -> 執行突破
                 else {
-                    // 如果氣血太低連 1 點都練不了，還是要等一下
                     if (curHp <= 20) {
                          if (!isWaitingForRegen) {
                             isWaitingForRegen = true;
@@ -136,9 +220,7 @@ export const SkillSystem = {
                             UI.updateHUD(freshP);
                         }
                     } else {
-                        if (isWaitingForRegen) {
-                            isWaitingForRegen = false;
-                        }
+                        if (isWaitingForRegen) isWaitingForRegen = false;
                         await SkillSystem.trainStat(freshP, u, "內力", "force", "maxForce", "hp", "氣", ["1"]);
                     }
                 }
@@ -147,14 +229,13 @@ export const SkillSystem = {
                 console.error("AutoForce Error:", error);
                 UI.print("修練過程發生未知錯誤，系統嘗試恢復...", "error");
             } finally {
-                // 解除鎖定
                 isProcessing = false;
             }
 
         }, 2000); // 2 秒一次循環
     },
 
-    // === 屬性修練 (Exercise/Respirate/Meditate) ===
+    // === 屬性修練 (Exercise/Respirate/Meditate) - 整合版 ===
     trainStat: async (playerData, userId, typeName, attrCur, attrMax, costAttr, costName, args) => {
         if (playerData.state === 'fighting') {
             UI.print("戰鬥中無法修練！", "error");
@@ -202,29 +283,57 @@ export const SkillSystem = {
 
         // 檢查消耗是否足夠
         if (attr[costAttr] < cost) { 
-            // 如果是自動修練中，不顯示錯誤訊息，避免洗頻
             if (!autoForceInterval) {
                 UI.print(`你的${costName}不足，無法修練。(需要 ${cost})`, "error"); 
             }
             return; 
         }
 
+        // === 瓶頸與上限檢查邏輯 ===
         let isCapReached = false;
         let maxCap = 999999;
+        let skillReqName = "";
     
         if (typeName === "內力") {
             const forceSkillLvl = playerData.skills.force || 0;
             const conBonus = playerData.attributes.con || 20;
             maxCap = (forceSkillLvl + conBonus) * 10;
+            skillReqName = "基本內功";
+        } 
+        else if (typeName === "靈力") {
+            // 靈力瓶頸：佛學淵源等級 * 10
+            const buddhismLvl = playerData.skills.buddhism || 0;
+            maxCap = buddhismLvl * 10;
+            skillReqName = "佛學淵源";
+            
+            if (buddhismLvl < 10 && maxVal >= 100) { // 基礎門檻
+                 UI.print("你對佛學的領悟不夠，無法凝聚更高深的靈力。", "error");
+                 return;
+            }
+        }
+        else if (typeName === "法力") {
+            // 法力瓶頸：基本咒術等級 * 10
+            const spellsLvl = playerData.skills.spells || 0;
+            maxCap = spellsLvl * 10;
+            skillReqName = "基本咒術";
 
-            if (maxVal >= maxCap) {
-                isCapReached = true;
+            if (spellsLvl < 10 && maxVal >= 100) { // 基礎門檻
+                 UI.print("你對咒術的理解不夠，無法凝聚更高深的法力。", "error");
+                 return;
             }
         }
 
-        const gain = cost + Math.floor((playerData.skills?.force || 0) / 10); 
+        if (maxVal >= maxCap) {
+            isCapReached = true;
+        }
+
+        // 計算獲得量 (可根據悟性或技能微調，這裡暫定為 1:1 + 技能加成)
+        let skillBonus = 0;
+        if(typeName === "內力") skillBonus = Math.floor((playerData.skills?.force || 0) / 10);
+        
+        const gain = cost + skillBonus; 
         let improved = false;
-        let autoStopped = false; // 標記是否因為瓶頸而停止
+        let autoStopped = false; 
         
         // 判斷是否超過當前上限 (limit)
         if (curVal + gain >= limit) {
@@ -237,6 +346,10 @@ export const SkillSystem = {
             } else {
                 // 嘗試突破上限
                 if (typeName !== "內力") {
+                    // 運精和運神需要消耗潛能來突破嗎？通常不需要，但為了平衡可以設
+                    // 這裡暫時設定不需要潛能，只要技能等級夠
+                } else {
+                    // 內力突破消耗潛能 (原設定)
                     const pot = playerData.combat?.potential || 0;
                     if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
                     playerData.combat.potential -= 1;
@@ -247,11 +360,9 @@ export const SkillSystem = {
                 if (isCapReached) {
                     attr[attrCur] = limit;
                     
-                    // [修改] 顯示明確的瓶頸訊息
-                    const capMsg = `你的內力修為受限(${maxCap})，只能積蓄內力至 ${limit}，無法提升上限。`;
+                    const capMsg = `你的${skillReqName}修為受限(${maxCap})，只能積蓄${typeName}至 ${limit}，無法提升上限。`;
                     UI.print(UI.txt(capMsg, "#ffaa00"), "system", true);
 
-                    // [修改] 如果是自動修練，遇到瓶頸自動停止
                     if (autoForceInterval) {
                         clearInterval(autoForceInterval);
                         autoForceInterval = null;
@@ -262,6 +373,7 @@ export const SkillSystem = {
                     }
 
                 } else {
+                    // === 突破成功，提升上限 ===
                     attr[attrMax] += 1; 
                     attr[attrCur] = attr[attrMax]; 
                     
@@ -269,22 +381,31 @@ export const SkillSystem = {
                     let msg = `你運轉周天，只覺體內轟的一聲... ` + UI.txt(`你的${typeName}上限提升了！`, "#ffff00", true);
                     UI.print(msg, "system", true);
 
+                    // [連動屬性提升]
                     if (typeName === "內力") {
-                        // [修改] 內力提升時，氣血增益由 +3 改為 +2
                         attr.maxHp = (attr.maxHp || 100) + 2;
                         attr.hp += 2;
                         UI.print(UI.txt(`受到真氣滋養，你的氣血上限也隨之提升了！`, "#00ff00"), "system", true);
+                    }
+                    else if (typeName === "靈力") {
+                        attr.maxSp = (attr.maxSp || 100) + 1; // 提升靈力同時提升 精
+                        attr.sp += 1;
+                        UI.print(UI.txt(`隨著靈力增長，你的精神上限也提升了！`, "#00ff00"), "system", true);
+                    }
+                    else if (typeName === "法力") {
+                        attr.maxMp = (attr.maxMp || 100) + 1; // 提升法力同時提升 神
+                        attr.mp += 1;
+                        UI.print(UI.txt(`隨著法力精進，你的心神上限也提升了！`, "#00ff00"), "system", true);
                     }
                 }
             }
 
         } else {
-            // 一般積蓄內力 (未達上限)
+            // 一般積蓄 (未達上限)
             attr[costAttr] -= cost;
             const newVal = curVal + gain;
             attr[attrCur] = Math.min(limit, newVal);
             
-            // [優化] 當一次性修練大量內力時，顯示更具體的訊息
             let msg = "";
             if (cost > 100) {
                  msg = `你深吸一口氣，將全身 ${cost} 點${costName}盡數化為${typeName}，修為大增！`;
@@ -312,14 +433,22 @@ export const SkillSystem = {
 
         if (improved) {
             updateData[`attributes.${attrMax}`] = attr[attrMax];
-            updateData["combat.potential"] = playerData.combat.potential;
+            
             if (typeName === "內力") {
+                updateData["combat.potential"] = playerData.combat.potential;
                 updateData["attributes.maxHp"] = attr.maxHp;
                 updateData["attributes.hp"] = attr.hp;
             }
+            else if (typeName === "靈力") {
+                updateData["attributes.maxSp"] = attr.maxSp;
+                updateData["attributes.sp"] = attr.sp;
+            }
+            else if (typeName === "法力") {
+                updateData["attributes.maxMp"] = attr.maxMp;
+                updateData["attributes.mp"] = attr.mp;
+            }
         }
 
-        // [新增] 如果是因為 Cap 導致 autoforce 停止，確保資料庫狀態更新為 normal
         if (autoStopped) {
              updateData["state"] = "normal";
         }
@@ -357,11 +486,6 @@ export const SkillSystem = {
             return;
         }
 
-        // [修改] 計算有效內功等級 (基礎 + 激發)，並調整轉換效率
-        // 公式：0.5 + (effectiveLevel / 100)
-        // 40級: 0.9 (虧損)
-        // 60級: 1.1 (微利)
-        // 120級 (60+60): 1.7 (高效)
         const forceLvl = getEffectiveSkillLevel(playerData, 'force');
         const factor = 0.5 + (forceLvl / 100);
 
@@ -378,7 +502,6 @@ export const SkillSystem = {
             attr[targetCur] = attr[targetMax];
         } else {
             actualCost = currentForce;
-            // 如果內力不足全補，則能補多少算多少
             actualRecover = Math.floor(actualCost * factor);
             attr.force = 0;
             attr[targetCur] += actualRecover;

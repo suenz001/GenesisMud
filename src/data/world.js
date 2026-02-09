@@ -36,10 +36,18 @@ export const WorldMap = {
     },
     "market_sq": { 
         title: "熱鬧市集", 
-        description: "這裡是城裡最熱鬧的市集，叫賣聲此起彼落。", 
+        description: "這裡是城裡最熱鬧的市集，叫賣聲此起彼落。往南可以聽到朗朗讀書聲，那裡是通儒書院。", 
         x: 2, y: 0, z: 0, 
         region: ["world"] 
     },
+    // [新增] 書院 (Market 的南邊)
+    "academy": {
+        title: "通儒書院",
+        description: "這是一間充滿書香氣息的書院，牆上掛著至聖先師的畫像。朱先生正坐在案前，搖頭晃腦地讀著書。這裡相當安靜，適合讀書。",
+        x: 2, y: -1, z: 0, 
+        safe: true, region: ["world"], npcs: ["scholar_zhu"]
+    },
+
     "bank": { 
         title: "宏源錢莊", 
         description: "金字招牌的錢莊，信譽卓著。", 

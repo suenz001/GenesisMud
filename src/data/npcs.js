@@ -41,8 +41,26 @@ export const NPCDB = {
             "leather_boots": 250
         }
     },
+    // [新增] 書院 朱先生
+    "scholar_zhu": {
+        id: "scholar_zhu",
+        name: "朱先生",
+        title: "通儒書院夫子",
+        description: "一位白髮蒼蒼的老先生，手裡拿著一卷書，正在搖頭晃腦地誦讀。\n他是揚州城裡最有學問的人，也販賣各種書籍。",
+        attributes: { str: 10, con: 10, per: 30, kar: 20, int: 40, cor: 10 },
+        combat: { hp: 500, maxHp: 500, attack: 20, defense: 20, xp: 0 },
+        skills: { "literate": 150, "force": 50 }, // 識字等級很高
+        shop: {
+            "book_literate_1": 50,  // 三字經
+            "book_literate_2": 200, // 千字文
+            "book_buddha_1": 100,   // 心經
+            "book_buddha_2": 500,   // 金剛經
+            "book_taoism_1": 100,   // 符咒入門
+            "book_taoism_2": 500    // 道德經
+        }
+    },
     
-    // === 武館 NPC (重構) ===
+    // === 武館 NPC ===
     
     // 1. 王教頭 (力量/剛猛型)
     "gym_master": {
@@ -77,7 +95,7 @@ export const NPCDB = {
         }
     },
 
-    // 2. 李教頭 (技巧/靈敏型) [新增]
+    // 2. 李教頭 (技巧/靈敏型)
     "gym_master_li": {
         id: "gym_master_li",
         name: "李教頭",
@@ -110,7 +128,7 @@ export const NPCDB = {
         }
     },
 
-    // 3. 機關人 (傷害測試) [新增]
+    // 3. 機關人 (傷害測試)
     "wooden_dummy": {
         id: "wooden_dummy",
         name: "機關人",
@@ -124,9 +142,9 @@ export const NPCDB = {
         skills: {} // 無技能
     },
 
-    // === 森林生物 (平滑曲線：等級 0 ~ 180 畢業) ===
+    // === 森林生物 ===
 
-    // Tier 1: 新手練手 (Combat Level ~10)
+    // Tier 1: 新手練手
     "rabbit": {
         id: "rabbit",
         name: "野兔",
@@ -137,7 +155,7 @@ export const NPCDB = {
         enabled_skills: { "unarmed": "agile-beast" },
         drops: [{ id: "rabbit_meat", rate: 1.0 }, { id: "rabbit_skin", rate: 0.5 }]
     },
-    // Tier 1.5: 稍強 (Combat Level ~22)
+    // Tier 1.5: 稍強
     "pheasant": {
         id: "pheasant",
         name: "野雞",
@@ -149,7 +167,7 @@ export const NPCDB = {
         drops: [{ id: "pheasant_meat", rate: 1.0 }, { id: "pheasant_feather", rate: 0.6 }]
     },
 
-    // Tier 2: 初學 (Combat Level ~35)
+    // Tier 2: 初學
     "monkey": {
         id: "monkey",
         name: "猴子",
@@ -160,7 +178,7 @@ export const NPCDB = {
         enabled_skills: { "unarmed": "agile-beast" },
         drops: [{ id: "wild_fruit", rate: 0.8 }]
     },
-    // Tier 2.5: 入門 (Combat Level ~60)
+    // Tier 2.5: 入門
     "snake": {
         id: "snake",
         name: "蟒蛇",
@@ -173,49 +191,49 @@ export const NPCDB = {
         drops: [{ id: "snake_gall", rate: 0.2 }, { id: "snake_skin", rate: 0.5 }]
     },
 
-    // Tier 3: 進階 (Combat Level ~90)
+    // Tier 3: 進階
     "bobcat": {
         id: "bobcat",
         name: "山貓",
         description: "行動敏捷的山貓，眼神銳利。",
         attributes: { str: 20, con: 20, per: 40, kar: 10, int: 15, cor: 10 },
-        combat: { hp: 2000, maxHp: 2000, attack: 70, defense: 50, xp: 180 }, 
+        combat: { hp: 1500, maxHp: 1500, attack: 70, defense: 50, xp: 180 }, 
         skills: { "unarmed": 50, "dodge": 50, "wolf-claw": 50, "force": 30 }, 
         enabled_skills: { "unarmed": "wolf-claw" },
         drops: [{ id: "bobcat_skin", rate: 0.4 }]
     },
-    // Tier 3.5: 挑戰 (Combat Level ~120)
+    // Tier 3.5: 挑戰
     "boar": {
         id: "boar",
         name: "野豬",
         description: "一隻兇猛的野豬，皮糙肉厚。",
         attributes: { str: 30, con: 30, per: 15, kar: 10, int: 5, cor: 5 },
-        combat: { hp: 3500, maxHp: 3500, attack: 90, defense: 70, xp: 240 }, 
+        combat: { hp: 1800, maxHp: 1800, attack: 90, defense: 70, xp: 240 }, 
         skills: { "unarmed": 60, "dodge": 60, "boar-charge": 60, "force": 60 }, 
         enabled_skills: { "unarmed": "boar-charge" },
         drops: [{ id: "boar_meat", rate: 1.0 }, { id: "boar_tooth", rate: 0.3 }]
     },
 
-    // Tier 4: 高手 (Combat Level ~150)
+    // Tier 4: 高手
     "wolf": {
         id: "wolf",
         name: "野狼",
         aggro: true, 
         description: "眼神兇惡的野狼，成群結隊。",
         attributes: { str: 35, con: 30, per: 35, kar: 10, int: 15, cor: 10 },
-        combat: { hp: 5000, maxHp: 5000, attack: 110, defense: 90, xp: 300 },
+        combat: { hp: 2200, maxHp: 2200, attack: 110, defense: 90, xp: 300 },
         skills: { "unarmed": 80, "dodge": 80, "wolf-claw": 80, "force": 60 }, 
         enabled_skills: { "unarmed": "wolf-claw" },
         drops: [{ id: "wolf_skin", rate: 0.4 }]
     },
-    // Tier 5: 森林霸主 (Combat Level ~200, 適合玩家 180 畢業)
+    // Tier 5: 森林霸主
     "bear": {
         id: "bear",
         name: "黑熊",
         aggro: true, 
         description: "一頭巨大的黑熊，站起來像一座小山。",
         attributes: { str: 50, con: 50, per: 20, kar: 10, int: 10, cor: 10 },
-        combat: { hp: 10000, maxHp: 10000, attack: 150, defense: 120, xp: 500 },
+        combat: { hp: 3000, maxHp: 3000, attack: 150, defense: 120, xp: 500 },
         skills: { "unarmed": 100, "dodge": 100, "wolf-claw": 100, "force": 100 },
         enabled_skills: { "unarmed": "wolf-claw" },
         drops: [{ id: "bear_skin", rate: 1.0 }, { id: "bear_paw", rate: 0.2 }]

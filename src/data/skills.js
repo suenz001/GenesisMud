@@ -93,6 +93,20 @@ export const SkillDB = {
         ]
     },
 
+    // ================== 知識技能 (Knowledge) [新增] ==================
+    "literate": {
+        name: "讀書識字", type: "knowledge", rating: 1.0,
+        desc: "閱讀書籍、理解文字的能力。等級越高，能讀懂越深奧的書籍。"
+    },
+    "buddhism": {
+        name: "佛學淵源", type: "knowledge", rating: 1.0,
+        desc: "對佛家經典的領悟。修練靈力(Spiritual)的根基。"
+    },
+    "spells": {
+        name: "基本咒術", type: "knowledge", rating: 1.0,
+        desc: "對道家符咒的理解。修練法力(Mana)的根基。"
+    },
+
     // ================== 野獸專屬技能 (Beast Skills) ==================
     "wolf-claw": {
         name: "猛獸爪牙", type: "martial", rating: 1.2, base: "unarmed",
