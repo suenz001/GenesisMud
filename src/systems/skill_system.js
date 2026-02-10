@@ -811,7 +811,7 @@ export const SkillSystem = {
                 }
             }
 
-            const spC = 5 + Math.floor(currentLvl / 5); 
+            const spC = 3 + Math.floor(currentLvl / 20); 
             const potC = 1; 
             
             if(p.attributes.sp <= spC){
