@@ -344,17 +344,7 @@ export const SkillSystem = {
                 let msg = `你運轉周天，消耗 ${cost} 點${costName}，將${typeName}積蓄到了極限 (${limit})。`;
                 UI.print(msg, "system", true);
             } else {
-                // 嘗試突破上限
-                if (typeName !== "內力") {
-                    // 運精和運神需要消耗潛能來突破嗎？通常不需要，但為了平衡可以設
-                    // 這裡暫時設定不需要潛能，只要技能等級夠
-                } else {
-                    // 內力突破消耗潛能 (原設定)
-                    const pot = playerData.combat?.potential || 0;
-                    if (pot < 1) { UI.print("你的潛能不足，無法突破瓶頸。", "error"); return; }
-                    playerData.combat.potential -= 1;
-                }
-                
+                // === 嘗試突破上限 (已修改：移除潛能消耗) ===
                 attr[costAttr] -= cost; 
 
                 if (isCapReached) {
@@ -435,7 +425,6 @@ export const SkillSystem = {
             updateData[`attributes.${attrMax}`] = attr[attrMax];
             
             if (typeName === "內力") {
-                updateData["combat.potential"] = playerData.combat.potential;
                 updateData["attributes.maxHp"] = attr.maxHp;
                 updateData["attributes.hp"] = attr.hp;
             }
