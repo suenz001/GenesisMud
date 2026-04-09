@@ -5,20 +5,22 @@ export const NPCDB = {
     "waiter": {
         id: "waiter",
         name: "店小二",
-        description: "一位勤快的店小二。",
+        img: "assets/images/npcs/waiter.png",
+        description: "一位穿著粗布麻衣的年輕伙計，肩膀上搭著一條洗到脫色的白毛巾。他滿臉堆著殷勤的笑容，正穿梭在各個客桌之間，手腳異常麻利。",
         attributes: { str: 15, con: 15, per: 15, kar: 15, int: 15, cor: 15 },
         combat: { hp: 300, maxHp: 300, attack: 10, defense: 5, xp: 0 },
         shop: { "rice": 10, "dumpling": 15, "bread": 5, "roast_chicken": 50, "waterskin": 20, "tea": 10, "wine": 80 },
         inquiries: {
-            "name": "我是這家客棧的店小二，客官有什麼吩咐？",
-            "rumor": "聽說江湖上最近很不平靜，尤其是東邊的森林裡有猛獸出沒。",
-            "food": "客官若是餓了渴了，儘管跟我買(buy)些吃喝的！"
+            "name": "我是這家客棧的店小二，客官您要是餓了渴了，包在我身上！",
+            "rumor": "客官您有所不知，最近城東那黑壓壓的林子裡，常常傳出滲人的狼嚎聲，您可千萬別亂跑啊。",
+            "food": "客官若是餓了，儘管開口買(buy)些吃喝的！我們這兒的燒雞可是一絕。"
         }
     },
     "blacksmith": {
         id: "blacksmith",
         name: "鐵匠",
-        description: "一位肌肉虯結的壯漢，正揮舞著大鐵鎚打造兵器。",
+        img: "assets/images/npcs/blacksmith.png",
+        description: "這位虯髯大漢赤裸著上半身，露出古銅色的虯結肌肉。他正揮舞著幾十斤重的巨鎚，『叮噹』作響地敲打著一塊燒紅的生鐵，火星四處飛濺，散發出驚人的熱流。",
         attributes: { str: 40, con: 40, per: 20, kar: 20, int: 20, cor: 20 },
         combat: { hp: 800, maxHp: 800, attack: 50, defense: 30, xp: 0 },
         shop: { 
@@ -51,7 +53,8 @@ export const NPCDB = {
         id: "scholar_zhu",
         name: "朱先生",
         title: "通儒書院夫子",
-        description: "一位白髮蒼蒼的老先生，手裡拿著一卷書，正在搖頭晃腦地誦讀。\n他是揚州城裡最有學問的人，也販賣各種書籍。",
+        img: "assets/images/npcs/scholar_zhu.png",
+        description: "朱先生一襲洗得發白的長衫，頜下三縷長鬚隨風飄動。他手提一管狼毫，面前案上堆滿了古籍典冊。他的目光深邃而平和，彷彿已經看透了紅塵俗世的紛擾。",
         attributes: { str: 10, con: 10, per: 30, kar: 20, int: 40, cor: 10 },
         combat: { hp: 500, maxHp: 500, attack: 20, defense: 20, xp: 0 },
         skills: { "literate": 150, "force": 50 }, // 識字等級很高
@@ -75,7 +78,8 @@ export const NPCDB = {
     "banker": {
         id: "banker",
         name: "錢莊老闆",
-        description: "一位穿著綢緞長袍的中年人，正精打細算地撥弄著手裡的純金算盤。",
+        img: "assets/images/npcs/banker.png",
+        description: "這位老闆姓錢，人如其名，全身上下穿金戴銀，一襲綾羅綢緞更是價值不斐。他手中那把純金打造的算盤被撥弄得『劈啪』作響，一雙小眼睛滴溜溜轉著，精明無比。",
         attributes: { str: 10, con: 10, per: 10, kar: 40, int: 50, cor: 10 },
         combat: { hp: 500, maxHp: 500, attack: 10, defense: 10, xp: 0 },
         isBanker: true,
@@ -92,7 +96,8 @@ export const NPCDB = {
         id: "gym_master",
         name: "王教頭",
         title: "飛龍武館總教頭",
-        description: "他身材魁梧，滿臉橫肉，一看就是練硬氣功的行家。專精於大開大闔的剛猛功夫。",
+        img: "assets/images/npcs/gym_master.png",
+        description: "王教頭生得膀大腰圓，猶如半截黑塔一般杵在庭院中。他手持一柄泛著寒光的特大號九環鋼刀，每一次呼吸都氣息悠長，顯然外家硬氣功已經練到了爐火純青的境界。",
         family: "common_gym",
         attributes: { str: 50, con: 50, per: 30, kar: 30, int: 30, cor: 30 }, // 力量體質較高
         combat: { hp: 5000, maxHp: 5000, attack: 80, defense: 80, xp: 0 },
@@ -125,7 +130,8 @@ export const NPCDB = {
         id: "gym_master_li",
         name: "李教頭",
         title: "飛龍武館副教頭",
-        description: "他身形瘦削，目光如電，雖然不壯碩，但太陽穴高高鼓起，顯然內功深厚，擅長靈巧多變的武功。",
+        img: "assets/images/npcs/gym_master_li.jpg",
+        description: "李教頭看似文弱骨瘦如柴，但他雙目開闔之間，隱隱有精光爆射而出。他的一雙手掌修長白皙，腰間盤著一條不知名材質製成的玄黑軟鞭，隨時準備發出致命一擊。",
         family: "common_gym",
         attributes: { str: 30, con: 30, per: 50, kar: 30, int: 50, cor: 40 }, // 悟性靈性較高
         combat: { hp: 3500, maxHp: 3500, attack: 90, defense: 70, xp: 0 },
@@ -157,7 +163,8 @@ export const NPCDB = {
     "wooden_dummy": {
         id: "wooden_dummy",
         name: "機關人",
-        description: "一個包著銅皮的巨大木樁，上面佈滿了刀痕和拳印，雖然觸動機關後它會還手，但不會對你造成傷害，是測試武功的絕佳對象。",
+        img: "assets/images/npcs/wooden_dummy.png",
+        description: "這是一具由魯班秘術打造而成的巨大機關人。它的主體由百年鐵木製成，外層更包覆著厚重且坑坑窪窪的黃銅皮。儘管它滿身傷痕，關節處的齒輪依然完美咬合著。",
         attributes: { str: 10, con: 100, per: 0, kar: 0, int: 0, cor: 0 },
         combat: { 
             hp: 50000, maxHp: 50000, // 高血量
@@ -173,7 +180,8 @@ export const NPCDB = {
     "rabbit": {
         id: "rabbit",
         name: "野兔",
-        description: "一隻可愛的小野兔，正在吃草。",
+        img: "assets/images/npcs/rabbit.webp",
+        description: "一隻毛茸茸的小野兔，一對長耳朵正警覺地豎著。牠的鼻頭一抽一抽地嗅著周圍的空氣，遇到風吹草動便準備逃之夭夭。",
         attributes: { str: 5, con: 5, per: 25, kar: 20, int: 10, cor: 10 },
         combat: { hp: 200, maxHp: 200, attack: 15, defense: 5, xp: 20 }, 
         skills: { "unarmed": 10, "dodge": 10, "agile-beast": 5 },
@@ -184,7 +192,8 @@ export const NPCDB = {
     "pheasant": {
         id: "pheasant",
         name: "野雞",
-        description: "一隻色彩斑斕的野雞，在草叢中覓食。",
+        img: "assets/images/npcs/pheasant.jpg",
+        description: "這隻羽毛艷麗的野雞正在枯葉堆裡啄食著蟲子，牠那斑斕的尾羽在陽光下折射出亮眼的光彩。",
         attributes: { str: 8, con: 5, per: 25, kar: 15, int: 10, cor: 10 },
         combat: { hp: 300, maxHp: 300, attack: 20, defense: 10, xp: 40 }, 
         skills: { "unarmed": 15, "dodge": 15, "bird-hit": 15 },
@@ -196,7 +205,8 @@ export const NPCDB = {
     "monkey": {
         id: "monkey",
         name: "猴子",
-        description: "一隻調皮的猴子，手裡拿著不知道哪來的果子。",
+        img: "assets/images/npcs/monkey.jpg",
+        description: "這是一隻身手極其靈活的獼猴。牠單手攀在樹藤上盪來盪去，另一手還拿著剛搶來的果子，正對著你齜牙咧嘴地做著鬼臉。",
         attributes: { str: 10, con: 10, per: 40, kar: 15, int: 20, cor: 10 },
         combat: { hp: 600, maxHp: 600, attack: 30, defense: 20, xp: 70 }, 
         skills: { "unarmed": 30, "dodge": 30, "agile-beast": 20 }, 
@@ -207,8 +217,9 @@ export const NPCDB = {
     "snake": {
         id: "snake",
         name: "蟒蛇",
+        img: "assets/images/npcs/snake.jpg",
         aggro: true, 
-        description: "一條盤踞在樹枝上的蟒蛇，吐著信子。",
+        description: "一條大碗口粗的巨蟒，冰冷的鱗片在陰暗的樹林裡閃爍著幽光。它正高昂著扁平的三角頭部，吐著分叉的紅信死死盯著你。",
         attributes: { str: 15, con: 15, per: 20, kar: 10, int: 10, cor: 10 },
         combat: { hp: 1000, maxHp: 1000, attack: 50, defense: 30, xp: 120 }, 
         skills: { "unarmed": 30, "dodge": 30, "snake-move": 30, "force": 30 },
@@ -220,7 +231,8 @@ export const NPCDB = {
     "bobcat": {
         id: "bobcat",
         name: "山貓",
-        description: "行動敏捷的山貓，眼神銳利。",
+        img: "assets/images/npcs/bobcat.jpg",
+        description: "這隻山貓體型雖小，但充滿爆發力。牠那寶石般的豎瞳在黑暗中透出一股嗜血的野性，四爪間鋒利如刀的倒鉤若隱若現。",
         attributes: { str: 20, con: 20, per: 40, kar: 10, int: 15, cor: 10 },
         combat: { hp: 1500, maxHp: 1500, attack: 70, defense: 50, xp: 180 }, 
         skills: { "unarmed": 50, "dodge": 50, "wolf-claw": 50, "force": 30 }, 
@@ -231,7 +243,8 @@ export const NPCDB = {
     "boar": {
         id: "boar",
         name: "野豬",
-        description: "一隻兇猛的野豬，皮糙肉厚。",
+        img: "assets/images/npcs/boar.webp",
+        description: "這頭成年雄性野豬渾身披著宛如鋼針般堅硬的黑色倒刺。牠最恐怖的是嘴邊那一對向外翻開、閃著寒光的巨大的獠牙，令人不寒而慄。",
         attributes: { str: 30, con: 30, per: 15, kar: 10, int: 5, cor: 5 },
         combat: { hp: 1800, maxHp: 1800, attack: 90, defense: 70, xp: 240 }, 
         skills: { "unarmed": 60, "dodge": 60, "boar-charge": 60, "force": 60 }, 
@@ -243,8 +256,9 @@ export const NPCDB = {
     "wolf": {
         id: "wolf",
         name: "野狼",
+        img: "assets/images/npcs/wolf.webp",
         aggro: true, 
-        description: "眼神兇惡的野狼，成群結隊。",
+        description: "這是一匹飢腸轆轆的孤狼。牠壓低了身體，背上的毛髮根根豎起，喉嚨裡正發出低沉且充滿威脅性的低吼聲。",
         attributes: { str: 35, con: 30, per: 35, kar: 10, int: 15, cor: 10 },
         combat: { hp: 2200, maxHp: 2200, attack: 110, defense: 90, xp: 300 },
         skills: { "unarmed": 80, "dodge": 80, "wolf-claw": 80, "force": 60 }, 
@@ -255,8 +269,9 @@ export const NPCDB = {
     "bear": {
         id: "bear",
         name: "黑熊",
+        img: "assets/images/npcs/bear.webp",
         aggro: true, 
-        description: "一頭巨大的黑熊，站起來像一座小山。",
+        description: "被譽為森林霸主的巨大黑熊。當牠直立起身子時，龐大的陰影幾乎能把人完全籠罩。那巨大的熊掌只需一擊，就足以拍碎習武之人的天靈蓋。",
         attributes: { str: 50, con: 50, per: 20, kar: 10, int: 10, cor: 10 },
         combat: { hp: 3000, maxHp: 3000, attack: 150, defense: 120, xp: 500 },
         skills: { "unarmed": 100, "dodge": 100, "wolf-claw": 100, "force": 100 },
