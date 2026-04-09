@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>創世江湖行 - GenesisMud</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="game-wrapper">
+        <div id="header">【創世江湖行】GenesisMud - Ver 0.4.4 (戰鬥優化版)</div>
+        
+        <div id="game-body">
+            <div id="main-display">
+                <div id="output"></div>
+                <div id="input-area">
+                    <input type="text" id="cmd-input" placeholder="系統載入中..." disabled>
+                    <button id="send-btn" disabled><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+
+            <div id="sidebar">
+                
+                <div class="dash-panel" id="panel-radar">
+                    <div id="location-header">
+                        <i class="fas fa-map-marker-alt"></i> <span id="current-room-name">-- 未知 --</span>
+                    </div>
+                    <div id="mini-map-box">
+                    </div>
+                </div>
+
+                <div id="mid-panel-container">
+                    
+                    <div class="dash-panel" id="panel-inspection" style="display: none;">
+                        <div id="inspect-img-box">
+                            <img id="inspect-img" src="" alt="觀察圖片">
+                        </div>
+                        
+                        <div class="inspection-info-foot">
+                            <div id="inspect-name">--</div>
+                        </div>
+                    </div>
+
+                    <div id="panel-stats-group">
+                        
+                        <div class="dash-panel" id="panel-vitals">
+                            <div class="vital-row main-vital">
+                                <div class="vital-icon hp"><i class="fas fa-heart"></i></div>
+                                <div class="bar-outer">
+                                    <div id="bar-hp" class="bar-inner hp-fill" style="width: 100%;"></div>
+                                    <span id="text-hp" class="bar-text">100/100</span>
+                                </div>
+                            </div>
+                            <div class="vital-row main-vital">
+                                <div class="vital-icon force"><i class="fas fa-fire"></i></div>
+                                <div class="bar-outer">
+                                    <div id="bar-force" class="bar-inner force-fill" style="width: 0%;"></div>
+                                    <span id="text-force" class="bar-text">0/0</span>
+                                </div>
+                            </div>
+
+                            <div class="sub-vitals-grid">
+                                <div class="vital-col">
+                                    <span class="label">精 SP</span>
+                                    <div class="bar-thin-outer">
+                                        <div id="bar-sp" class="bar-thin-inner sp-fill" style="width: 100%;"></div>
+                                    </div>
+                                    <span id="text-sp" class="val-text">100/100</span>
+                                </div>
+                                <div class="vital-col">
+                                    <span class="label">神 MP</span>
+                                    <div class="bar-thin-outer">
+                                        <div id="bar-mp" class="bar-thin-inner mp-fill" style="width: 100%;"></div>
+                                    </div>
+                                    <span id="text-mp" class="val-text">100/100</span>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                                <div style="padding: 4px; background: #222; border-radius: 4px; border: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 12px; color: #aaa;"><i class="fas fa-lightbulb" style="color: #ffd700; margin-right: 5px;"></i>潛能</span>
+                                    <span id="val-potential" style="color: #ffd700; font-weight: bold; font-family: monospace;">0</span>
+                                </div>
+                                <div style="padding: 4px; background: #222; border-radius: 4px; border: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 12px; color: #aaa;"><i class="fas fa-coins" style="color: #ffd700; margin-right: 5px;"></i>財產</span>
+                                    <span id="val-money" style="color: #fff; font-weight: bold; font-family: monospace; font-size: 11px;">0</span>
+                                </div>
+                            </div>
+
+                            <div class="survival-grid">
+                                <div class="survival-item" id="btn-auto-eat" title="點擊切換自動進食">
+                                    <i class="fas fa-bowl-rice survival-icon"></i>
+                                    <div class="survival-bars">
+                                        <div id="bar-food" class="s-bar" style="width: 100%;"></div>
+                                    </div>
+                                    <span id="status-food">飽</span>
+                                </div>
+                                <div class="survival-item" id="btn-auto-drink" title="點擊切換自動飲水">
+                                    <i class="fas fa-wine-bottle survival-icon"></i>
+                                    <div class="survival-bars">
+                                        <div id="bar-water" class="s-bar" style="width: 100%;"></div>
+                                    </div>
+                                    <span id="status-water">渴</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dash-panel" id="panel-enforce">
+                            <div class="panel-title-sm">內力運用 (Enforce)</div>
+                            <div class="enforce-control">
+                                <button class="btn-step" data-enforce-mod="-1"><i class="fas fa-minus"></i></button>
+                                <button class="btn-step-set" data-enforce-set="0">收</button>
+                                <div class="enforce-display">
+                                    <span id="val-enforce">0</span>
+                                    <span class="unit">成</span>
+                                </div>
+                                <button class="btn-step-set" data-enforce-set="10">滿</button>
+                                <button class="btn-step" data-enforce-mod="1"><i class="fas fa-plus"></i></button>
+                            </div>
+                        </div>
+
+                    </div> 
+                </div> 
+
+                <div class="dash-panel" id="panel-move">
+                    
+                    <div class="move-shortcuts">
+                        <button class="btn-action-sm" data-cmd="respirate" title="修練：精 -> 靈力">運精</button>
+                        <button class="btn-action-sm" data-cmd="exert regenerate" title="回復：內力 -> 精">回精</button>
+                        
+                        <button class="btn-action-sm" data-cmd="exercise double" title="修練：氣 -> 內力 (儲存至2倍上限)">運氣</button>
+                        <button class="btn-action-sm" data-cmd="exert recover" title="回復：內力 -> 氣">回氣</button>
+                        
+                        <button class="btn-action-sm" data-cmd="meditate" title="修練：神 -> 法力">運神</button>
+                        <button class="btn-action-sm" data-cmd="exert refresh" title="回復：內力 -> 神">回神</button>
+
+                        <button class="btn-action-sm btn-macro" id="btn-macro-1" data-macro-id="1" title="左鍵執行 / 右鍵設定">自定義</button>
+                        <button class="btn-action-sm btn-macro" id="btn-macro-2" data-macro-id="2" title="左鍵執行 / 右鍵設定">自定義</button>
+                        <button class="btn-action-sm btn-macro" id="btn-macro-3" data-macro-id="3" title="左鍵執行 / 右鍵設定">自定義</button>
+                        <button class="btn-action-sm btn-macro" id="btn-macro-4" data-macro-id="4" title="左鍵執行 / 右鍵設定">自定義</button>
+                    </div>
+
+                    <div class="move-controls">
+                        <div class="dpad-container">
+                            <button class="btn-dir nw" data-dir="nw">↖</button>
+                            <button class="btn-dir n" data-dir="n">北</button>
+                            <button class="btn-dir ne" data-dir="ne">↗</button>
+                            
+                            <button class="btn-dir w" data-dir="w">西</button>
+                            <button class="btn-action-center" data-cmd="look">看</button>
+                            <button class="btn-dir e" data-dir="e">東</button>
+                            
+                            <button class="btn-dir sw" data-dir="sw">↙</button>
+                            <button class="btn-dir s" data-dir="s">南</button>
+                            <button class="btn-dir se" data-dir="se">↘</button>
+                        </div>
+                        <div class="vertical-move">
+                            <button class="btn-v-move" data-dir="up"><i class="fas fa-arrow-up"></i> 上</button>
+                            <button class="btn-v-move" data-dir="down"><i class="fas fa-arrow-down"></i> 下</button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="dash-panel" id="panel-utility">
+                    <div class="utility-grid">
+                        <button class="btn-util" data-cmd="score" title="狀態 (Score)"><i class="fas fa-user-ninja"></i></button>
+                        <button class="btn-util" data-cmd="inventory" title="背包 (Inventory)"><i class="fas fa-box-open"></i></button>
+                        <button class="btn-util" data-cmd="skills" title="武學 (Skills)"><i class="fas fa-book-dead"></i></button>
+                        <button class="btn-util" data-cmd="save" title="存檔 (Save)"><i class="fas fa-save"></i></button>
+                        <button class="btn-util" data-cmd="recall" title="回城 (Recall)"><i class="fas fa-dungeon"></i></button>
+                        <button class="btn-util" data-cmd="help" title="說明 (Help)"><i class="fas fa-question-circle"></i></button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="login-panel">
+            <div style="color: #33ff33; margin-bottom: 10px; font-weight: bold; font-size: 1.2em;">江湖入口</div>
+            <input type="email" id="email-input" placeholder="電子信箱">
+            <input type="password" id="pwd-input" placeholder="密碼">
+            <div class="login-btns">
+                <button id="btn-login">登入</button>
+                <button id="btn-register">註冊</button>
+            </div>
+            <div style="margin-top: 15px; border-top: 1px solid #444; padding-top: 15px;">
+                <button id="btn-guest">匿名試玩 (Guest)</button>
+            </div>
+            <div id="login-msg" style="color: #ff5555; margin-top: 10px; font-size: 12px; min-height: 1.5em;"></div>
+        </div>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
