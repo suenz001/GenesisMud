@@ -262,7 +262,11 @@ export const MapSystem = {
         if (!room) { UI.print("你陷入虛空...", "error"); return; }
 
         if (!room.isDynamic) {
-            MessageSystem.listenToRoom(playerData.location);
+            let listenRooms = [playerData.location, "global_chat"];
+            if (playerData.sect) {
+                listenRooms.push(`sect_${playerData.sect}`);
+            }
+            MessageSystem.listenToRooms(listenRooms);
         } else {
             MessageSystem.stopListening();
         }

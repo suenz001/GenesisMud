@@ -320,6 +320,15 @@ export const PlayerSystem = {
         const descStyle = "color:#888; font-size: 13px;";
         const renderRow = (cmd, desc) => `<span style="${cmdStyle}">${cmd}</span><span style="${descStyle}">${desc}</span><br>`;
 
+        // --- 交流 ---
+        html += `<div style="margin-bottom:8px;"><span style="${catStyle}">[交流]</span><br>`;
+        html += renderRow("say <文字>", "在目前的房間發言");
+        html += renderRow("chat <文字>", "在全伺服器公共頻道發言");
+        html += renderRow("class <文字>", "在門派專屬頻道發言");
+        html += renderRow("emote <動作>", "扮演動作，例如: emote 笑了笑");
+        html += renderRow("smile / laugh / hi", "MUD 經典表情指令 (還有 flop, cry, nod, hug 等)");
+        html += `</div>`;
+
         // --- 核心系統 ---
         html += `<div style="margin-bottom:8px;"><span style="${catStyle}">[系統]</span><br>`;
         html += renderRow("look (l)", "觀察四周環境與人物");
