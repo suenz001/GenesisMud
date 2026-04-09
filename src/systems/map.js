@@ -480,7 +480,7 @@ export const MapSystem = {
                     } catch (e) {}
                     displayHp = Math.max(0, displayHp);
 
-                    UI.showInspection(npc.id, npc.name, 'npc');
+                    UI.showInspection(npc.id, npc.name, 'npc', npc.img || null);
                     UI.print(UI.titleLine(npc.name), "chat", true); 
                     UI.print(npc.description);
 

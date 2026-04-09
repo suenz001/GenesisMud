@@ -264,7 +264,7 @@ export const UI = {
 
     showLoginError: (msg) => { document.getElementById('login-msg').textContent = msg; },
     
-    showInspection: (id, name, type) => {
+    showInspection: (id, name, type, imgPath = null) => {
         // ... (保留原本的 showInspection) ...
         const img = document.getElementById('inspect-img');
         const nameLabel = document.getElementById('inspect-name');
@@ -277,8 +277,9 @@ export const UI = {
         if (nameLabel) nameLabel.textContent = name;
         
         img.classList.remove('loaded');
+        // 如果有指定路徑就直接用，否則用舊邏輯 (預設 .webp)
         const folder = type === 'npc' ? 'npcs' : 'items'; 
-        const targetSrc = `assets/images/${folder}/${id}.webp`;
+        const targetSrc = imgPath ? imgPath : `assets/images/${folder}/${id}.webp`;
         
         img.onload = () => { img.classList.add('loaded'); };
         img.onerror = () => {
