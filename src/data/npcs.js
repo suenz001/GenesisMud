@@ -55,6 +55,8 @@ export const NPCDB = {
         attributes: { str: 10, con: 10, per: 30, kar: 20, int: 40, cor: 10 },
         combat: { hp: 500, maxHp: 500, attack: 20, defense: 20, xp: 0 },
         skills: { "literate": 150, "force": 50 }, // 識字等級很高
+        isPublicTutor: true,
+        publicSkills: ["literate"], 
         shop: {
             "book_literate_1": 50,  // 三字經
             "book_literate_2": 200, // 千字文

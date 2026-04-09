@@ -748,13 +748,16 @@ export const SkillSystem = {
         
         const isMaster = p.family && p.family.masterId === npc.id;
         const isSameSect = p.family && p.family.sect === npc.family;
+        const isPublicTutor = npc.isPublicTutor && npc.publicSkills && npc.publicSkills.includes(sid);
 
-        if (!isMaster && !isSameSect) {
-            UI.print("你必須先拜師才能向他請教。", "error");
+        if (!isMaster && !isSameSect && !isPublicTutor) {
+            UI.print(npc.isPublicTutor ? "對方只願意向世人傳授特定的基礎知識。" : "你必須先拜師才能向他請教。", "error");
             return;
         }
 
-        if(!npc.skills[sid]){UI.print("師父並不會這招。","chat");return;} 
+        let teacherTitle = (isMaster || isSameSect) ? "師父" : "前輩";
+
+        if(!npc.skills[sid]){UI.print(`${teacherTitle}並不會這招。`,"chat");return;}
         
         const currentLvlStart = p.skills[sid] || 0;
         
@@ -782,7 +785,7 @@ export const SkillSystem = {
             const currentLvl = p.skills[sid] || 0;
             
             if (currentLvl >= npc.skills[sid]) {
-                UI.print(actualCount > 0 ? `你學了 ${actualCount} 次，師父的本事已被你學全了。` : "這招你已經學滿了，師父沒什麼好教你的了。", "chat");
+                UI.print(actualCount > 0 ? `你學了 ${actualCount} 次，${teacherTitle}的本事已被你學全了。` : `這招你已經學滿了，${teacherTitle}沒什麼好教你的了。`, "chat");
                 break;
             }
             
