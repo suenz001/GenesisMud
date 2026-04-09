@@ -27,6 +27,8 @@ const commandRegistry = {
     'who': { description: '查看在線玩家', execute: PlayerSystem.who },
     'help': { description: '查看指令列表', execute: PlayerSystem.help },
     'score': { description: '查看屬性', execute: PlayerSystem.score },
+    'sc': { description: '查看屬性(score縮寫)', execute: PlayerSystem.score },
+    'hp': { description: '查看簡要狀態', execute: PlayerSystem.hp },
     'save': { description: '存檔', execute: PlayerSystem.save },
     'quit': { description: '離開遊戲', execute: PlayerSystem.quit }, 
     'suicide': { description: '自殺刪檔', execute: PlayerSystem.suicide },

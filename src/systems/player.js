@@ -267,6 +267,27 @@ export const PlayerSystem = {
         
         html += `</div>`;
 
+        html += `</div>`;
+
+        UI.print(html, 'normal', true);
+    },
+
+    hp: (playerData) => {
+        if (!playerData) return;
+        const attr = playerData.attributes;
+        const border = UI.txt("--------------------------------------------", "#444");
+        
+        let html = `<div style="font-family: 'Courier New', monospace; line-height: 1.4; background: rgba(0,0,0,0.3); padding: 5px 10px; border: 1px solid #333; display:inline-block;">`;
+        html += `<div style="text-align:center; color:#00ffff; margin-bottom:3px;">≡ ${playerData.name} (${playerData.id}) ≡</div>`;
+        html += `${border}<br>`;
+        html += `精：<span style="color:#ffd700; display:inline-block; width:80px;">${attr.sp}/${attr.maxSp}</span> `;
+        html += `氣：<span style="color:#ff5555; display:inline-block; width:80px;">${attr.hp}/${attr.maxHp}</span> `;
+        html += `神：<span style="color:#00bfff">${attr.mp}/${attr.maxMp}</span><br>`;
+        
+        html += `食物：<span style="color:#00ff00; display:inline-block; width:65px;">${attr.food}/${attr.maxFood}</span> `;
+        html += `飲水：<span style="color:#00bfff">${attr.water}/${attr.maxWater}</span><br>`;
+        html += `</div>`;
+
         UI.print(html, 'normal', true);
     },
 
@@ -353,7 +374,7 @@ export const PlayerSystem = {
                         html += `<div style="color:#ffff00; margin-top:8px;">═ 【${sect}】 ═</div>`;
                     }
 
-                    const genderStr = player.gender === '男性' ? '少俠' : (player.gender === '女性' ? '俠女' : '高人');
+                    const genderStr = player.gender === '男' ? '少俠' : (player.gender === '女' ? '俠女' : '高人');
                     const sectStr = groupBySect ? "" : `【<span style="color:#ffff00">${sect}</span>】 `;
                     const familyStr = player.family ? ` <span style="color:#aaa">&lt;${player.family}&gt;</span>` : "";
 
