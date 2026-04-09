@@ -14,6 +14,7 @@ import { ItemDB } from "./data/items.js";
 import { auth, db } from "./firebase.js";
 import { PlayerSystem } from "./systems/player.js"; // 確保導入 PlayerSystem 以使用 quit
 import { CombatSystem } from "./systems/combat.js"; // 引入 CombatSystem
+import { ConditionSystem } from "./systems/conditions.js"; // 引入 ConditionSystem
 
 let currentUser = null;
 let localPlayerData = null; 
@@ -313,6 +314,11 @@ function startRegeneration(user) {
             }
         }
 
+        // 觸發狀態系統 (Condition System)
+        if (ConditionSystem.tickConditions(localPlayerData)) {
+            changed = true;
+        }
+
         // 執行資料庫更新
         if (changed || forceUpdate) {
             UI.updateHUD(localPlayerData);
@@ -321,6 +327,7 @@ function startRegeneration(user) {
                 // 準備更新資料，包含屬性與最後活動時間(心跳)
                 const updatePayload = { 
                     attributes: attr,
+                    conditions: localPlayerData.conditions || {},
                     lastActive: Date.now() // 更新心跳時間
                 };
                 await updateDoc(playerRef, updatePayload);

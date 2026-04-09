@@ -6,6 +6,7 @@ import { UI } from "../ui.js";
 import { SkillDB } from "../data/skills.js";
 import { MapSystem } from "./map.js";
 import { ItemDB } from "../data/items.js";
+import { ConditionSystem } from "./conditions.js";
 
 // --- 通用：更新玩家資料 ---
 export async function updatePlayer(userId, data) {
@@ -108,8 +109,12 @@ export function getCombatStats(entity) {
     const hit = baseHit + weaponHit;
     const dodge = baseDodge; 
 
+    // [新增] 狀態系統加成 (Condition System)
+    const statsObj = { ap, dp, hit, dodge, baseAp, baseDp, baseHit, baseDodge };
+    ConditionSystem.applyModifiers(entity, statsObj);
+
     return { 
-        ap, dp, hit, dodge, 
+        ap: statsObj.ap, dp: statsObj.dp, hit: statsObj.hit, dodge: statsObj.dodge, 
         baseAp, baseDp, baseHit, baseDodge,
         equipAp: weaponDmg, 
         equipDp: totalDefense, 
