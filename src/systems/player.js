@@ -113,6 +113,12 @@ export function getCombatStats(entity) {
     const statsObj = { ap, dp, hit, dodge, baseAp, baseDp, baseHit, baseDodge };
     ConditionSystem.applyModifiers(entity, statsObj);
 
+    // [新增] 安全性：合理性上限防護 (Anti-Cheat 傷害封頂)
+    if (statsObj.ap > 9999) statsObj.ap = 9999;
+    if (statsObj.dp > 9999) statsObj.dp = 9999;
+    if (statsObj.hit > 9999) statsObj.hit = 9999;
+    if (statsObj.dodge > 9999) statsObj.dodge = 9999;
+
     return { 
         ap: statsObj.ap, dp: statsObj.dp, hit: statsObj.hit, dodge: statsObj.dodge, 
         baseAp, baseDp, baseHit, baseDodge,

@@ -13,6 +13,9 @@ import { PerformSystem } from "./perform_system.js";
 import { DialogueSystem } from "./dialogue.js";
 import { BankSystem } from "./bank.js";
 
+let lastCommandTime = 0;
+const COMMAND_COOLDOWN = 400; // 安全冷卻時間 400ms
+
 const dirMapping = {
     'n': 'north', 's': 'south', 'e': 'east', 'w': 'west',
     'u': 'up', 'd': 'down', 
@@ -122,6 +125,14 @@ export const CommandSystem = {
     handle: (inputStr, playerData, userId) => {
         if (!inputStr) return;
         
+        // [新增] 指令冷卻機制 (防連點與腳本洗頻)
+        const now = Date.now();
+        if (now - lastCommandTime < COMMAND_COOLDOWN) {
+            UI.print("你的動作太快了，先喘口氣吧！", "error");
+            return;
+        }
+        lastCommandTime = now;
+
         const args = inputStr.trim().split(/\s+/);
         const cmdName = args.shift().toLowerCase();
         
