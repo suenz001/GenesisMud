@@ -479,6 +479,30 @@ export const MapSystem = {
                     UI.showInspection(npc.id, npc.name, 'npc');
                     UI.print(UI.titleLine(npc.name), "chat", true); 
                     UI.print(npc.description);
+
+                    // [新增] 提示玩家可以對這個 NPC 做什麼
+                    if (!isUnconscious) {
+                        let hintHtml = "<div style='color:#00ffff; margin-top: 5px;'>【 互動提示 】</div>";
+                        let hints = [];
+                        if (npc.inquiries) hints.push(`* 輸入 <span style="color:#ffd700">ask ${npc.id} about [話題]</span> 向他打聽情報`);
+                        if (npc.shop) {
+                            hints.push(`* 輸入 <span style="color:#ffd700">list ${npc.id}</span> 瀏覽他的商品`);
+                            hints.push(`* 輸入 <span style="color:#ffd700">sell [物品ID]</span> 可以把打到的東西賣給他`);
+                        }
+                        if (npc.isBanker) {
+                            hints.push(`* 輸入 <span style="color:#ffd700">balance</span> 來查帳`);
+                            hints.push(`* 輸入 <span style="color:#ffd700">deposit [金額]</span> / <span style="color:#ffd700">withdraw [金額]</span> 進行存提款`);
+                        }
+                        if (npc.isPublicTutor || npc.family) {
+                            hints.push(`* 滿足門派或導師條件時可輸入 <span style="color:#ffd700">learn [技能ID] from ${npc.id}</span> 請教武功`);
+                        }
+                        
+                        if (hints.length > 0) {
+                            hintHtml += `<div style='color:#88bbcc; font-size:12px;'>${hints.join("<br>")}</div>`;
+                            UI.print(hintHtml, "normal", true);
+                        }
+                    }
+
                     if (isUnconscious) {
                         UI.print(UI.txt("【 狀態：昏迷不醒 】", "#888888", true), "chat", true);
                         UI.print(UI.attrLine("體力", `${displayHp}/${npc.combat.maxHp}`), "chat", true);

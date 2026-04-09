@@ -296,50 +296,72 @@ export const PlayerSystem = {
         }
     },
 
-    // [優化] Help 顯示：分類更清晰，補齊遺漏指令
+    // [優化] Help 顯示：分類更清晰，加入新手引導與表格化排版
     help: () => {
-        const border = UI.txt("---------------------------------------------------", "#444");
-        let html = `<div style="font-family: 'Courier New', monospace; background: rgba(0,0,0,0.3); padding: 10px; border: 1px solid #333;">`;
-        html += `<div style="text-align:center; color:#00ffff; margin-bottom:5px;">≡ 江湖指南 ≡</div>`;
+        const border = UI.txt("===================================================", "#444");
+        const divider = UI.txt("---------------------------------------------------", "#333");
+        let html = `<div style="font-family: 'Courier New', monospace; background: rgba(0,0,0,0.4); padding: 15px; border: 1px solid #444; border-radius: 5px; line-height: 1.5;">`;
+        html += `<div style="text-align:center; color:#ffd700; font-size: 16px; font-weight:bold; margin-bottom:10px;">≡ GenesisMud 江湖指南 ≡</div>`;
         html += `${border}<br>`;
         
-        // 定義樣式
-        const catStyle = "color:#ff9800; font-weight:bold; display:inline-block; width:60px;";
-        const cmdStyle = "color:#ccc;";
+        // --- 新手引導 ---
+        html += `<div style="color:#00ffff; font-weight:bold; margin-bottom:5px;">【 新手村生存守則 】</div>`;
+        html += `<div style="color:#ccc; font-size:13px; margin-bottom:10px;">
+                1. <b>填飽肚子：</b> 遊戲中會隨時間消耗食物與飲水，記得去<span style="color:#00ff00">客棧</span>向小二買包子和水袋。<br>
+                2. <b>拜師學藝：</b> 揚州廣場北邊有<span style="color:#00ff00">武館</span>，可以向武館教頭拜師 (<code>apprentice</code>)。<br>
+                3. <b>讀書識字：</b> 去客棧二樓找<span style="color:#00ff00">朱先生</span>學習識字 (<code>learn literate</code>)，將來才能看懂武功。<br>
+                4. <b>提升實力：</b> 使用 <code>skills</code> 查看擁有的武學，透過打坐 (<code>exercise</code>) 提昇內力。<br>
+                5. <b>安全存錢：</b> 揚州廣場東邊有<span style="color:#00ff00">宏源錢莊</span>，可以將多餘的錢存入 (<code>deposit</code>)。
+                </div>`;
+        html += `${divider}<br>`;
 
-        // 系統
-        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[系統]</span> `;
-        html += `<span style="${cmdStyle}">save, quit, recall, help, suicide</span></div>`;
+        const catStyle = "color:#ff9800; font-weight:bold; display:inline-block; width:70px;";
+        const cmdStyle = "color:#88bbcc; display:inline-block; width:130px; margin-left: 20px;";
+        const descStyle = "color:#888; font-size: 13px;";
+        const renderRow = (cmd, desc) => `<span style="${cmdStyle}">${cmd}</span><span style="${descStyle}">${desc}</span><br>`;
 
-        // 狀態
-        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[狀態]</span> `;
-        html += `<span style="${cmdStyle}">score, skills, inventory (i)</span></div>`;
+        // --- 核心系統 ---
+        html += `<div style="margin-bottom:8px;"><span style="${catStyle}">[系統]</span><br>`;
+        html += renderRow("look (l)", "觀察四周環境與人物");
+        html += renderRow("score", "查看個人狀態、財產與屬性面板");
+        html += renderRow("skills (sk)", "查看已學會的武功與等級");
+        html += renderRow("save", "保存遊戲進度 (更新重生點)");
+        html += renderRow("quit", "離開遊戲 (請先確保不在戰鬥中)");
+        html += `</div>`;
 
-        // 物品與裝備
-        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[物品]</span> `;
-        html += `<span style="${cmdStyle}">get, drop, give, eat, drink, list, buy, sell</span><br>`;
-        html += `<span style="display:inline-block; width:60px;"></span> <span style="${cmdStyle}">wear, unwear, wield, unwield</span></div>`;
+        // --- 探索 ---
+        html += `<div style="margin-bottom:8px;"><span style="${catStyle}">[探索]</span><br>`;
+        html += renderRow("n/s/e/w", "往東南西北移動 (或直接點擊畫面出口)");
+        html += renderRow("say [內容]", "在當前房間說話");
+        html += renderRow("ask [對象]", "向特定 NPC 探聽消息情報");
+        html += `</div>`;
 
-        // 戰鬥
-        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[戰鬥]</span> `;
-        html += `<span style="${cmdStyle}">kill (殺), fight (切磋)</span></div>`;
+        // --- 物品 ---
+        html += `<div style="margin-bottom:8px;"><span style="${catStyle}">[物品]</span><br>`;
+        html += renderRow("inventory(i)", "查看背包內容");
+        html += renderRow("get / drop", "撿起地上的物品 / 丟棄物品");
+        html += renderRow("wield / wear", "裝備武器 / 穿戴防具");
+        html += renderRow("buy / sell", "向商人購買物品 / 將物品賣給商人");
+        html += renderRow("eat / drink", "吃東西 / 喝水");
+        html += `</div>`;
 
-        // 武學
-        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[武學]</span> `;
-        html += `<span style="${cmdStyle}">apprentice (拜師), learn (學習), practice (練習)</span><br>`;
-        html += `<span style="display:inline-block; width:60px;"></span> <span style="${cmdStyle}">enable (激發), unenable (取消激發)</span></div>`;
+        // --- 武學 ---
+        html += `<div style="margin-bottom:8px;"><span style="${catStyle}">[武學]</span><br>`;
+        html += renderRow("learn", "向導師請教武功 (需消耗潛能)");
+        html += renderRow("practice", "自行練習基礎武功 (需消耗氣血)");
+        html += renderRow("enable", "激發進階武功以替換基礎武功效果");
+        html += renderRow("autoforce", "自動進行內力修練循環 (掛機必備)");
+        html += `</div>`;
 
-        // 修練
-        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[修練]</span> `;
-        html += `<span style="${cmdStyle}">exercise (運氣), respirate (運精), meditate (運神)</span><br>`;
-        html += `<span style="display:inline-block; width:60px;"></span> <span style="${cmdStyle}">enforce (加力), autoforce (自動修練)</span></div>`;
-        
-        // 行動
-        html += `<div style="margin-bottom:5px;"><span style="${catStyle}">[行動]</span> `;
-        html += `<span style="${cmdStyle}">look (l), n, s, e, w, u, d</span></div>`;
+        // --- 戰鬥 ---
+        html += `<div style="margin-bottom:8px;"><span style="${catStyle}">[戰鬥]</span><br>`;
+        html += renderRow("fight / kill", "與人切磋武藝 / 下殺手戰鬥到底");
+        html += renderRow("enforce", "注入內力強化攻擊威力 (例如 enforce 5)");
+        html += renderRow("perform", "施展特殊武功絕招 (例如 perform unarmed.cuff)");
+        html += `</div>`;
 
         html += `${border}<br>`;
-        html += `<div style="color:#888; font-size:12px;">提示：點擊介面按鈕可直接執行大部分指令。</div>`;
+        html += `<div style="color:#55aa55; font-size:12px; text-align:center;">💡 提示：介面上的藍色與黃色文字通常可直接點擊來執行對應動作。</div>`;
         html += `</div>`;
 
         UI.print(html, 'normal', true);
