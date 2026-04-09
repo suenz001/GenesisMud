@@ -110,8 +110,9 @@ const commandRegistry = {
             if(!p.sect) return UI.print("你尚未加入任何門派。", "error");
             if(a.length === 0) return UI.print("你要說什麼？(格式: class <訊息>)", "error");
             const msg = a.join(" ");
-            UI.print(`[${p.sect}] ${p.name}: ${msg}`, "chat");
-            MessageSystem.broadcast(`sect_${p.sect}`, `[${p.sect}] ${p.name}: ${msg}`, "chat");
+            const coloredMsg = UI.txt(`[${p.sect}] ${p.name}: ${msg}`, "#00ff00");
+            UI.print(coloredMsg, "chat", true);
+            MessageSystem.broadcast(`sect_${p.sect}`, coloredMsg, "chat");
         } 
     },
     'ask': { description: '打聽', execute: DialogueSystem.ask },
