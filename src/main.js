@@ -3,7 +3,9 @@ import {
     onAuthStateChanged, 
     signInWithEmailAndPassword, 
     createUserWithEmailAndPassword, 
-    signInAnonymously 
+    signInAnonymously,
+    setPersistence,
+    browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -62,6 +64,12 @@ UI.onMacroUpdate(async (id, macroData) => {
         console.error("儲存巨集失敗", e);
         UI.print("設定儲存失敗，請檢查網路。", "error");
     }
+});
+
+// 強制設定 Firebase Auth 持久化層級為 Session (依賴分頁不共享)
+// 這樣玩家才能在同個瀏覽器開多個分頁，每個分頁各自登入不同帳號
+setPersistence(auth, browserSessionPersistence).catch(e => {
+    console.error("設定多重視窗獨立登入失敗:", e);
 });
 
 onAuthStateChanged(auth, async (user) => {
