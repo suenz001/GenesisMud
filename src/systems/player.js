@@ -7,6 +7,7 @@ import { SkillDB } from "../data/skills.js";
 import { MapSystem } from "./map.js";
 import { ItemDB } from "../data/items.js";
 import { ConditionSystem } from "./conditions.js";
+import { EMOTES } from "./commands.js";
 
 // --- 通用：更新玩家資料 ---
 export async function updatePlayer(userId, data) {
@@ -399,9 +400,35 @@ export const PlayerSystem = {
     },
 
     // [優化] Help 顯示：分類更清晰，加入新手引導與表格化排版
-    help: () => {
+    help: (p, a) => {
         const border = UI.txt("===================================================", "#444");
         const divider = UI.txt("---------------------------------------------------", "#333");
+
+        if (a && a[0] && a[0].toLowerCase() === 'emote') {
+            const emoteKeys = Object.keys(EMOTES);
+            let html = `<div style="font-family: 'Courier New', monospace; background: rgba(0,0,0,0.4); padding: 15px; border: 1px solid #444; border-radius: 5px; line-height: 1.5;">`;
+            html += `<div style="text-align:center; color:#ffd700; font-size: 16px; font-weight:bold; margin-bottom:10px;">≡ 動作表情指令大全 ≡</div>`;
+            html += `${border}<br>`;
+            html += `<div style="color:#aaa; margin-bottom:10px;">
+                    所有的表情指令都可以 <b>單獨使用</b>，或是 <b>指定對象 (包含玩家 ID 或 NPC ID)</b>。<br>
+                    例如輸入：<br>
+                    <span style="color:#00ff00;">smile</span> (顯示：你微微一笑。)<br>
+                    <span style="color:#00ff00;">smile waiter</span> (顯示：你對著店小二微微一笑。)<br>
+                    甚至可以在頻道中使用：<br>
+                    <span style="color:#00ff00;">chat smile waiter</span> (全頻道廣播：張大俠對著店小二微微一笑。)
+                    </div>`;
+            html += `${divider}<br>`;
+            
+            // Grid 顯示
+            html += `<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 5px;">`;
+            for (const key of emoteKeys) {
+                html += `<div style="color:#88bbcc; padding:2px;">• ${key}</div>`;
+            }
+            html += `</div>`;
+            html += `${border}</div>`;
+            return UI.print(html, "system", true);
+        }
+
         let html = `<div style="font-family: 'Courier New', monospace; background: rgba(0,0,0,0.4); padding: 15px; border: 1px solid #444; border-radius: 5px; line-height: 1.5;">`;
         html += `<div style="text-align:center; color:#ffd700; font-size: 16px; font-weight:bold; margin-bottom:10px;">≡ GenesisMud 江湖指南 ≡</div>`;
         html += `${border}<br>`;
@@ -428,7 +455,7 @@ export const PlayerSystem = {
         html += renderRow("chat <文字>", "在全伺服器公共頻道發言");
         html += renderRow("class <文字>", "在門派專屬頻道發言");
         html += renderRow("emote <動作>", "扮演動作，例如: emote 笑了笑");
-        html += renderRow("smile / laugh / hi", "MUD 經典表情指令 (還有 flop, cry, nod, hug 等)");
+        html += renderRow("help emote", "列出所有的內建 MUD 動作表情清單");
         html += `</div>`;
 
         // --- 資訊 ---

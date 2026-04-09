@@ -1,5 +1,7 @@
 // src/systems/commands.js
 import { UI } from "../ui.js";
+import { db } from "../firebase.js";
+import { getDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { MapSystem } from "./map.js";
 import { MessageSystem } from "./messages.js"; 
 import { ItemDB } from "../data/items.js"; 
@@ -137,7 +139,7 @@ Object.keys(dirMapping).forEach(shortDir => {
     commandRegistry[fullDir] = { description: `往 ${fullDir} 移動`, execute: (p, a, u) => MapSystem.move(p, fullDir, u) };
 });
 
-const EMOTES = {
+export const EMOTES = {
     'smile': { 
         self: '你微微一笑。', 
         other: '微微一笑。',
@@ -314,18 +316,29 @@ const EMOTES = {
     }
 };
 
-function resolveTarget(raw) {
+async function resolveTarget(raw) {
     if (!raw) return null;
-    return NPCDB[raw] ? NPCDB[raw].name : raw;
+    if (NPCDB[raw]) return NPCDB[raw].name;
+    try {
+        const playerSnap = await getDoc(doc(db, "players", raw));
+        if (playerSnap.exists()) {
+            return playerSnap.data().name;
+        }
+    } catch (e) {}
+    return "UNKNOWN";
 }
 
-function processChatCommand(p, a, prefixText, channelId, isGreen = false) {
+async function processChatCommand(p, a, prefixText, channelId, isGreen = false) {
     if(a.length === 0) return UI.print(`你要說什麼？`, "error");
     
     const firstWord = a[0].toLowerCase();
     if (EMOTES[firstWord]) {
         const targetRaw = a[1];
-        const targetName = resolveTarget(targetRaw);
+        let targetName = null;
+        if (targetRaw) {
+            targetName = await resolveTarget(targetRaw);
+            if (targetName === "UNKNOWN") return UI.print("沒看到這個人呀。", "error");
+        }
         
         let selfMsg, otherMsg;
         if (targetName) {
@@ -359,9 +372,13 @@ function processChatCommand(p, a, prefixText, channelId, isGreen = false) {
 Object.keys(EMOTES).forEach(cmd => {
     commandRegistry[cmd] = {
         description: '動作表情',
-        execute: (p, a) => {
+        execute: async (p, a) => {
             const targetRaw = a[0];
-            const targetName = resolveTarget(targetRaw);
+            let targetName = null;
+            if (targetRaw) {
+                targetName = await resolveTarget(targetRaw);
+                if (targetName === "UNKNOWN") return UI.print("沒看到這個人呀。", "error");
+            }
             
             let selfMsg, otherMsg;
             if (targetName) {
@@ -379,7 +396,7 @@ Object.keys(EMOTES).forEach(cmd => {
 });
 
 export const CommandSystem = {
-    handle: (inputStr, playerData, userId) => {
+    handle: async (inputStr, playerData, userId) => {
         if (!inputStr) return;
         
         // [新增] 指令冷卻機制 (防連點與腳本洗頻)
@@ -445,7 +462,13 @@ export const CommandSystem = {
         if (!playerData) { UI.print("靈魂尚未歸位...", "error"); return; }
         
         const command = commandRegistry[cmdName];
-        if (command) command.execute(playerData, args, userId);
+        if (command) {
+            try {
+                await command.execute(playerData, args, userId);
+            } catch(e) {
+                console.error("執行指令失敗", e);
+            }
+        }
         else UI.print("你胡亂比劃了一通。(輸入 help 查看指令)", "error");
     },
     stopCombat: CombatSystem.stopCombat
