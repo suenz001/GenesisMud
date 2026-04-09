@@ -876,19 +876,26 @@ export const SkillSystem = {
 
         if(!p.skills[baseSkillId]){ UI.print("你不會這項基本武功。", "error"); return; }
         
-        let targetSkillId = baseSkillId;
-        let isAdvanced = false;
+        const skillInfo = SkillDB[baseSkillId];
+        if (skillInfo && skillInfo.base) {
+             UI.print("請輸入「基本武功」的代碼來練習它所激發的進階武功。", "error");
+             return;
+        }
+
+        let targetSkillId = null;
 
         if (p.enabled_skills && p.enabled_skills[baseSkillId]) {
             targetSkillId = p.enabled_skills[baseSkillId];
-            isAdvanced = true;
+        }
+
+        if (!targetSkillId) {
+             UI.print(`你必須先激發(enable)一門進階武學，才能透過練習 ${baseSkillId} 來提昇它。\n(基本武功無法透過單純的練習來升級)`, "error");
+             return;
         }
 
         if (!p.skills[targetSkillId]) {
-            if (isAdvanced) {
-                UI.print(`你雖然激發了${targetSkillId}，但還沒學會，無法練習。`, "error");
-                return;
-            }
+            UI.print(`你雖然激發了${targetSkillId}，但還沒學會，無法練習。`, "error");
+            return;
         }
 
         let actualCount = 0;
@@ -901,8 +908,8 @@ export const SkillSystem = {
             const baseLvl = p.skills[baseSkillId] || 0;
             const skillName = SkillDB[targetSkillId] ? SkillDB[targetSkillId].name : targetSkillId;
 
-            if (isAdvanced && currentLvl >= baseLvl) {
-                const baseName = SkillDB[baseSkillId].name;
+            if (currentLvl >= baseLvl) {
+                const baseName = SkillDB[baseSkillId] ? SkillDB[baseSkillId].name : baseSkillId;
                 UI.print(actualCount > 0 ? `練習了 ${actualCount} 次後，你的${baseName}火候已不足以支持更高的${skillName}。` : `你的${baseName}火候不足，無法繼續提升${skillName}。`, "error");
                 break;
             }
