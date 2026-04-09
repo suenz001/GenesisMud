@@ -97,22 +97,13 @@ const commandRegistry = {
     'say': { description: '說', execute: (p,a)=>{const m=a.join(" ");UI.print(`你: ${m}`,"chat");MessageSystem.broadcast(p.location,`${p.name} 說: ${m}`);} },
     'chat': { 
         description: '公共頻道', 
-        execute: (p, a) => {
-            if(a.length === 0) return UI.print("你要說什麼？(格式: chat <訊息>)", "error");
-            const msg = a.join(" ");
-            UI.print(`[公共] ${p.name}: ${msg}`, "chat");
-            MessageSystem.broadcast("global_chat", `[公共] ${p.name}: ${msg}`, "chat");
-        } 
+        execute: (p, a) => processChatCommand(p, a, "[公共]", "global_chat", false)
     },
     'class': { 
         description: '門派頻道', 
         execute: (p, a) => {
             if(!p.sect) return UI.print("你尚未加入任何門派。", "error");
-            if(a.length === 0) return UI.print("你要說什麼？(格式: class <訊息>)", "error");
-            const msg = a.join(" ");
-            const coloredMsg = UI.txt(`[${p.sect}] ${p.name}: ${msg}`, "#00ff00");
-            UI.print(coloredMsg, "chat", true);
-            MessageSystem.broadcast(`sect_${p.sect}`, coloredMsg, "chat");
+            processChatCommand(p, a, `[${p.sect}]`, `sect_${p.sect}`, true);
         } 
     },
     'ask': { description: '打聽', execute: DialogueSystem.ask },
@@ -144,26 +135,140 @@ Object.keys(dirMapping).forEach(shortDir => {
 });
 
 const EMOTES = {
-    'smile': { self: '你微微一笑。', other: '微微一笑。' },
-    'laugh': { self: '你哈哈大笑。', other: '哈哈大笑。' },
-    'hi': { self: '你向大家熱情地打招呼。', other: '向大家熱情地打招呼。' },
-    'tsk': { self: '你嘖嘖搖頭，似乎很不以為然。', other: '嘖嘖搖頭，似乎很不以為然。' },
-    'flop': { self: '你雙腿一軟，吧嗒一聲跌坐在地上。', other: '雙腿一軟，吧嗒一聲跌坐在地上。' },
-    'nod': { self: '你點了點頭。', other: '點了點頭。' },
-    'shake': { self: '你搖了搖頭。', other: '搖了搖頭。' },
-    'sigh': { self: '你深深地嘆了一口氣。', other: '深深地嘆了一口氣。' },
-    'bow': { self: '你恭敬地鞠了一躬。', other: '恭敬地鞠了一躬。' },
-    'cry': { self: '你忍不住放聲大哭。', other: '忍不住放聲大哭。' },
-    'hug': { self: '你張開雙臂，想要擁抱大家。', other: '張開雙臂，想要擁抱大家。' },
-    'shrug': { self: '你聳了聳肩，表示無能為力。', other: '聳了聳肩，表示無能為力。' }
+    'smile': { 
+        self: '你微微一笑。', 
+        other: '微微一笑。',
+        self_target: (n) => `你對著${n}微微一笑。`,
+        other_target: (n) => `對著${n}微微一笑。`
+    },
+    'laugh': { 
+        self: '你哈哈大笑。', 
+        other: '哈哈大笑。',
+        self_target: (n) => `你對著${n}哈哈大笑。`,
+        other_target: (n) => `對著${n}哈哈大笑。`
+    },
+    'hi': { 
+        self: '你向大家熱情地打招呼。', 
+        other: '向大家熱情地打招呼。',
+        self_target: (n) => `你熱情地向${n}打招呼。`,
+        other_target: (n) => `熱情地向${n}打招呼。`
+    },
+    'tsk': { 
+        self: '你嘖嘖搖頭，似乎很不以為然。', 
+        other: '嘖嘖搖頭，似乎很不以為然。',
+        self_target: (n) => `你對著${n}嘖嘖搖頭，似乎很不以為然。`,
+        other_target: (n) => `對著${n}嘖嘖搖頭，似乎很不以為然。`
+    },
+    'flop': { 
+        self: '你雙腿一軟，吧嗒一聲跌坐在地上。', 
+        other: '雙腿一軟，吧嗒一聲跌坐在地上。',
+        self_target: (n) => `你在${n}面前雙腿一軟，吧嗒一聲跌坐在地上。`,
+        other_target: (n) => `在${n}面前雙腿一軟，吧嗒一聲跌坐在地上。`
+    },
+    'nod': { 
+        self: '你點了點頭。', 
+        other: '點了點頭。',
+        self_target: (n) => `你對著${n}點了點頭。`,
+        other_target: (n) => `對著${n}點了點頭。`
+    },
+    'shake': { 
+        self: '你搖了搖頭。', 
+        other: '搖了搖頭。',
+        self_target: (n) => `你對著${n}搖了搖頭。`,
+        other_target: (n) => `對著${n}搖了搖頭。`
+    },
+    'sigh': { 
+        self: '你深深地嘆了一口氣。', 
+        other: '深深地嘆了一口氣。',
+        self_target: (n) => `你對著${n}深深地嘆了一口氣。`,
+        other_target: (n) => `對著${n}深深地嘆了一口氣。`
+    },
+    'bow': { 
+        self: '你恭敬地鞠了一躬。', 
+        other: '恭敬地鞠了一躬。',
+        self_target: (n) => `你恭敬地向${n}鞠了一躬。`,
+        other_target: (n) => `恭敬地向${n}鞠了一躬。`
+    },
+    'cry': { 
+        self: '你忍不住放聲大哭。', 
+        other: '忍不住放聲大哭。',
+        self_target: (n) => `你抱著${n}忍不住放聲大哭。`,
+        other_target: (n) => `抱著${n}忍不住放聲大哭。`
+    },
+    'hug': { 
+        self: '你張開雙臂，想要擁抱大家。', 
+        other: '張開雙臂，想要擁抱大家。',
+        self_target: (n) => `你緊緊地擁抱了${n}。`,
+        other_target: (n) => `緊緊地擁抱了${n}。`
+    },
+    'shrug': { 
+        self: '你聳了聳肩，表示無能為力。', 
+        other: '聳了聳肩，表示無能為力。',
+        self_target: (n) => `你對著${n}聳了聳肩，表示無能為力。`,
+        other_target: (n) => `對著${n}聳了聳肩，表示無能為力。`
+    }
 };
+
+function resolveTarget(raw) {
+    if (!raw) return null;
+    return NPCDB[raw] ? NPCDB[raw].name : raw;
+}
+
+function processChatCommand(p, a, prefixText, channelId, isGreen = false) {
+    if(a.length === 0) return UI.print(`你要說什麼？`, "error");
+    
+    const firstWord = a[0].toLowerCase();
+    if (EMOTES[firstWord]) {
+        const targetRaw = a[1];
+        const targetName = resolveTarget(targetRaw);
+        
+        let selfMsg, otherMsg;
+        if (targetName) {
+            selfMsg = EMOTES[firstWord].self_target(targetName);
+            otherMsg = EMOTES[firstWord].other_target(targetName);
+        } else {
+            selfMsg = EMOTES[firstWord].self;
+            otherMsg = EMOTES[firstWord].other;
+        }
+
+        let outputSelf = `${prefixText} ${selfMsg}`;
+        let outputOther = `${prefixText} ${p.name}${otherMsg}`;
+        if (isGreen) {
+            outputSelf = UI.txt(outputSelf, "#00ff00");
+            outputOther = UI.txt(outputOther, "#00ff00");
+        }
+        
+        UI.print(outputSelf, "chat", isGreen);
+        MessageSystem.broadcast(channelId, outputOther, "chat");
+        return;
+    }
+
+    const msg = a.join(" ");
+    let outputSelf = `${prefixText} ${p.name}: ${msg}`;
+    if (isGreen) outputSelf = UI.txt(outputSelf, "#00ff00");
+    
+    UI.print(outputSelf, "chat", isGreen);
+    MessageSystem.broadcast(channelId, outputSelf, "chat");
+}
 
 Object.keys(EMOTES).forEach(cmd => {
     commandRegistry[cmd] = {
         description: '動作表情',
         execute: (p, a) => {
-            UI.print(EMOTES[cmd].self, "system");
-            MessageSystem.broadcast(p.location, `${p.name} ${EMOTES[cmd].other}`, "system");
+            const targetRaw = a[0];
+            const targetName = resolveTarget(targetRaw);
+            
+            let selfMsg, otherMsg;
+            if (targetName) {
+                selfMsg = EMOTES[cmd].self_target(targetName);
+                otherMsg = EMOTES[cmd].other_target(targetName);
+            } else {
+                selfMsg = EMOTES[cmd].self;
+                otherMsg = EMOTES[cmd].other;
+            }
+
+            UI.print(selfMsg, "system");
+            MessageSystem.broadcast(p.location, `${p.name}${otherMsg}`, "system");
         }
     }
 });
