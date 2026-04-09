@@ -8,7 +8,12 @@ export const NPCDB = {
         description: "一位勤快的店小二。",
         attributes: { str: 15, con: 15, per: 15, kar: 15, int: 15, cor: 15 },
         combat: { hp: 300, maxHp: 300, attack: 10, defense: 5, xp: 0 },
-        shop: { "rice": 10, "dumpling": 15, "bread": 5, "roast_chicken": 50, "waterskin": 20, "tea": 10, "wine": 80 }
+        shop: { "rice": 10, "dumpling": 15, "bread": 5, "roast_chicken": 50, "waterskin": 20, "tea": 10, "wine": 80 },
+        inquiries: {
+            "name": "我是這家客棧的店小二，客官有什麼吩咐？",
+            "rumor": "聽說江湖上最近很不平靜，尤其是東邊的森林裡有猛獸出沒。",
+            "food": "客官若是餓了渴了，儘管跟我買(buy)些吃喝的！"
+        }
     },
     "blacksmith": {
         id: "blacksmith",
@@ -57,6 +62,11 @@ export const NPCDB = {
             "book_buddha_2": 500,   // 金剛經
             "book_taoism_1": 100,   // 符咒入門
             "book_taoism_2": 500    // 道德經
+        },
+        inquiries: {
+            "name": "老朽朱先生，在此設館授徒。",
+            "study": "年輕人若是不識字，將來就算拿到絕世武功秘笈也只能乾瞪眼啊！",
+            "rumor": "聽說飛龍武館的王教頭和李教頭，兩人的武功路數截然不同呢。"
         }
     },
     

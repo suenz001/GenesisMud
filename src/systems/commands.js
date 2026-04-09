@@ -9,7 +9,8 @@ import { CombatSystem } from "./combat.js";
 import { PlayerSystem, updatePlayer } from "./player.js";
 import { InventorySystem } from "./inventory.js";
 import { SkillSystem } from "./skill_system.js";
-import { PerformSystem } from "./perform_system.js"; 
+import { PerformSystem } from "./perform_system.js";
+import { DialogueSystem } from "./dialogue.js";
 
 const dirMapping = {
     'n': 'north', 's': 'south', 'e': 'east', 'w': 'west',
@@ -85,6 +86,7 @@ const commandRegistry = {
         } 
     },
     'say': { description: '說', execute: (p,a)=>{const m=a.join(" ");UI.print(`你: ${m}`,"chat");MessageSystem.broadcast(p.location,`${p.name} 說: ${m}`);} },
+    'ask': { description: '打聽', execute: DialogueSystem.ask },
     'emote': { description: '演', execute: (p,a)=>{const m=a.join(" ");UI.print(`${p.name} ${m}`,"system");MessageSystem.broadcast(p.location,`${p.name} ${m}`);} },
     'recall': { 
         description: '回', 
