@@ -52,7 +52,7 @@ export const WorldMap = {
         title: "宏源錢莊", 
         description: "金字招牌的錢莊，信譽卓著。", 
         safe: true, x: 3, y: 0, z: 0, 
-        region: ["world"] 
+        region: ["world"], npcs: ["banker"]
     },
     
     "street_ne1": { 

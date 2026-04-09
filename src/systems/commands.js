@@ -11,6 +11,7 @@ import { InventorySystem } from "./inventory.js";
 import { SkillSystem } from "./skill_system.js";
 import { PerformSystem } from "./perform_system.js";
 import { DialogueSystem } from "./dialogue.js";
+import { BankSystem } from "./bank.js";
 
 const dirMapping = {
     'n': 'north', 's': 'south', 'e': 'east', 'w': 'west',
@@ -51,6 +52,9 @@ const commandRegistry = {
     'inventory': { description: '背包', execute: InventorySystem.inventory },
     'i': { description: '背包 (縮寫)', execute: InventorySystem.inventory },
     'give': { description: '給予', execute: InventorySystem.give },
+    'balance': { description: '查帳', execute: BankSystem.balance },
+    'deposit': { description: '存款(deposit <數值>)', execute: BankSystem.deposit },
+    'withdraw': { description: '提款(withdraw <數值>)', execute: BankSystem.withdraw },
 
     // === 技能與修練指令 ===
     'skills': { description: '查看技能', execute: SkillSystem.skills },

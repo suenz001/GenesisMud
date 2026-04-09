@@ -71,6 +71,19 @@ export const NPCDB = {
             "rumor": "聽說飛龍武館的王教頭和李教頭，兩人的武功路數截然不同呢。"
         }
     },
+    // [新增] 錢莊老闆
+    "banker": {
+        id: "banker",
+        name: "錢莊老闆",
+        description: "一位穿著綢緞長袍的中年人，正精打細算地撥弄著手裡的純金算盤。",
+        attributes: { str: 10, con: 10, per: 10, kar: 40, int: 50, cor: 10 },
+        combat: { hp: 500, maxHp: 500, attack: 10, defense: 10, xp: 0 },
+        isBanker: true,
+        inquiries: {
+            "name": "在下姓錢，大家都叫我錢老闆。客官要存錢(deposit)還是提錢(withdraw)？",
+            "business": "我們宏源錢莊銀聯互通，童叟無欺！隨時可以來查帳(balance)。"
+        }
+    },
     
     // === 武館 NPC ===
     
