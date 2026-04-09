@@ -12,13 +12,9 @@ import { ItemDB } from "../data/items.js";
 let autoForceInterval = null; 
 let isProcessing = false; // 防止異步操作重疊的鎖
 
-// === 升級所需經驗值公式 (極速升級版) ===
+// === 升級所需經驗值公式 (平滑難度版) ===
 function calculateMaxExp(level) {
-    if (level < 150) {
-        return Math.pow(level + 1, 2) * 5;
-    } else {
-        return Math.pow(level + 1, 3);
-    }
+    return Math.floor(Math.pow(level + 1, 2) * (10 + level / 2));
 }
 
 function findNPCInRoom(roomId, npcNameOrId) {
