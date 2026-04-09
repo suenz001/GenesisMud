@@ -206,6 +206,108 @@ const EMOTES = {
         other: '聳了聳肩，表示無能為力。',
         self_target: (n) => `你對著${n}聳了聳肩，表示無能為力。`,
         other_target: (n) => `對著${n}聳了聳肩，表示無能為力。`
+    },
+    'kick': {
+        self: '你飛起一腳，踢在半空中。',
+        other: '飛起一腳，踢在半空中。',
+        self_target: (n) => `你飛起一腳，狠狠踢在${n}的屁股上！`,
+        other_target: (n) => `飛起一腳，狠狠踢在${n}的屁股上！`
+    },
+    'sob': {
+        self: '你抽咽著，眼淚流了下來。',
+        other: '抽咽著，眼淚流了下來。',
+        self_target: (n) => `你靠著${n}的肩膀，傷心地抽咽著。`,
+        other_target: (n) => `靠著${n}的肩膀，傷心地抽咽著。`
+    },
+    'giggle': {
+        self: '你忍不住噗哧一聲笑了出來。',
+        other: '忍不住噗哧一聲笑了出來。',
+        self_target: (n) => `你看著${n}，忍不住噗哧一聲笑了出來。`,
+        other_target: (n) => `看著${n}，忍不住噗哧一聲笑了出來。`
+    },
+    'lick': {
+        self: '你舔了舔嘴唇。',
+        other: '舔了舔嘴唇。',
+        self_target: (n) => `你伸出舌頭，舔了${n}一下。`,
+        other_target: (n) => `伸出舌頭，舔了${n}一下。`
+    },
+    'frown': {
+        self: '你皺了皺眉頭。',
+        other: '皺了皺眉頭。',
+        self_target: (n) => `你對著${n}皺了皺眉頭。`,
+        other_target: (n) => `對著${n}皺了皺眉頭。`
+    },
+    'wave': {
+        self: '你用力揮了揮手。',
+        other: '用力揮了揮手。',
+        self_target: (n) => `你向${n}用力揮了揮手。`,
+        other_target: (n) => `向${n}用力揮了揮手。`
+    },
+    'poke': {
+        self: '你覺得有些無聊，隨手戳了戳空氣。',
+        other: '覺得有些無聊，隨手戳了戳空氣。',
+        self_target: (n) => `你伸出手指，調皮地戳了戳${n}。`,
+        other_target: (n) => `伸出手指，調皮地戳了戳${n}。`
+    },
+    'slap': {
+        self: '你用力拍了一下大腿。',
+        other: '用力拍了一下大腿。',
+        self_target: (n) => `你掄起巴掌，狠狠地給了${n}一個清脆的耳光！`,
+        other_target: (n) => `掄起巴掌，狠狠地給了${n}一個清脆的耳光！`
+    },
+    'kiss': {
+        self: '你送出一個飛吻。',
+        other: '送出一個飛吻。',
+        self_target: (n) => `你深情地吻了${n}一下。`,
+        other_target: (n) => `深情地吻了${n}一下。`
+    },
+    'pat': {
+        self: '你輕輕拍了拍手。',
+        other: '輕輕拍了拍手。',
+        self_target: (n) => `你輕輕拍了拍${n}的頭。`,
+        other_target: (n) => `輕輕拍了拍${n}的頭。`
+    },
+    'glare': {
+        self: '你怒目圓睜。',
+        other: '怒目圓睜。',
+        self_target: (n) => `你狠狠地瞪了${n}一眼。`,
+        other_target: (n) => `狠狠地瞪了${n}一眼。`
+    },
+    'stare': {
+        self: '你睜大眼睛盯著前方。',
+        other: '睜大眼睛盯著前方。',
+        self_target: (n) => `你目不轉睛地盯著${n}看。`,
+        other_target: (n) => `目不轉睛地盯著${n}看。`
+    },
+    'wink': {
+        self: '你頑皮地眨了眨眼。',
+        other: '頑皮地眨了眨眼。',
+        self_target: (n) => `你對著${n}頑皮地眨了眨眼。`,
+        other_target: (n) => `對著${n}頑皮地眨了眨眼。`
+    },
+    'cheer': {
+        self: '你興奮地大聲歡呼！',
+        other: '興奮地大聲歡呼！',
+        self_target: (n) => `你為${n}大聲歡呼叫好！`,
+        other_target: (n) => `為${n}大聲歡呼叫好！`
+    },
+    'clap': {
+        self: '你開心地鼓起掌來。',
+        other: '開心地鼓起掌來。',
+        self_target: (n) => `你對著${n}開心地鼓掌。`,
+        other_target: (n) => `對著${n}開心地鼓掌。`
+    },
+    'faint': {
+        self: '你兩眼一黑，暈了過去。',
+        other: '兩眼一黑，暈了過去。',
+        self_target: (n) => `你看到${n}，嚇得兩眼一黑暈了過去。`,
+        other_target: (n) => `看到${n}，嚇得兩眼一黑暈了過去。`
+    },
+    'yawn': {
+        self: '你大大地打了一個哈欠，看起來很睏。',
+        other: '大大地打了一個哈欠，看起來很睏。',
+        self_target: (n) => `你看著${n}，忍不住打了一個大哈欠。`,
+        other_target: (n) => `看著${n}，忍不住打了一個大哈欠。`
     }
 };
 
