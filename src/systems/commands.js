@@ -24,6 +24,7 @@ const dirMapping = {
 
 const commandRegistry = {
     // === 基礎與玩家指令 ===
+    'who': { description: '查看在線玩家', execute: PlayerSystem.who },
     'help': { description: '查看指令列表', execute: PlayerSystem.help },
     'score': { description: '查看屬性', execute: PlayerSystem.score },
     'save': { description: '存檔', execute: PlayerSystem.save },

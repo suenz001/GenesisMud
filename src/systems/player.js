@@ -1,5 +1,5 @@
 // src/systems/player.js
-import { doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, updateDoc, deleteDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { db, auth } from "../firebase.js";
 import { UI } from "../ui.js";
@@ -296,6 +296,87 @@ export const PlayerSystem = {
         }
     },
 
+    who: async (p, a, u) => {
+        // 設定在線判定閾值為最近 5 分鐘
+        const threshold = Date.now() - 300000; 
+        
+        let showDetailed = false;
+        let groupBySect = false;
+
+        const args = a.map(arg => arg.toLowerCase());
+        if (args.includes("-l")) showDetailed = true;
+        if (args.includes("-class")) groupBySect = true;
+
+        try {
+            const playersRef = collection(db, "players");
+            const q = query(playersRef, where("lastActive", ">", threshold)); 
+            const snaps = await getDocs(q);
+
+            let onlinePlayers = [];
+            snaps.forEach(doc => {
+                const data = doc.data();
+                if (data.id) onlinePlayers.push(data);
+            });
+
+            if (onlinePlayers.length === 0) {
+                UI.print("江湖中目前空無一人。", "system");
+                return;
+            }
+
+            onlinePlayers.sort((a,b) => {
+                let sA = a.sect || "無門派";
+                let sB = b.sect || "無門派";
+                if(sA === "無門派") sA = "龘"; // force bottom sort
+                if(sB === "無門派") sB = "龘"; // force bottom sort
+                
+                if (groupBySect) {
+                    if (sA !== sB) return sA.localeCompare(sB, 'zh-TW');
+                }
+                const bHp = b.attributes?.maxHp || 0;
+                const aHp = a.attributes?.maxHp || 0;
+                return bHp - aHp;
+            });
+
+            const border = UI.txt("===========================================", "#444");
+            let html = `<div style="font-family: 'Courier New', monospace; line-height: 1.4; background: rgba(0,0,0,0.3); padding: 10px; border: 1px solid #333;">`;
+            html += `<div style="color:#00ffff; margin-bottom:5px;">≡ 目前在線玩家 (共 ${onlinePlayers.length} 人) ≡</div>`;
+            html += `${border}<br>`;
+
+            if (showDetailed || groupBySect) {
+                let currentSect = null;
+
+                for (const player of onlinePlayers) {
+                    const sect = player.sect || "無門派";
+                    
+                    if (groupBySect && currentSect !== sect) {
+                        currentSect = sect;
+                        html += `<div style="color:#ffff00; margin-top:8px;">═ 【${sect}】 ═</div>`;
+                    }
+
+                    const genderStr = player.gender === '男性' ? '少俠' : (player.gender === '女性' ? '俠女' : '高人');
+                    const sectStr = groupBySect ? "" : `【<span style="color:#ffff00">${sect}</span>】 `;
+                    const familyStr = player.family ? ` <span style="color:#aaa">&lt;${player.family}&gt;</span>` : "";
+
+                    html += ` ${sectStr}<span style="color:#fff">${player.name}</span> <span style="color:#88bbcc">(${player.id})</span> ${genderStr}${familyStr}<br>`;
+                }
+            } else {
+                const names = onlinePlayers.map(p => ` <span style="color:#fff">${p.name}</span> <span style="color:#88bbcc">(${p.id})</span>`);
+                html += names.join(", ") + "<br>";
+            }
+
+            html += `${border}</div>`;
+            UI.print(html, "system", true);
+
+        } catch (e) {
+            console.error("查閱玩家名單失敗", e);
+            if (e.message.includes('index')) {
+                UI.print("查閱名單功能正在設定中(等待資料庫建立索引)。請稍後再試。", "error");
+            } else {
+                UI.print("查閱在線玩家失敗。", "error");
+            }
+        }
+    },
+
     // [優化] Help 顯示：分類更清晰，加入新手引導與表格化排版
     help: () => {
         const border = UI.txt("===================================================", "#444");
@@ -327,6 +408,17 @@ export const PlayerSystem = {
         html += renderRow("class <文字>", "在門派專屬頻道發言");
         html += renderRow("emote <動作>", "扮演動作，例如: emote 笑了笑");
         html += renderRow("smile / laugh / hi", "MUD 經典表情指令 (還有 flop, cry, nod, hug 等)");
+        html += `</div>`;
+
+        // --- 資訊 ---
+        html += `<div style="margin-bottom:8px;"><span style="${catStyle}">[查詢]</span><br>`;
+        html += renderRow("who", "查看目前在線的玩家");
+        html += renderRow("who -l", "查看詳細的在線玩家名單");
+        html += renderRow("who -class", "依門派分門別類查看在線名單");
+        html += renderRow("score（或 sc）", "查看自己的狀態與數值");
+        html += renderRow("skills (sk)", "查看自己的技能清單");
+        html += renderRow("inventory (i)", "查看自己的背包物品");
+        html += renderRow("hp", "查看角色簡略狀態");
         html += `</div>`;
 
         // --- 核心系統 ---
