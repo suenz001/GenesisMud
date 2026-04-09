@@ -8,6 +8,7 @@ import { MapSystem } from "./map.js";
 import { ItemDB } from "../data/items.js";
 import { ConditionSystem } from "./conditions.js";
 import { EMOTES } from "./commands.js";
+import { PerformDB } from "../data/performs.js";
 
 // --- 通用：更新玩家資料 ---
 export async function updatePlayer(userId, data) {
@@ -429,6 +430,60 @@ export const PlayerSystem = {
             return UI.print(html, "system", true);
         }
 
+        if (a && a[0] && a[0].toLowerCase() === 'perform') {
+            const performs = Object.values(PerformDB);
+            const skillMap = {
+                'iron-palm': '鐵砂掌', 'eight-trigram-blade': '八卦刀', 'arhat-stick': '羅漢棍',
+                'swift-sword': '疾風劍法', 'shadow-dagger': '如影隨形刺', 'cloud-whip': '流雲鞭',
+                'golden-dart': '金錢鏑', 'yang-spear': '楊家槍'
+            };
+            const effectMap = { 'stun': '點穴（動彈不得）', 'bleed': '流血', 'bind': '定身' };
+            const typeMap = { 'single': '單體', 'aoe': '範圍全體', 'multi_hit': '連擊', 'control': '控制' };
+            
+            let html = `<div style="font-family: 'Courier New', monospace; background: rgba(0,0,0,0.4); padding: 15px; border: 1px solid #444; border-radius: 5px; line-height: 1.6;">`;
+            html += `<div style="text-align:center; color:#ff8800; font-size: 16px; font-weight:bold; margin-bottom:10px;">≡ 武學絕招大全 ≡</div>`;
+            html += `${border}<br>`;
+            html += `<div style="color:#aaa; margin-bottom:10px;">
+                <b>如何使用絕招：</b><br>
+                <span style="color:#ffd700;">perform &lt;招式ID&gt;</span> — 不指定目標，自動攻擊戰鬥中的對手<br>
+                <span style="color:#ffd700;">perform &lt;招式ID&gt; &lt;NPC ID&gt;</span> — 指定攻擊目標<br>
+                <span style="color:#ffd700;">perform &lt;招式ID&gt; &lt;玩家ID&gt;</span> — 對戰鬥中的玩家使用（需先進入戰鬥）<br>
+                <b>需求：</b> 已學並激發對應武功 + 需持對應兵器 + 內力足够
+                </div>`;
+            html += `${divider}<br>`;
+
+            html += `<table style="width:100%; border-collapse:collapse; font-size:13px;">`;
+            html += `<tr style="color:#ff9800; border-bottom:1px solid #333;">
+                <th style="text-align:left; padding:4px 8px;">ID</th>
+                <th style="text-align:left; padding:4px 8px;">招式名</th>
+                <th style="text-align:left; padding:4px 8px;">需求武功</th>
+                <th style="text-align:center; padding:4px 8px;">類型</th>
+                <th style="text-align:center; padding:4px 8px;">內力消耗</th>
+                <th style="text-align:center; padding:4px 8px;">冷卻</th>
+                <th style="text-align:left; padding:4px 8px;">特效</th>
+            </tr>`;
+
+            for (const pd of performs) {
+                const skillName = skillMap[pd.skill] || pd.skill;
+                const typeName = typeMap[pd.type] || pd.type;
+                const effectName = pd.effect ? (effectMap[pd.effect] || pd.effect) + ` (${pd.duration}s)` : '—';
+                const hitsNote = pd.hits ? ` ×${pd.hits}` : '';
+                const cdSec = (pd.cooldown / 1000).toFixed(0);
+                html += `<tr style="border-bottom:1px solid #222; color:#ccc;">
+                    <td style="padding:4px 8px; color:#88bbcc;">${pd.id}</td>
+                    <td style="padding:4px 8px; color:#ffd700; font-weight:bold">${pd.name}</td>
+                    <td style="padding:4px 8px; color:#88cc88;">${skillName}</td>
+                    <td style="text-align:center; padding:4px 8px;">${typeName}${hitsNote}</td>
+                    <td style="text-align:center; padding:4px 8px; color:#88aaff;">${pd.forceCost}</td>
+                    <td style="text-align:center; padding:4px 8px; color:#aaa;">${cdSec}s</td>
+                    <td style="padding:4px 8px; color:#ff8888;">${effectName}</td>
+                </tr>`;
+            }
+            html += `</table>`;
+            html += `${border}</div>`;
+            return UI.print(html, "system", true);
+        }
+
         let html = `<div style="font-family: 'Courier New', monospace; background: rgba(0,0,0,0.4); padding: 15px; border: 1px solid #444; border-radius: 5px; line-height: 1.5;">`;
         html += `<div style="text-align:center; color:#ffd700; font-size: 16px; font-weight:bold; margin-bottom:10px;">≡ GenesisMud 江湖指南 ≡</div>`;
         html += `${border}<br>`;
@@ -508,7 +563,8 @@ export const PlayerSystem = {
         html += `<div style="margin-bottom:8px;"><span style="${catStyle}">[戰鬥]</span><br>`;
         html += renderRow("fight / kill", "與人切磋武藝 / 下殺手戰鬥到底");
         html += renderRow("enforce", "注入內力強化攻擊威力 (例如 enforce 5)");
-        html += renderRow("perform", "施展特殊武功絕招 (例如 perform unarmed.cuff)");
+        html += renderRow("perform <招式ID>", "施展特殊武功絕招 (例如 perform burning)");
+        html += renderRow("help perform", "列出所有可用絕招與詳細資訊");
         html += `</div>`;
 
         html += `${border}<br>`;

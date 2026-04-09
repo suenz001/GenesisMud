@@ -522,32 +522,44 @@ export const CombatSystem = {
         UI.print(msg, "chat", true);
         MessageSystem.broadcast(playerData.location, msg);
 
-        let hits = performData.hits || 1;
-        let applyDebuff = false;
-        if (performData.type === 'buff_debuff' && performData.effect === 'busy') {
-            applyDebuff = true;
-        }
+        const hits = performData.hits || 1;
+        let targetDied = false;
 
         for (let i = 0; i < hits; i++) {
             let dmg = Math.floor(damageBase);
             dmg = Math.floor(dmg * (0.9 + Math.random() * 0.2)); 
 
-            await CombatSystem.applyDamage(uniqueId, dmg, playerData, userId, npc);
+            const result = await CombatSystem.applyDamage(uniqueId, dmg, playerData, userId, npc);
             
             const currentState = await fetchNpcState(uniqueId, npc.combat.maxHp);
-            if (currentState.hp <= 0) return;
+            if (currentState.hp <= 0) { targetDied = true; break; }
         }
 
-        let busyTime = npcState.busy || 0;
-        if (applyDebuff) {
-            const duration = (performData.duration || 3) * 1000;
-            busyTime = Date.now() + duration;
-            UI.print(UI.txt(`${npc.name} 被你的招式驚得手足無措！`, "#ff5555"), "chat", true);
-            MessageSystem.broadcast(playerData.location, UI.txt(`${npc.name} 陷入了混亂！`, "#ff5555", true));
-            await syncNpcState(uniqueId, npc.combat.hp, npc.combat.maxHp, playerData.location, npc.name, userId, false, busyTime, npc.id);
+        // [新增] 套用控制效果 (stun = 點穴無法動彈攻擊, bleed = 流血)
+        if (!targetDied && performData.effect) {
+            const duration = performData.duration || 3;
+            const busyUntil = Date.now() + duration * 1000;
+            
+            try {
+                await syncNpcState(uniqueId, npc.combat.hp, npc.combat.maxHp, 
+                    playerData.location, npc.name, userId, false, busyUntil, npc.id);
+                await updateDoc(doc(db, "active_npcs", uniqueId), {
+                    [`conditions.${performData.effect}`]: { id: performData.effect, expireAt: busyUntil }
+                });
+            } catch(e) {}
+
+            if (performData.effect === 'stun') {
+                UI.print(UI.txt(`你點中了 ${npc.name} 的要穴！牠動彈不得！(${duration}秒)`, "#ffdd00", true), "chat", true);
+                MessageSystem.broadcast(playerData.location, UI.txt(`${npc.name} 被點中要穴，無法動彈！`, "#ffdd00", true));
+            } else if (performData.effect === 'bleed') {
+                UI.print(UI.txt(`${npc.name} 的傷口大量出血！(${duration}秒)`, "#cc0000", true), "chat", true);
+                MessageSystem.broadcast(playerData.location, UI.txt(`${npc.name} 受到了流血效果！`, "#cc0000", true));
+            }
         }
 
-        CombatSystem.fight(playerData, [], userId, false, npc);
+        if (!targetDied) {
+            CombatSystem.fight(playerData, [], userId, false, npc);
+        }
     },
 
     syncCombatState: async (playerData, userId) => {
