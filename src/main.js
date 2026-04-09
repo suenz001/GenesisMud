@@ -66,6 +66,11 @@ UI.onMacroUpdate(async (id, macroData) => {
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
+        if (currentUser && currentUser.uid !== user.uid) {
+            // 防止同一個瀏覽器開雙視窗或切換帳號遺留的舊 Interval 互相覆蓋
+            cleanupGameSession(); 
+        }
+        
         currentUser = user;
         UI.showLoginPanel(false);
         UI.enableGameInput(true);
@@ -118,7 +123,8 @@ function cleanupGameSession() {
 }
 
 function setupPlayerListener(user, isFirstLoad = false) {
-    if (playerUnsubscribe) playerUnsubscribe(); 
+    // 每次設定新的監聽器前，務必徹底清理舊的 Interval，防止不同帳號的迴圈互相污染
+    cleanupGameSession(); 
 
     const playerRef = doc(db, "players", user.uid);
     
