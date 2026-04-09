@@ -127,8 +127,8 @@ export const SkillSystem = {
         });
     },
 
-    // === 自動修練內力 (Auto Force) - 蓄力爆發版 ===
-    autoForce: async (p, a, u) => {
+    // === 自動修練 (Auto Train) 共用邏輯 ===
+    autoTrainBase: async (p, u, typeName, attrCur, attrMax, costAttr, costName) => {
         // 如果已經在修練，則停止
         if (autoForceInterval || p.state === 'exercising') {
             if (autoForceInterval) clearInterval(autoForceInterval);
@@ -136,7 +136,7 @@ export const SkillSystem = {
             isProcessing = false;
             p.state = 'normal';
             await updatePlayer(u, { state: 'normal' });
-            UI.print("你停止了自動修練內力。", "system");
+            UI.print(`你停止了自動修練${typeName}。`, "system");
             return;
         }
 
@@ -147,10 +147,9 @@ export const SkillSystem = {
 
         p.state = 'exercising';
         await updatePlayer(u, { state: 'exercising' });
-        UI.print("你盤膝而坐，閉目凝神，準備衝擊內力瓶頸...", "system");
-        UI.print(UI.txt("【系統】自動循環：積蓄氣血 -> 一次性補滿內力 -> 突破上限", "#00ffff"), "system", true);
+        UI.print(`你盤膝而坐，閉目凝神，準備衝擊${typeName}瓶頸...`, "system");
+        UI.print(UI.txt(`【系統】自動循環：積蓄${costName} -> 一次性補滿${typeName} -> 突破上限`, "#00ffff"), "system", true);
         
-        // 重置鎖定狀態
         isProcessing = false;
         let isWaitingForRegen = false;
 
@@ -159,77 +158,68 @@ export const SkillSystem = {
             isProcessing = true;
 
             try {
-                // 每次循環都從資料庫抓取「最新」的玩家狀態
                 const playerRef = doc(db, "players", u);
                 const playerSnap = await getDoc(playerRef);
 
-                if (!playerSnap.exists()) {
+                if (!playerSnap.exists() || playerSnap.data().state !== 'exercising') {
                     clearInterval(autoForceInterval);
                     autoForceInterval = null;
                     return;
                 }
 
                 const freshP = playerSnap.data();
-
-                // 安全檢查
-                if (freshP.state !== 'exercising') {
-                    clearInterval(autoForceInterval);
-                    autoForceInterval = null;
-                    return;
-                }
-
                 const attr = freshP.attributes;
-                const maxForce = attr.maxForce;
-                const curForce = attr.force;
-                const curHp = attr.hp;
-                const limit = maxForce * 2;
+                const maxVal = attr[attrMax];
+                const curVal = attr[attrCur];
+                const curCost = attr[costAttr];
+                const limit = maxVal * 2;
                 
-                // 1. 如果內力還沒滿 2 倍 -> 計算需要多少氣血才能「一次補滿」
-                if (curForce < limit) {
-                    const neededForce = limit - curForce;
-                    const hpCostNeeded = neededForce; 
+                // 1. 如果能量還沒滿 2 倍 -> 計算需要多少才能「一次補滿」
+                if (curVal < limit) {
+                    const needed = limit - curVal;
                     
-                    // 檢查當前氣血是否足夠「一次性」補滿，並保留 10 點
-                    if (curHp > hpCostNeeded + 10) {
+                    // 檢查消耗點數是否足夠「一次性」補滿，並保留 10 點
+                    if (curCost > needed + 10) {
                         if (isWaitingForRegen) {
                             isWaitingForRegen = false;
-                            UI.print(UI.txt("氣血充盈，開始衝擊氣脈！", "#00ff00"), "system", true);
+                            UI.print(UI.txt(`${costName}脈充盈，開始衝擊！`, "#00ff00"), "system", true);
                         }
-                        // 執行大額修練
-                        await SkillSystem.trainStat(freshP, u, "內力", "force", "maxForce", "hp", "氣", [neededForce.toString()]);
+                        await SkillSystem.trainStat(freshP, u, typeName, attrCur, attrMax, costAttr, costName, [needed.toString()]);
                     } else {
-                        // 氣血不足，進入等待模式
+                        // 不足，進入等待模式
                         if (!isWaitingForRegen) {
                             isWaitingForRegen = true;
-                            const missingHp = hpCostNeeded + 10 - curHp;
-                            UI.print(UI.txt(`氣血不足以一次貫通 (缺 ${missingHp} 氣)，暫停運功積蓄氣血...`, "#888888"), "system", true);
+                            const missing = needed + 10 - curCost;
+                            UI.print(UI.txt(`${costName}不足以一次貫通 (缺 ${missing} ${costName})，暫停運功積蓄...`, "#888888"), "system", true);
                             UI.updateHUD(freshP);
                         }
                     }
                 } 
-                // 2. 內力已達 2 倍 -> 執行突破
+                // 2. 已達 2 倍 -> 執行突破
                 else {
-                    if (curHp <= 20) {
+                    if (curCost <= 20) {
                          if (!isWaitingForRegen) {
                             isWaitingForRegen = true;
-                            UI.print(UI.txt("氣血虛弱，暫停運功調理...", "#888888"), "system", true);
+                            UI.print(UI.txt(`${costName}虛弱，暫停運功調理...`, "#888888"), "system", true);
                             UI.updateHUD(freshP);
                         }
                     } else {
                         if (isWaitingForRegen) isWaitingForRegen = false;
-                        await SkillSystem.trainStat(freshP, u, "內力", "force", "maxForce", "hp", "氣", ["1"]);
+                        await SkillSystem.trainStat(freshP, u, typeName, attrCur, attrMax, costAttr, costName, ["1"]);
                     }
                 }
-
             } catch (error) {
-                console.error("AutoForce Error:", error);
+                console.error("AutoTrain Error:", error);
                 UI.print("修練過程發生未知錯誤，系統嘗試恢復...", "error");
             } finally {
                 isProcessing = false;
             }
-
-        }, 2000); // 2 秒一次循環
+        }, 2000); 
     },
+
+    autoForce: async (p, a, u) => SkillSystem.autoTrainBase(p, u, "內力", "force", "maxForce", "hp", "氣"),
+    autoRespirate: async (p, a, u) => SkillSystem.autoTrainBase(p, u, "靈力", "spiritual", "maxSpiritual", "sp", "精"),
+    autoMeditate: async (p, a, u) => SkillSystem.autoTrainBase(p, u, "法力", "mana", "maxMana", "mp", "神"),
 
     // === 屬性修練 (Exercise/Respirate/Meditate) - 整合版 ===
     trainStat: async (playerData, userId, typeName, attrCur, attrMax, costAttr, costName, args) => {
@@ -323,9 +313,11 @@ export const SkillSystem = {
             isCapReached = true;
         }
 
-        // 計算獲得量 (可根據悟性或技能微調，這裡暫定為 1:1 + 技能加成)
+        // 計算獲得量 (依照相關技能加成)
         let skillBonus = 0;
         if(typeName === "內力") skillBonus = Math.floor((playerData.skills?.force || 0) / 10);
+        else if(typeName === "靈力") skillBonus = Math.floor((playerData.skills?.buddhism || 0) / 10);
+        else if(typeName === "法力") skillBonus = Math.floor((playerData.skills?.spells || 0) / 10);
         
         const gain = cost + skillBonus; 
         let improved = false;

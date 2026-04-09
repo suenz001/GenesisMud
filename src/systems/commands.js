@@ -77,8 +77,10 @@ const commandRegistry = {
     'meditate': { description: '運神 (神->法力)', execute: (p,a,u) => SkillSystem.trainStat(p,u,"法力","mana","maxMana","mp","神",a) },
     
     // === 內力運用與自動修練指令 ===
+    'autoforce': { description: '自動運氣', execute: SkillSystem.autoForce },
+    'autorespirate': { description: '自動運精', execute: SkillSystem.autoRespirate },
+    'automeditate': { description: '自動運神', execute: SkillSystem.autoMeditate },
     'exert': { description: '運功', execute: SkillSystem.exert },
-    'autoforce': { description: '自動修練內力', execute: SkillSystem.autoForce },
     'enforce': { description: '加力', execute: PlayerSystem.enforce },
 
     // === 地圖與社交指令 ===

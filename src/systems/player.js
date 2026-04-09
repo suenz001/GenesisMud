@@ -348,9 +348,11 @@ export const PlayerSystem = {
         // --- 武學 ---
         html += `<div style="margin-bottom:8px;"><span style="${catStyle}">[武學]</span><br>`;
         html += renderRow("learn", "向導師請教武功 (需消耗潛能)");
-        html += renderRow("practice", "自行練習基礎武功 (需消耗氣血)");
+        html += renderRow("practice", "自行練習進階武功 (需消耗氣血)");
         html += renderRow("enable", "激發進階武功以替換基礎武功效果");
-        html += renderRow("autoforce", "自動進行內力修練循環 (掛機必備)");
+        html += renderRow("autoforce", "自動進行內力(氣)修練循環");
+        html += renderRow("autorespirate", "自動進行靈力(精)修練循環");
+        html += renderRow("automeditate", "自動進行法力(神)修練循環");
         html += `</div>`;
 
         // --- 戰鬥 ---
