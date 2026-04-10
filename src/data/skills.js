@@ -252,9 +252,9 @@ export const SkillDB = {
         name: "茅山道劍", id: "maoshan-sword", base: "sword", type: "martial", rating: 1.4,
         desc: "茅山派的驅魔劍法，每一擊都暗含罡氣。",
         actions: [
-            { msg: "$P踏出天罡步，手中$w爆出耀眼的<span style='color:#ffff00; font-weight:bold;'>「金光咒」</span>，一劍刺向$N！", damage: 50 },
-            { msg: "$P劍尖一挑，在空中畫出一道符文，<span style='color:#00ffff; font-weight:bold;'>「太極劍花」</span>如實體般擊向$N。", damage: 45 },
-            { msg: "$P大喝一聲「急急如律令！」，$w挾帶<span style='color:#ff8800; font-weight:bold;'>「天雷之威」</span>劈向$N！", damage: 55 }
+            { msg: "$P踏出天罡步，手中$w爆出耀眼的<span style='color:#ffff00; text-shadow:0 0 10px #ffaa00; font-weight:bold;'>「金光咒」</span>，一劍刺向$N！", damage: 50 },
+            { msg: "$P劍尖一挑，在空中畫出一道符文，<span style='color:#00ffff; text-shadow:0 0 8px #0088ff; font-weight:bold;'>「太極劍花」</span>如實體般擊向$N。", damage: 45 },
+            { msg: "$P大喝一聲「急急如律令！」，$w挾帶<span style='color:#ff8800; text-shadow:0 0 12px #ff0000; font-weight:bold;'>「天雷之威」</span>劈向$N！", damage: 55 }
         ]
     },
     "maoshan-force": { name: "茅山心法", id: "maoshan-force", base: "force", type: "force", rating: 1.4, desc: "茅山獨門內功，能凝練法力，驅邪避凶。" },
@@ -276,9 +276,9 @@ export const SkillDB = {
         name: "天罡步法", id: "tiangang-steps", base: "dodge", type: "dodge", rating: 1.4,
         desc: "茅山派秘傳身法，腳踏七星，閃避無極。",
         dodge_actions: [
-            "$N腳下一錯，踏出<span style='color:#ffcc00'>天罡北斗</span>之位，瞬間移出了一丈遠。",
-            "$N口中默念咒文，身形忽然一化為三，讓$P的攻擊從<span style='color:#88bbff'>幻影</span>中穿過。",
-            "$N袖袍一揮，飄然倒躍，猶如<span style='color:#ddddff'>仙人起舞</span>般避開了殺招。"
+            "$N腳下一錯，踏出<span style='color:#ffcc00; text-shadow:0 0 5px #ffaa00; font-weight:bold;'>天罡北斗</span>之位，瞬間移出了一丈遠。",
+            "$N口中默念咒文，身形忽然一化為三，讓$P的攻擊從<span style='color:#88bbff; text-shadow:0 0 8px #0044ff; font-style:italic;'>幻影</span>中穿過。",
+            "$N袖袍一揮，飄然倒躍，猶如<span style='color:#ddddff; text-shadow:0 0 5px #aaaaff;'>仙人起舞</span>般避開了殺招。"
         ]
     }
 };
