@@ -348,10 +348,10 @@ export const PlayerSystem = {
             }
 
             onlinePlayers.sort((a,b) => {
-                let sA = a.sect || "無門派";
-                let sB = b.sect || "無門派";
-                if(sA === "無門派") sA = "龘"; // force bottom sort
-                if(sB === "無門派") sB = "龘"; // force bottom sort
+                let sA = (a.sect && a.sect !== 'none') ? a.sect : "江湖浪人";
+                let sB = (b.sect && b.sect !== 'none') ? b.sect : "江湖浪人";
+                if(sA === "江湖浪人") sA = "龘"; // force bottom sort
+                if(sB === "江湖浪人") sB = "龘"; // force bottom sort
                 
                 if (groupBySect) {
                     if (sA !== sB) return sA.localeCompare(sB, 'zh-TW');
@@ -370,7 +370,7 @@ export const PlayerSystem = {
                 let currentSect = null;
 
                 for (const player of onlinePlayers) {
-                    const sect = player.sect || "無門派";
+                    const sect = (player.sect && player.sect !== 'none') ? player.sect : "江湖浪人";
                     
                     if (groupBySect && currentSect !== sect) {
                         currentSect = sect;
