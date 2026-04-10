@@ -1002,9 +1002,55 @@ export const CombatSystem = {
 
             for (const enemy of [...combatList]) {
                 if (enemy.type === 'pve' && enemy.npcHp > 0) {
-                     if (enemy.busy && now < enemy.busy) {
-                         continue;
-                     }
+                    // [修正] 每回合從 Firestore 同步 NPC 的 busy 和 conditions 狀態
+                    try {
+                        const npcRef = doc(db, "active_npcs", enemy.uniqueId);
+                        const npcSnap = await getDoc(npcRef);
+                        if (npcSnap.exists()) {
+                            const npcLiveData = npcSnap.data();
+                            enemy.busy = npcLiveData.busy || 0;
+                            enemy.conditions = npcLiveData.conditions || {};
+                        }
+                    } catch(e) {}
+
+                    // [點穴+定身] 如果 NPC 有 stun 狀態且尚未過期，跳過本回合攻擊
+                    const stunCond = enemy.conditions?.stun;
+                    const isStunned = stunCond && now < stunCond.expireAt;
+                    
+                    // [流血] 如果 NPC 有 bleed 狀態，每回合扣除血量
+                    const bleedCond = enemy.conditions?.bleed;
+                    if (bleedCond && now < bleedCond.expireAt) {
+                        const bleedDmg = Math.floor(enemy.npcHp * 0.03) + 5; // 3% + 5 固定傷害
+                        enemy.npcHp -= bleedDmg;
+                        if (enemy.npcHp < 0) enemy.npcHp = 0;
+                        UI.print(UI.txt(`${enemy.npcName} 的傷口持續失血，損失 ${bleedDmg} 點氣血。`, "#cc0000"), "chat", true);
+                        
+                        try {
+                            await updateDoc(doc(db, "active_npcs", enemy.uniqueId), { currentHp: enemy.npcHp });
+                        } catch(e) {}
+
+                        if (enemy.npcHp <= 0) {
+                            enemy.npcIsUnconscious = true;
+                            await syncNpcState(enemy.uniqueId, 0, enemy.maxNpcHp, enemy.roomId, enemy.npcName, null, true, 0, enemy.targetId);
+                            UI.print(UI.txt(`${enemy.npcName} 因失血過多，轟然倒地！`, "#ff5555"), "system", true);
+                            await handleKillReward(enemy.npcObj, playerData, enemy, userId);
+                            const idx = combatList.indexOf(enemy);
+                            if (idx > -1) combatList.splice(idx, 1);
+                            continue;
+                        }
+                    }
+
+                    if (enemy.busy && now < enemy.busy) {
+                        if (isStunned) {
+                            UI.print(UI.txt(`${enemy.npcName} 穴道被封，動彈不得！`, "#ffdd00"), "chat", true);
+                        }
+                        continue;
+                    }
+                    
+                    if (isStunned) {
+                        UI.print(UI.txt(`${enemy.npcName} 被點穴，無法行動！`, "#ffdd00"), "chat", true);
+                        continue;
+                    }
 
                      const npc = enemy.npcObj;
                      const eStats = getNPCCombatStats(npc);
