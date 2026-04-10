@@ -258,6 +258,10 @@ export const SkillDB = {
         ]
     },
     "maoshan-force": { name: "茅山心法", id: "maoshan-force", base: "force", type: "force", rating: 1.4, desc: "茅山獨門內功，能凝練法力，驅邪避凶。" },
+    "maoshan-spells": {
+        name: "茅山道術", id: "maoshan-spells", base: "spells", type: "spells", rating: 1.5,
+        desc: "茅山派的驅鬼秘術，必須將其激發(enable spells maoshan-spells)才能施放各類法術。"
+    },
     "turtle-force": { name: "龜息功", id: "turtle-force", base: "force", type: "force", rating: 1.1, desc: "模仿神龜呼吸的內功。" },
     "leaf-steps": { 
         name: "隨風步", id: "leaf-steps", base: "dodge", type: "dodge", rating: 1.3,

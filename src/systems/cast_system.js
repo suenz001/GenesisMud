@@ -106,10 +106,15 @@ export const CastSystem = {
             UI.print(`你尚未加入【${spell.sect}】門派，無法施展此法術。`, "error"); return;
         }
 
-        // 法術技能確認（需有 spells 技能）
+        // 法術技能確認
         const spellsLvl = playerData.skills?.spells || 0;
         if (spellsLvl <= 0) {
-            UI.print("你對咒術一竅不通，無法施法。(先向茅山師父學習 spells 技能)", "error"); return;
+            UI.print("你對咒術一竅不通，無法施法。先向茅山師父學習基本咒術(spells)。", "error"); return;
+        }
+
+        const enabledSpell = playerData.enabled_skills?.spells;
+        if (!enabledSpell) {
+            UI.print("你尚未激發任何進階道術，無法施展法術！(請先 enable spells <進階武學ID>)", "error"); return;
         }
 
         // MP 消耗檢查

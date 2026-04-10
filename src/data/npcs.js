@@ -296,10 +296,10 @@ export const NPCDB = {
         combat: { hp: 3000, maxHp: 3000, attack: 120, defense: 100, xp: 0 },
         skills: {
             "unarmed": 80, "sword": 80, "spells": 120,
-            "force": 80, "dodge": 80, "maoshan-sword": 80, "maoshan-force": 80, "tiangang-steps": 80
+            "force": 80, "dodge": 80, "maoshan-sword": 80, "maoshan-force": 80, "tiangang-steps": 80, "maoshan-spells": 100
         },
         enabled_skills: {
-            "sword": "maoshan-sword", "force": "maoshan-force", "dodge": "tiangang-steps"
+            "sword": "maoshan-sword", "force": "maoshan-force", "dodge": "tiangang-steps", "spells": "maoshan-spells"
         },
         inquiries: {
             "茅山": "玄靈子捻動道珠，緩緩說道：「茅山立派已逾三百年，以符籙道法立足江湖，驅鬼辟邪乃是本門天職。你若心誠，可拜入我茅山門下，共同護守人間正道。」",
@@ -322,10 +322,10 @@ export const NPCDB = {
         combat: { hp: 4000, maxHp: 4000, attack: 160, defense: 120, xp: 0 },
         skills: {
             "unarmed": 80, "sword": 60, "spells": 200,
-            "force": 100, "dodge": 80, "maoshan-sword": 100, "maoshan-force": 120, "tiangang-steps": 100
+            "force": 100, "dodge": 80, "maoshan-sword": 100, "maoshan-force": 120, "tiangang-steps": 100, "maoshan-spells": 180
         },
         enabled_skills: {
-            "sword": "maoshan-sword", "force": "maoshan-force", "dodge": "tiangang-steps"
+            "sword": "maoshan-sword", "force": "maoshan-force", "dodge": "tiangang-steps", "spells": "maoshan-spells"
         },
         inquiries: {
             "法術": "玄煞老道漫不經心地看了你一眼，冷冷問道：「你的咒術幾級了？沒到三十級，别來煩我。」",
@@ -357,8 +357,8 @@ export const NPCDB = {
         description: "一名二十出頭的年輕道士，身形矯健，拳腳間透著幾分茅山派的道家韻味。他正在庭院中練習一套剛猛中帶著道法玄意的拳法，每一式都配合著低沉的吐納之聲，顯然已初窺茅山武學的門道。",
         attributes: { str: 25, con: 25, per: 25, kar: 20, int: 25, cor: 20 },
         combat: { hp: 1000, maxHp: 1000, attack: 70, defense: 55, xp: 50 },
-        skills: { "unarmed": 40, "sword": 40, "spells": 20, "force": 30, "dodge": 35, "maoshan-sword": 30 },
-        enabled_skills: { "unarmed": "unarmed", "sword": "maoshan-sword" },
+        skills: { "unarmed": 40, "sword": 40, "spells": 20, "force": 30, "dodge": 35, "maoshan-sword": 30, "maoshan-spells": 10 },
+        enabled_skills: { "unarmed": "unarmed", "sword": "maoshan-sword", "spells": "maoshan-spells" },
         inquiries: {
             "切磋": "青風道士笑道：「正好手癢！但你可別手下留情，茅山弟子不怕挫折！(輸入 fight maoshan_disc1)」",
             "法術": "「法術嘛…我剛開始學，還不太熟。不過師父說只要法力足夠，連殭屍也能一擊必殺！」"
@@ -373,8 +373,8 @@ export const NPCDB = {
         description: "白澤道士生得文弱清秀，薄薄的嘴唇上方留著幾撮稀疏的鬍渣，手指上沾滿了墨跡。他是茅山派有名的「書符達人」，專長在符籙研究，在切磋上倒比不上同門師兄，但論起道法理論，無人能出其右。",
         attributes: { str: 15, con: 18, per: 20, kar: 18, int: 40, cor: 25 },
         combat: { hp: 700, maxHp: 700, attack: 45, defense: 40, xp: 0 },
-        skills: { "unarmed": 20, "spells": 60, "force": 40, "maoshan-force": 30 },
-        enabled_skills: { "force": "maoshan-force" },
+        skills: { "unarmed": 20, "spells": 60, "force": 40, "maoshan-force": 30, "maoshan-spells": 50 },
+        enabled_skills: { "force": "maoshan-force", "spells": "maoshan-spells" },
         inquiries: {
             "法術": "白澤放下毛筆，認真解釋道：「cast 指令的格式是：cast <法術ID> <目標ID>。例如：cast thunder_seal jiangshi。法術消耗的是你的法力（MP），所以要先用 automeditate 練習法力。」",
             "cast": "「cast 指令限茅山弟子使用。你要先（1）拜入茅山，（2）學習 spells 技能，（3）用 automeditate 積蓄法力，才能施法。對殭屍和孤魂的傷害會有大幅加成！」",
