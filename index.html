@@ -14,6 +14,13 @@
         <div id="game-body">
             <div id="main-display">
                 <div id="output"></div>
+                <div id="output-live" style="display: none;">
+                    <div id="live-header">
+                        <span style="color:#00ffff; font-size:12px; font-weight:bold;">⏬ 即時動態 (已暫停自動捲動)</span>
+                        <button id="btn-snap-bottom" title="回到最底下"><i class="fas fa-arrow-down"></i> 回到底部</button>
+                    </div>
+                    <div id="live-content"></div>
+                </div>
                 <div id="input-area">
                     <input type="text" id="cmd-input" placeholder="系統載入中..." disabled>
                     <button id="send-btn" disabled><i class="fas fa-paper-plane"></i></button>

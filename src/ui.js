@@ -3,6 +3,9 @@ import { WorldMap } from "./data/world.js";
 import { MapSystem } from "./systems/map.js"; 
 
 const output = document.getElementById('output');
+const outputLive = document.getElementById('output-live');
+const liveContent = document.getElementById('live-content');
+const btnSnapBottom = document.getElementById('btn-snap-bottom');
 const input = document.getElementById('cmd-input');
 const sendBtn = document.getElementById('send-btn');
 const loginPanel = document.getElementById('login-panel');
@@ -69,6 +72,30 @@ const NUMPAD_MAP = {
     'NumpadSubtract': 'down' // 減號鍵往下
 };
 
+// [新增] 滾輪分割視窗狀態
+let isSplitView = false;
+
+output.addEventListener('scroll', () => {
+    // 若距離底部超過 20px，代表使用者往上滾動了
+    const distToBottom = output.scrollHeight - output.scrollTop - output.clientHeight;
+    if (distToBottom > 20) {
+        if (!isSplitView) {
+            isSplitView = true;
+            outputLive.style.display = 'flex';
+            liveContent.innerHTML = ''; // 開啟時清空內容
+        }
+    } else {
+        if (isSplitView) {
+            isSplitView = false;
+            outputLive.style.display = 'none';
+        }
+    }
+});
+
+btnSnapBottom.addEventListener('click', () => {
+    output.scrollTop = output.scrollHeight;
+});
+
 export const UI = {
     // ... (保留原本的 txt, titleLine, attrLine, formatMoney, makeCmd, print ... 等函式，不用變) ...
     txt: (text, color = '#ccc', bold = false) => {
@@ -102,8 +129,22 @@ export const UI = {
         if (type === 'system') div.classList.add('msg-system');
         if (type === 'error') div.classList.add('msg-error');
         if (type === 'chat') div.classList.add('msg-chat');
+        
         output.appendChild(div);
-        output.scrollTop = output.scrollHeight;
+        
+        if (!isSplitView) {
+            output.scrollTop = output.scrollHeight;
+        } else {
+            // 如果處於分割視窗模式，將訊息複製一份到下半部
+            const clone = div.cloneNode(true);
+            liveContent.appendChild(clone);
+            liveContent.scrollTop = liveContent.scrollHeight;
+            
+            // 限制下半部的訊息數量 (最多 50 筆)
+            if (liveContent.children.length > 50) {
+                liveContent.firstChild.remove();
+            }
+        }
     },
     
     updateMacroButtons: (macros) => {
