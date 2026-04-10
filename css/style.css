@@ -159,6 +159,17 @@ body {
 }
 #cmd-input:focus { outline: none; border-color: var(--accent-green); }
 
+#cmd-history {
+    background: #080808;
+    border: 1px solid #444;
+    color: #ccc;
+    font-size: 14px;
+    padding: 0 5px;
+    border-radius: 4px;
+    max-width: 120px;
+}
+#cmd-history:focus { outline: none; border-color: var(--accent-green); }
+
 #send-btn {
     background: #333;
     color: #fff;

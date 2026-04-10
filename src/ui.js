@@ -7,6 +7,7 @@ const outputLive = document.getElementById('output-live');
 const liveContent = document.getElementById('live-content');
 const btnSnapBottom = document.getElementById('btn-snap-bottom');
 const input = document.getElementById('cmd-input');
+const cmdHistorySelect = document.getElementById('cmd-history');
 const sendBtn = document.getElementById('send-btn');
 const loginPanel = document.getElementById('login-panel');
 // ... (保留原本的 DOM 元素宣告，不用變) ...
@@ -56,6 +57,38 @@ let currentEnforceValue = 0;
 // 巨集相關變數
 let localMacros = {}; 
 let onMacroSaveCallback = null;
+
+// [新增] 指令歷史紀錄 (使用 localStorage 保持跨網頁紀錄)
+const MAX_HISTORY = 10;
+
+function updateHistoryDropdown(cmd = null) {
+    let history = JSON.parse(localStorage.getItem('cmdHistory') || '[]');
+    
+    if (cmd && cmd.trim()) {
+        history = [cmd, ...history.filter(c => c !== cmd)].slice(0, MAX_HISTORY);
+        localStorage.setItem('cmdHistory', JSON.stringify(history));
+    }
+    
+    // 更新下拉選單
+    cmdHistorySelect.innerHTML = '<option value="">(歷史指令)</option>';
+    history.forEach(c => {
+        const option = document.createElement('option');
+        option.value = c;
+        if (c.length > 15) option.textContent = c.substring(0, 15) + '...';
+        else option.textContent = c;
+        cmdHistorySelect.appendChild(option);
+    });
+}
+// 初始化下拉選單
+updateHistoryDropdown();
+
+cmdHistorySelect.addEventListener('change', () => {
+    if (cmdHistorySelect.value) {
+        input.value = cmdHistorySelect.value;
+        input.focus();
+        cmdHistorySelect.selectedIndex = 0; // 重置回預設選項
+    }
+});
 
 // [新增] 數字鍵盤對應表 (Numpad Mapping)
 const NUMPAD_MAP = {
@@ -291,6 +324,7 @@ export const UI = {
         // ... (保留原本的 enableGameInput) ...
         input.disabled = !enabled;
         sendBtn.disabled = !enabled;
+        cmdHistorySelect.disabled = !enabled;
         const allBtns = document.querySelectorAll('button:not(#btn-login):not(#btn-register):not(#btn-guest)');
         allBtns.forEach(btn => btn.disabled = !enabled);
 
@@ -364,12 +398,16 @@ export const UI = {
             input.select(); 
         };
 
-        const sendHandler = () => {
-            const val = input.value.trim();
-            if (val) {
-                UI.print(`> ${val}`);
-                callback(val);
-                updateInputState(val);
+
+
+        const handleSend = () => {
+            const cmd = input.value.trim();
+            if (cmd) {
+                UI.print(`> ${cmd}`);
+                callback(cmd);
+                updateHistoryDropdown(cmd);
+                input.value = '';
+                input.focus();
             }
         };
 
