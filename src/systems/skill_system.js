@@ -555,6 +555,7 @@ export const SkillSystem = {
         const npc = findNPCInRoom(playerData.location, args[0]);
         if (!npc) { UI.print("這裡沒有這個人。", "error"); return; }
         if (!npc.family) { UI.print(`${npc.name} 說道：「我只是一介平民，不懂收徒。」`, "chat"); return; }
+        if (!npc.isMaster) { UI.print(`${npc.name} 說道：「我這點微末道行，哪敢收徒啊。」`, "chat"); return; }
         
         if (playerData.family) {
             if (playerData.family.masterId === npc.id) { 

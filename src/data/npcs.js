@@ -99,6 +99,7 @@ export const NPCDB = {
         img: "assets/images/npcs/gym_master.png",
         description: "王教頭生得膀大腰圓，猶如半截黑塔一般杵在庭院中。他手持一柄泛著寒光的特大號九環鋼刀，每一次呼吸都氣息悠長，顯然外家硬氣功已經練到了爐火純青的境界。",
         family: "common_gym",
+        isMaster: true,
         attributes: { str: 50, con: 50, per: 30, kar: 30, int: 30, cor: 30 }, // 力量體質較高
         combat: { hp: 5000, maxHp: 5000, attack: 80, defense: 80, xp: 0 },
         skills: { 
@@ -133,6 +134,7 @@ export const NPCDB = {
         img: "assets/images/npcs/gym_master_li.jpg",
         description: "李教頭看似文弱骨瘦如柴，但他雙目開闔之間，隱隱有精光爆射而出。他的一雙手掌修長白皙，腰間盤著一條不知名材質製成的玄黑軟鞭，隨時準備發出致命一擊。",
         family: "common_gym",
+        isMaster: true,
         attributes: { str: 30, con: 30, per: 50, kar: 30, int: 50, cor: 40 }, // 悟性靈性較高
         combat: { hp: 3500, maxHp: 3500, attack: 90, defense: 70, xp: 0 },
         skills: { 
@@ -287,13 +289,17 @@ export const NPCDB = {
         name: "玄靈子道人",
         title: "茅山派長老",
         family: "maoshan",
+        isMaster: true,
         img: "assets/images/npcs/xuanling.png",
         description: "這位老道白鬚飄飄，面容雖已滿是皺紋，一雙眼睛卻明亮如電。他身著灰白道袍，胸前繡著三清玉符圖案，右手持一柄古樸的桃木劍，左手捻著一串用黑石珠子串成的道珠。山風吹來，他的衣袍與長鬚同時飄動，整個人如同立在雲端的謫仙。",
         attributes: { str: 35, con: 40, per: 45, kar: 30, int: 50, cor: 35 },
         combat: { hp: 3000, maxHp: 3000, attack: 120, defense: 100, xp: 0 },
         skills: {
             "unarmed": 80, "sword": 80, "spells": 120,
-            "force": 80, "dodge": 80
+            "force": 80, "dodge": 80, "maoshan-sword": 80, "maoshan-force": 80, "tiangang-steps": 80
+        },
+        enabled_skills: {
+            "sword": "maoshan-sword", "force": "maoshan-force", "dodge": "tiangang-steps"
         },
         inquiries: {
             "茅山": "玄靈子捻動道珠，緩緩說道：「茅山立派已逾三百年，以符籙道法立足江湖，驅鬼辟邪乃是本門天職。你若心誠，可拜入我茅山門下，共同護守人間正道。」",
@@ -309,13 +315,17 @@ export const NPCDB = {
         name: "玄煞老道",
         title: "茅山派符籙長老",
         family: "maoshan",
+        isMaster: true,
         img: "assets/images/npcs/xuansha.png",
         description: "此人赤發散亂，面容猙獰，若不是身著茅山道袍，怕是要被誤認為是某種邪祟。他的雙目充血泛紅，指尖常有幾縷細小的雷光游走。身後漂浮著七張半燃的符紙，那是他多年修為的法力外溢所致。見到生人靠近，他不言不語，只是輕輕嗤了一聲。",
         attributes: { str: 40, con: 45, per: 50, kar: 20, int: 60, cor: 30 },
         combat: { hp: 4000, maxHp: 4000, attack: 160, defense: 120, xp: 0 },
         skills: {
             "unarmed": 80, "sword": 60, "spells": 200,
-            "force": 100, "dodge": 80
+            "force": 100, "dodge": 80, "maoshan-sword": 100, "maoshan-force": 120, "tiangang-steps": 100
+        },
+        enabled_skills: {
+            "sword": "maoshan-sword", "force": "maoshan-force", "dodge": "tiangang-steps"
         },
         inquiries: {
             "法術": "玄煞老道漫不經心地看了你一眼，冷冷問道：「你的咒術幾級了？沒到三十級，别來煩我。」",
@@ -347,8 +357,8 @@ export const NPCDB = {
         description: "一名二十出頭的年輕道士，身形矯健，拳腳間透著幾分茅山派的道家韻味。他正在庭院中練習一套剛猛中帶著道法玄意的拳法，每一式都配合著低沉的吐納之聲，顯然已初窺茅山武學的門道。",
         attributes: { str: 25, con: 25, per: 25, kar: 20, int: 25, cor: 20 },
         combat: { hp: 1000, maxHp: 1000, attack: 70, defense: 55, xp: 50 },
-        skills: { "unarmed": 40, "sword": 30, "spells": 20, "force": 30, "dodge": 35 },
-        enabled_skills: { "unarmed": "unarmed" },
+        skills: { "unarmed": 40, "sword": 40, "spells": 20, "force": 30, "dodge": 35, "maoshan-sword": 30 },
+        enabled_skills: { "unarmed": "unarmed", "sword": "maoshan-sword" },
         inquiries: {
             "切磋": "青風道士笑道：「正好手癢！但你可別手下留情，茅山弟子不怕挫折！(輸入 fight maoshan_disc1)」",
             "法術": "「法術嘛…我剛開始學，還不太熟。不過師父說只要法力足夠，連殭屍也能一擊必殺！」"
@@ -363,7 +373,8 @@ export const NPCDB = {
         description: "白澤道士生得文弱清秀，薄薄的嘴唇上方留著幾撮稀疏的鬍渣，手指上沾滿了墨跡。他是茅山派有名的「書符達人」，專長在符籙研究，在切磋上倒比不上同門師兄，但論起道法理論，無人能出其右。",
         attributes: { str: 15, con: 18, per: 20, kar: 18, int: 40, cor: 25 },
         combat: { hp: 700, maxHp: 700, attack: 45, defense: 40, xp: 0 },
-        skills: { "unarmed": 20, "spells": 60, "force": 25 },
+        skills: { "unarmed": 20, "spells": 60, "force": 40, "maoshan-force": 30 },
+        enabled_skills: { "force": "maoshan-force" },
         inquiries: {
             "法術": "白澤放下毛筆，認真解釋道：「cast 指令的格式是：cast <法術ID> <目標ID>。例如：cast thunder_seal jiangshi。法術消耗的是你的法力（MP），所以要先用 automeditate 練習法力。」",
             "cast": "「cast 指令限茅山弟子使用。你要先（1）拜入茅山，（2）學習 spells 技能，（3）用 automeditate 積蓄法力，才能施法。對殭屍和孤魂的傷害會有大幅加成！」",
