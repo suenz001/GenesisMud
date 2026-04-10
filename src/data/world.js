@@ -156,16 +156,63 @@ export const WorldMap = {
     // 南方：茅山 (0, 0) -> (0, -10) [直線 South]
     "maoshan_gate": {
         title: "茅山派山門",
-        description: "茅山派的山門隱沒在終年不散的濃霧之中。入口處立著一塊爬滿青苔的黑石碑，四周貼滿了隨風飄搖的黃色符紙。踏入此地，一股陰冷刺骨的寒意便混雜著紙灰味撲面而來。",
+        description: `茅山派的山門矗立在荒山雨霧之中，兩側青石柱上各刻著一行寒意凜凜的古篆——「生死有命」、「鬼神莫犯」。大門前站著一名身形挺拔的道童，神情雖稚卻氣度不凡，見生人靠近便將手中的符籙握得更緊。四周數十張黃色符紙隨山風獵獵作響，似乎隨時都要飛昇而去。
+<br>【這裡可以向 玄靈子道人 拜師入門，或學習基礎的拳腳、劍術與咒術】`,
         allowSave: true, safe: true,
         x: 0, y: -10, z: 0, 
-        region: ["maoshan"]
+        region: ["maoshan"],
+        npcs: ["maoshan_boy", "xuanling"]
     },
     "maoshan_hall": {
         title: "三清大殿",
-        description: "大殿內光線昏暗，僅靠幾盞長明燈勉強照明。正中供奉著三清道祖的巨大神像，香火雖然鼎盛，但裊裊升起的青煙卻始終盤旋在樑柱間，透著一股說不出的詭異氣氛。",
+        description: `大殿內香煙裊裊，深褐色的巨型神像在搖曳的燭火中若隱若現。供桌上擺放著七七四十九個牛皮紙符，個個都磨得發黑，浸透了歲月的法力。殿中央懸著一口古銅大鐘，據說能在正子時敲響，驅散方圓五里的陰煞之氣。弟子們在此朝拜、抄錄道經，空氣中瀰漫著松脂香燭的氣味，令人心神沉澱。`,
         allowSave: true, safe: true,
-        x: 0, y: -11, z: 0, region: ["maoshan"]
+        x: 0, y: -11, z: 0,
+        region: ["maoshan"],
+        npcs: ["maoshan_disc2"]
+    },
+    "maoshan_courtyard": {
+        title: "松鶴庭院",
+        description: `一個四面由青磚矮牆圍成的廣場，中央種了三棵百年以上的古松，樹冠如蓋，遮天蔽日。茅山弟子在此晨練拳腳，空氣中迴響著整齊的呼喝聲與符術的低鳴共鳴。庭院石板上刻著密密麻麻的八卦圖騰，每逢月圓之夜，據說這些圖騰會自行散發幽光。
+<br>【可在此與弟子切磋武練，或向 玄靈子道人 學習武功】`,
+        allowSave: true, safe: true,
+        x: 0, y: -12, z: 0,
+        region: ["maoshan"],
+        npcs: ["maoshan_disc1", "xuanling"]
+    },
+    "maoshan_library": {
+        title: "道藏閣",
+        description: `道藏閣是茅山派最神聖的藏書聖地，三層小樓塞滿了泛黃的竹簡與厚重的古籍。許多書卷年代久遠，翻開時有陳年書香與淡淡的符水氣息撲面而來。書架間偶爾漂著幾塊自己游移的符籙，是前輩高人留下的索引機關，指示著重要典籍的位置。弟子白澤一臉書卷氣地坐在角落，正舔著毛筆抄錄符文。
+<br>【這裡可以向弟子 白澤 了解法術系統，或自行打坐(automeditate)修練法力】`,
+        allowSave: true, safe: true,
+        x: 1, y: -12, z: 0,
+        region: ["maoshan"],
+        npcs: ["maoshan_disc2"]
+    },
+    "maoshan_altar": {
+        title: "符籙壇",
+        description: `符籙壇四周是一圈深及膝蓋的白石欄杆，欄杆上雕鑿著綿延不絕的神鬼符文。壇心是一塊直徑逾丈的黑色玄石，其上永遠燃著一團誰也不知道從何而起的幽藍火焰，雨打不熄、風吹不滅。玄煞老道就站在火焰旁，張開雙臂，口中無聲地吐出一段只有鬼神才能聽見的上古咒語——他的手指間，雷光交織。
+<br>【需加入茅山且 spells 等級達 30，才能向 玄煞老道 學習高階法術】`,
+        allowSave: true, safe: true,
+        x: -1, y: -12, z: 0,
+        region: ["maoshan"],
+        npcs: ["xuansha", "wandering_ghost"]
+    },
+    "maoshan_crypt": {
+        title: "陰煞地窟",
+        description: `一條布滿黏滑青苔、極為陡峭的石階通向山腹深處。越往下走，氣溫越是驟降，腳下的地面隱約可見一道道瘮人的抓痕——那是什麼爪子留下的？石壁上嵌著幾根早已燃盡、只剩焦黑燈芯的油燈，浸在漫漫長夜中任憑邪祟自由遊蕩。遠處不知哪個角落傳來一聲低沉、喑啞的哀嚎。
+<br><span style="color:#ff4444">【危險區域！這裡藏有枯骨殭屍與飄蕩孤魂，法術在此對它們有顯著加成】</span>`,
+        safe: false,
+        x: 0, y: -13, z: 0,
+        region: ["maoshan"],
+        npcs: ["jiangshi", "jiangshi", "wandering_ghost", "wandering_ghost"]
+    },
+    "maoshan_peak": {
+        title: "茅山絕頂",
+        description: `踏上絕頂，雲霧在腳下翻湧，彷彿整個世界都沉沒在白茫茫的虛空之中。絕頂中央矗立著一座只有一人高的黑石道塔，塔身刻滿了密密麻麻的咒文，散發著一股令人心悸的法力波動。這裡是茅山派舉行重大儀式的聖地，等閒弟子絕不許踏足，胡亂入侵者將受到嚴厲懲處。`,
+        allowSave: true, safe: true,
+        x: 0, y: -14, z: 0,
+        region: ["maoshan"]
     },
 
     // 西方中繼站：漢口 (0, 0) -> (-20, 0) [直線 West]

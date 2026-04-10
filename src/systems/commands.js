@@ -14,6 +14,7 @@ import { SkillSystem } from "./skill_system.js";
 import { PerformSystem } from "./perform_system.js";
 import { DialogueSystem } from "./dialogue.js";
 import { BankSystem } from "./bank.js";
+import { CastSystem } from "./cast_system.js";
 
 let lastCommandTime = 0;
 const COMMAND_COOLDOWN = 400; // 安全冷卻時間 400ms
@@ -40,6 +41,7 @@ const commandRegistry = {
     'kill': { description: '下殺手', execute: CombatSystem.kill },
     'fight': { description: '切磋', execute: CombatSystem.fight },
     'perform': { description: '施展絕招', execute: PerformSystem.execute }, 
+    'cast': { description: '施放法術', execute: CastSystem.execute },
     'y': { description: '接受', execute: CombatSystem.acceptDuel },
     'yes': { description: '接受', execute: CombatSystem.acceptDuel },
     'n': { description: '拒絕', execute: CombatSystem.rejectDuel },

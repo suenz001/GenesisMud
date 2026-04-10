@@ -277,5 +277,133 @@ export const NPCDB = {
         skills: { "unarmed": 100, "dodge": 100, "wolf-claw": 100, "force": 100 },
         enabled_skills: { "unarmed": "wolf-claw" },
         drops: [{ id: "bear_skin", rate: 1.0 }, { id: "bear_paw", rate: 0.2 }]
+    },
+
+    // ================ 茅山派 NPC ================
+
+    // --- 師傅 ---
+    "xuanling": {
+        id: "xuanling",
+        name: "玄靈子道人",
+        title: "茅山派長老",
+        family: "maoshan",
+        img: "assets/images/npcs/xuanling.png",
+        description: "這位老道白鬚飄飄，面容雖已滿是皺紋，一雙眼睛卻明亮如電。他身著灰白道袍，胸前繡著三清玉符圖案，右手持一柄古樸的桃木劍，左手捻著一串用黑石珠子串成的道珠。山風吹來，他的衣袍與長鬚同時飄動，整個人如同立在雲端的謫仙。",
+        attributes: { str: 35, con: 40, per: 45, kar: 30, int: 50, cor: 35 },
+        combat: { hp: 3000, maxHp: 3000, attack: 120, defense: 100, xp: 0 },
+        skills: {
+            "unarmed": 80, "sword": 80, "spells": 120,
+            "force": 80, "dodge": 80
+        },
+        inquiries: {
+            "茅山": "玄靈子捻動道珠，緩緩說道：「茅山立派已逾三百年，以符籙道法立足江湖，驅鬼辟邪乃是本門天職。你若心誠，可拜入我茅山門下，共同護守人間正道。」",
+            "法術": "老道緩緩道：「法術消耗的是『法力』，也就是你體內的道家真元。若想修習法術，先得向我學習（learn）基本咒術（spells），再靠打坐（automeditate）積蓄道力，方可施法（cast）。」",
+            "拜師": "玄靈子道人說道：「若你心誠向道，輸入『apprentice xuanling』即可拜入茅山。但此路一旦踏上，便要捨棄俗世的羁絆，一心求道。」",
+            "怪物": "老道面色一沉：「山下地窟之中，有枯骨殭屍與飄蕩孤魂盤踞。普通武功雖能傷之，卻事倍功半。以茅山法術驅之，方是正道。」",
+            "法力": "「道力，即你口中的法力，以心神（MP）為本。你若想修練法力，便需盤膝打坐（automeditate），以神運氣，緩緩凝聚。」"
+        }
+    },
+
+    "xuansha": {
+        id: "xuansha",
+        name: "玄煞老道",
+        title: "茅山派符籙長老",
+        family: "maoshan",
+        img: "assets/images/npcs/xuansha.png",
+        description: "此人赤發散亂，面容猙獰，若不是身著茅山道袍，怕是要被誤認為是某種邪祟。他的雙目充血泛紅，指尖常有幾縷細小的雷光游走。身後漂浮著七張半燃的符紙，那是他多年修為的法力外溢所致。見到生人靠近，他不言不語，只是輕輕嗤了一聲。",
+        attributes: { str: 40, con: 45, per: 50, kar: 20, int: 60, cor: 30 },
+        combat: { hp: 4000, maxHp: 4000, attack: 160, defense: 120, xp: 0 },
+        skills: {
+            "unarmed": 80, "sword": 60, "spells": 200,
+            "force": 100, "dodge": 80
+        },
+        inquiries: {
+            "法術": "玄煞老道漫不經心地看了你一眼，冷冷問道：「你的咒術幾級了？沒到三十級，别來煩我。」",
+            "雷霆符": "「五行雷法之首，凝天地浩然正氣一擊而出，对所有陰邪之物克制甚重。你若能讓我看看你的道行，或許可傳你修習之法。」",
+            "鎖魂咒": "「此術非同小可，能直接鎖住對方的魂魄。對人類或許難以奏效，但面對孤魂野鬼，等同於直接縛住其本源，三招必滅。」"
+        }
+    },
+
+    // --- 弟子 ---
+    "maoshan_boy": {
+        id: "maoshan_boy",
+        name: "守山道童",
+        family: "maoshan",
+        description: "一個不過十三四歲的清秀少年，穿著寬大的青色道袍，頭上紮著兩個道髻，正站在山門前一板一眼地守衛。他的眼睛滴溜圓，對陌生人充滿好奇，但又盡力裝出一副不苟言笑的老成模樣。",
+        attributes: { str: 15, con: 15, per: 18, kar: 20, int: 15, cor: 15 },
+        combat: { hp: 300, maxHp: 300, attack: 20, defense: 15, xp: 0 },
+        skills: { "unarmed": 10, "spells": 5 },
+        inquiries: {
+            "茅山": "道童挺起胸膛說道：「茅山派可是鼎鼎大名！我們師父說，茅山弟子守護世人三百年，功德無量！」",
+            "拜師": "「想拜入茅山？那你得去找玄靈子師伯！他在山門裡面，或在後面的松鶴庭院。記得態度要誠懇喔！」",
+            "地窟": "「地…地窟？」道童的臉色微微一白，「那地方我不去的！裡面有殭屍！師兄說普通人進去根本撐不了一刻鐘！」"
+        }
+    },
+
+    "maoshan_disc1": {
+        id: "maoshan_disc1",
+        name: "茅山弟子·青風",
+        family: "maoshan",
+        description: "一名二十出頭的年輕道士，身形矯健，拳腳間透著幾分茅山派的道家韻味。他正在庭院中練習一套剛猛中帶著道法玄意的拳法，每一式都配合著低沉的吐納之聲，顯然已初窺茅山武學的門道。",
+        attributes: { str: 25, con: 25, per: 25, kar: 20, int: 25, cor: 20 },
+        combat: { hp: 1000, maxHp: 1000, attack: 70, defense: 55, xp: 50 },
+        skills: { "unarmed": 40, "sword": 30, "spells": 20, "force": 30, "dodge": 35 },
+        enabled_skills: { "unarmed": "unarmed" },
+        inquiries: {
+            "切磋": "青風道士笑道：「正好手癢！但你可別手下留情，茅山弟子不怕挫折！(輸入 fight maoshan_disc1)」",
+            "法術": "「法術嘛…我剛開始學，還不太熟。不過師父說只要法力足夠，連殭屍也能一擊必殺！」"
+        },
+        drops: []
+    },
+
+    "maoshan_disc2": {
+        id: "maoshan_disc2",
+        name: "茅山弟子·白澤",
+        family: "maoshan",
+        description: "白澤道士生得文弱清秀，薄薄的嘴唇上方留著幾撮稀疏的鬍渣，手指上沾滿了墨跡。他是茅山派有名的「書符達人」，專長在符籙研究，在切磋上倒比不上同門師兄，但論起道法理論，無人能出其右。",
+        attributes: { str: 15, con: 18, per: 20, kar: 18, int: 40, cor: 25 },
+        combat: { hp: 700, maxHp: 700, attack: 45, defense: 40, xp: 0 },
+        skills: { "unarmed": 20, "spells": 60, "force": 25 },
+        inquiries: {
+            "法術": "白澤放下毛筆，認真解釋道：「cast 指令的格式是：cast <法術ID> <目標ID>。例如：cast thunder_seal jiangshi。法術消耗的是你的法力（MP），所以要先用 automeditate 練習法力。」",
+            "cast": "「cast 指令限茅山弟子使用。你要先（1）拜入茅山，（2）學習 spells 技能，（3）用 automeditate 積蓄法力，才能施法。對殭屍和孤魂的傷害會有大幅加成！」",
+            "殭屍": "白澤壓低聲音說：「地窟裡的枯骨殭屍對普通物理攻擊有一定抗性，但對本派法術則毫無招架之力。尤其是雷霆符（thunder_seal），能讓它的骨骸直接灰飛煙滅！」"
+        }
+    },
+
+    // --- 怪物（茅山特有）---
+    "jiangshi": {
+        id: "jiangshi",
+        name: "枯骨殭屍",
+        monsterType: "undead",        // 法術識別標籤
+        img: "assets/images/npcs/jiangshi.png",
+        aggro: true,
+        description: "這具殭屍身軀已腐朽大半，但靠著陰煞之氣的支撐，仍然足以直立行走、殘忍殺戮。它的眼窩空洞，只有兩點磷火般的幽光閃爍，額頭上貼著一張幾乎磨蝕殆盡的符籙——那是當年壓制它的法術，如今早已失效。",
+        attributes: { str: 40, con: 45, per: 15, kar: 5, int: 5, cor: 5 },
+        combat: { hp: 1800, maxHp: 1800, attack: 105, defense: 110, xp: 120 },
+        // 物理攻擊 20% 減傷（defense 高），法術傷害 ×1.8（由 cast_system 處理）
+        skills: { "unarmed": 55, "dodge": 20, "wolf-claw": 55, "force": 40 },
+        enabled_skills: { "unarmed": "wolf-claw" },
+        drops: [
+            { id: "yellow_talisman", rate: 0.5 },
+            { id: "bone_chip", rate: 0.8 }
+        ]
+    },
+
+    "wandering_ghost": {
+        id: "wandering_ghost",
+        name: "飄蕩孤魂",
+        monsterType: "ghost",         // 法術識別標籤
+        img: "assets/images/npcs/wandering_ghost.png",
+        aggro: true,
+        description: "這是一道飄忽不定的幽靈，生前或許是某位失意之人，如今魂魄殘存，在陰氣最重的地窟中徘徊不去。它的身軀幾乎是透明的，隱隱散發著令人骨寒的藍光，靠近時能聽見隱約的哭泣聲，分不清是悲傷還是憤怒。",
+        attributes: { str: 20, con: 15, per: 40, kar: 5, int: 10, cor: 5 },
+        combat: { hp: 600, maxHp: 600, attack: 80, defense: 30, xp: 80 },
+        // 血量低、迴避高——物理難打，法術 ×2.0 加成
+        skills: { "unarmed": 60, "dodge": 100, "force": 20 },
+        enabled_skills: {},
+        drops: [
+            { id: "ghost_wisp", rate: 0.6 }
+        ]
     }
-};
+};

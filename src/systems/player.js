@@ -9,6 +9,7 @@ import { ItemDB } from "../data/items.js";
 import { ConditionSystem } from "./conditions.js";
 import { EMOTES } from "./commands.js";
 import { PerformDB } from "../data/performs.js";
+import { SpellDB } from "../data/spells.js";
 
 // --- 通用：更新玩家資料 ---
 export async function updatePlayer(userId, data) {
@@ -426,6 +427,53 @@ export const PlayerSystem = {
                 html += `<div style="color:#88bbcc; padding:2px;">• ${key}</div>`;
             }
             html += `</div>`;
+            html += `${border}</div>`;
+            return UI.print(html, "system", true);
+        }
+
+        if (a && a[0] && a[0].toLowerCase() === 'cast') {
+            const spells = Object.values(SpellDB);
+            const typeMap = { 'single': '單體', 'aoe': '範國全體', 'control': '控制', 'dot': 'DoT燃燒' };
+            const effectMap = { 'stun': '點穴', 'burn': '燃燒', 'bleed': '流血' };
+
+            let html = `<div style="font-family: 'Courier New', monospace; background: rgba(0,0,0,0.4); padding: 15px; border: 1px solid #444; border-radius: 5px; line-height: 1.6;">`;
+            html += `<div style="text-align:center; color:#cc88ff; font-size: 16px; font-weight:bold; margin-bottom:10px;">≡ 茂山派法術大全 ≡</div>`;
+            html += `${border}<br>`;
+            html += `<div style="color:#aaa; margin-bottom:10px;">
+                <b>施法要求：</b>已加入茂山派（apprentice xuanling）且携有 spells 技能<br>
+                <b>消耗：</b>法力（MP）——吃automeditate修練<br>
+                <b>指令：</b><span style="color:#cc88ff;">cast &lt;法術ID&gt; [&lt;目標ID&gt;]</span><br>
+                <b>對鬼怪加成：</b><span style="color:#ffdd00;">ghost類×2.0、undead類×1.8，高階法術可達×3.0</span>
+                </div>`;
+            html += `${divider}<br>`;
+
+            html += `<table style="width:100%; border-collapse:collapse; font-size:13px;">`;
+            html += `<tr style="color:#cc88ff; border-bottom:1px solid #333;">
+                <th style="text-align:left; padding:4px 8px;">ID</th>
+                <th style="text-align:left; padding:4px 8px;">名稱</th>
+                <th style="text-align:center; padding:4px 8px;">MP消耗</th>
+                <th style="text-align:center; padding:4px 8px;">類型</th>
+                <th style="text-align:center; padding:4px 8px;">冷卻</th>
+                <th style="text-align:left; padding:4px 8px;">對鬼天克</th>
+                <th style="text-align:left; padding:4px 8px;">特效</th>
+            </tr>`;
+
+            for (const sp of spells) {
+                const typeName = typeMap[sp.type] || sp.type;
+                const cdSec = (sp.cooldown / 1000).toFixed(0);
+                const bonusText = sp.bonusVs ? `${sp.bonusVs.join('/')} ×${sp.bonusMultiplier}` : '—';
+                const effectText = sp.effect ? (effectMap[sp.effect] || sp.effect) + (sp.duration ? ` (${sp.duration}s)` : '') : '—';
+                html += `<tr style="border-bottom:1px solid #222; color:#ccc;">
+                    <td style="padding:4px 8px; color:#cc88ff;">${sp.id}</td>
+                    <td style="padding:4px 8px; color:#ffd700; font-weight:bold">${sp.name}</td>
+                    <td style="text-align:center; padding:4px 8px; color:#88aaff;">${sp.mpCost}</td>
+                    <td style="text-align:center; padding:4px 8px;">${typeName}</td>
+                    <td style="text-align:center; padding:4px 8px; color:#aaa;">${cdSec}s</td>
+                    <td style="padding:4px 8px; color:#ffdd00;">${bonusText}</td>
+                    <td style="padding:4px 8px; color:#ff8888;">${effectText}</td>
+                </tr>`;
+            }
+            html += `</table>`;
             html += `${border}</div>`;
             return UI.print(html, "system", true);
         }
