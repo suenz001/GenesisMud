@@ -567,7 +567,7 @@ export const SkillSystem = {
                 return;
             }
             
-            UI.print(`你已經有師父了，是 ${playerData.family.masterId}。`, "error"); 
+            UI.print(`你已經有師父了，是【${playerData.family.masterName || playerData.family.masterId}】。`, "error"); 
             return; 
         }
 

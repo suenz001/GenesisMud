@@ -847,6 +847,19 @@ export const CombatSystem = {
                         return;
                     }
 
+                    // [修正] 離開戰鬥房間後立即停止戰鬥
+                    const hasPveEnemy = combatList.some(e => e.type === 'pve');
+                    if (hasPveEnemy) {
+                        const allLeft = combatList
+                            .filter(e => e.type === 'pve')
+                            .every(e => e.roomId !== playerData.location);
+                        if (allLeft) {
+                            UI.print(UI.txt("你已離開戰場，戰鬥結束。", "#aaaaaa", true), "system", true);
+                            CombatSystem.stopCombat(userId);
+                            return;
+                        }
+                    }
+
                     if (!playerData.combat) playerData.combat = {};
                     playerData.combat.enforce = freshData.combat?.enforce || 0; 
                     if (freshData.attributes) playerData.attributes = freshData.attributes;
